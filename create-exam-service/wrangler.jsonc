@@ -34,7 +34,16 @@
 		],
 		"observability": {
 			"enabled": true
-		}
+		},
+		"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "create-exams",
+			"database_id": "f90dad03-6683-4e49-b58b-167632fdc471",
+			"remote": true,
+			"migrations_dir": "drizzle",
+		},
+	],
 		/**
 		* Smart Placement
 		* https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
