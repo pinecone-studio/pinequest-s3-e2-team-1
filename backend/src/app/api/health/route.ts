@@ -1,21 +1,22 @@
 import { NextResponse } from "next/server";
-import type { BackendHealthResponse } from "@shared/contracts/backend";
+import { getGeneratorStats } from "@/lib/mock-exams/store";
 
 export function GET() {
-	const response: BackendHealthResponse = {
+	return NextResponse.json({
 		service: "create-exam-service",
 		status: "ok",
 		timestamp: new Date().toISOString(),
-		version: "0.1.0",
-		api: {
-			healthPath: "/api/health",
-			createExamPath: "/api/exams",
+		stats: getGeneratorStats(),
+		endpoints: {
+			generateTest: "POST /api/tests/generate",
+			getTestById: "GET /api/tests/:testId",
+			editTest: "PUT /api/tests/:testId",
+			deleteTest: "DELETE /api/tests/:testId",
+			saveTest: "POST /api/tests/save",
 		},
 		notes: [
-			"Database schema can stay separate per microservice.",
-			"Only the API contract between services must stay stable.",
+			"Test Generator owns its own schema and stores correct answers internally.",
+			"Exam service consumes tests through the shared TypeScript contract only.",
 		],
-	};
-
-	return NextResponse.json(response);
+	});
 }
