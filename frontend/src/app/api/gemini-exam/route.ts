@@ -1,9 +1,16 @@
 type DifficultyLevel = "easy" | "medium" | "advanced";
 
 type GenerateExamRequest = {
+  attachments?: Array<{
+    data?: string;
+    mimeType?: string;
+    name?: string;
+    text?: string;
+  }>;
   difficulty?: DifficultyLevel;
   mathCount?: number;
   mcqCount?: number;
+  sourceContext?: string;
   topics?: string;
   totalPoints?: number;
 };
@@ -33,6 +40,70 @@ function difficultyLabel(level: DifficultyLevel) {
   return "Дунд";
 }
 
+async function uploadGeminiFile({
+  apiKey,
+  data,
+  mimeType,
+  name,
+}: {
+  apiKey: string;
+  data: string;
+  mimeType: string;
+  name: string;
+}) {
+  const fileBytes = Buffer.from(data, "base64");
+  const startResponse = await fetch(
+    `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
+    {
+      body: JSON.stringify({
+        file: {
+          display_name: name,
+        },
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": String(fileBytes.byteLength),
+        "X-Goog-Upload-Header-Content-Type": mimeType,
+        "X-Goog-Upload-Protocol": "resumable",
+      },
+      method: "POST",
+    },
+  );
+
+  const uploadUrl = startResponse.headers.get("x-goog-upload-url");
+
+  if (!startResponse.ok || !uploadUrl) {
+    throw new Error(`${name} файлыг Gemini рүү upload хийж чадсангүй.`);
+  }
+
+  const uploadResponse = await fetch(uploadUrl, {
+    body: fileBytes,
+    headers: {
+      "Content-Length": String(fileBytes.byteLength),
+      "X-Goog-Upload-Command": "upload, finalize",
+      "X-Goog-Upload-Offset": "0",
+    },
+    method: "POST",
+  });
+
+  const uploadPayload = (await uploadResponse.json()) as {
+    file?: {
+      mimeType?: string;
+      uri?: string;
+    };
+  };
+
+  if (!uploadResponse.ok || !uploadPayload.file?.uri) {
+    throw new Error(`${name} файлыг finalize хийж чадсангүй.`);
+  }
+
+  return {
+    mimeType: uploadPayload.file.mimeType ?? mimeType,
+    uri: uploadPayload.file.uri,
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as GenerateExamRequest;
@@ -40,7 +111,9 @@ export async function POST(request: Request) {
     const mathCount = Math.max(0, Number(body.mathCount ?? 0));
     const totalPoints = Math.max(1, Number(body.totalPoints ?? 1));
     const difficulty = body.difficulty ?? "medium";
+    const sourceContext = body.sourceContext?.trim() ?? "";
     const topics = body.topics?.trim() ?? "";
+    const attachments = Array.isArray(body.attachments) ? body.attachments : [];
 
     if (mcqCount + mathCount <= 0) {
       return Response.json(
@@ -66,6 +139,19 @@ export async function POST(request: Request) {
     }
 
     const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+    const textAttachments = attachments.filter((attachment) => attachment.text?.trim());
+    const binaryAttachments = attachments.filter((attachment) => attachment.data?.trim());
+    const uploadedFiles = await Promise.all(
+      binaryAttachments.map((attachment) =>
+        uploadGeminiFile({
+          apiKey,
+          data: attachment.data ?? "",
+          mimeType: attachment.mimeType ?? "application/octet-stream",
+          name: attachment.name ?? "attachment",
+        }),
+      ),
+    );
+
     const prompt = `
 Чи Монгол хэл дээр жишиг математикийн шалгалт үүсгэдэг туслах.
 
@@ -75,6 +161,7 @@ export async function POST(request: Request) {
 - Нийт оноо: ${totalPoints}
 - Түвшин: ${difficultyLabel(difficulty)}
 - Заасан дэд сэдвүүд: ${topics}
+${sourceContext ? `- Материалаас уншсан агуулга:\n${sourceContext}` : ""}
 
 Дүрэм:
 - Зөвхөн JSON буцаа. Тайлбар, markdown, code fence бүү нэм.
@@ -86,6 +173,7 @@ export async function POST(request: Request) {
 - math асуулт бүр answerLatex болон responseGuide талбартай байна.
 - points нь бүх асуулт дээр эерэг бүхэл тоо байна.
 - Асуултууд нь зөвхөн өгсөн дэд сэдвүүдийн хүрээнд байна.
+- Хэрэв хавсаргасан зураг, pdf, document материал байвал түүний доторх агуулгыг уншаад асуулт үүсгэ.
 - Агуулга нь сурагчдад ойлгомжтой, цэгцтэй Монгол хэл дээр байна.
 
 JSON бүтэц:
@@ -116,7 +204,18 @@ JSON бүтэц:
         body: JSON.stringify({
           contents: [
             {
-              parts: [{ text: prompt }],
+              parts: [
+                { text: prompt },
+                ...textAttachments.map((attachment) => ({
+                  text: `Хавсаргасан текст материал (${attachment.name ?? "text"}):\n${attachment.text}`,
+                })),
+                ...uploadedFiles.map((file) => ({
+                  file_data: {
+                    file_uri: file.uri,
+                    mime_type: file.mimeType,
+                  },
+                })),
+              ],
               role: "user",
             },
           ],
