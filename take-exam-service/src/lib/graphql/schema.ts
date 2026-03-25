@@ -67,6 +67,7 @@ export const typeDefs = /* GraphQL */ `
   type Mutation {
     saveTest(test: String!): Boolean!
     startExam(testId: String!, studentId: String!, studentName: String!): Attempt!
+    resumeExam(attemptId: String!): Attempt!
     submitAnswers(attemptId: String!, answers: [AnswerInput!]!, finalize: Boolean!): Attempt!
     approveAttempt(attemptId: String!): Boolean!
   }
@@ -78,6 +79,6 @@ export const typeDefs = /* GraphQL */ `
 `;
 
 export const schema = createSchema({
-    typeDefs,
-    resolvers,
+  typeDefs,
+  resolvers,
 });

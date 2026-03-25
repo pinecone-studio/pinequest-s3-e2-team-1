@@ -6,6 +6,6 @@ export const saveTest = async (_: any, { test }: { test: string }) => {
     const { env } = getCloudflareContext() as any;
     const db = createDb(env.DB);
     const mockTest = JSON.parse(test);
-    await savePublishedTest(db, mockTest);
+    await savePublishedTest(db, mockTest, env.EXAM_CACHE);
     return true;
 };

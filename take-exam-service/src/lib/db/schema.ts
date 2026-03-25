@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const students = sqliteTable("students", {
     id: text("id").primaryKey(),
@@ -31,6 +31,9 @@ export const questions = sqliteTable("questions", {
     explanation: text("explanation").notNull(),
     points: integer("points").notNull(),
     competency: text("competency").notNull(),
+    imageUrl: text("image_url"),
+    audioUrl: text("audio_url"),
+    videoUrl: text("video_url"),
     orderSlot: integer("order_slot").notNull(),
 });
 
@@ -39,14 +42,17 @@ export const attempts = sqliteTable("attempts", {
     testId: text("test_id").notNull(),
     studentId: text("student_id").notNull(),
     studentName: text("student_name").notNull(),
-    status: text("status", { enum: ["in_progress", "submitted", "approved"] }).notNull(),
+    shuffleManifest: text("shuffle_manifest"),
+    status: text("status", { enum: ["in_progress", "processing", "submitted", "approved"] }).notNull(),
     score: integer("score"),
     maxScore: integer("max_score"),
     percentage: integer("percentage"),
     startedAt: text("started_at").notNull(),
     expiresAt: text("expires_at").notNull(),
     submittedAt: text("submitted_at"),
-});
+}, (table) => ({
+    studentPerTestUniqueIdx: uniqueIndex("attempts_test_student_unique_idx").on(table.testId, table.studentId),
+}));
 
 export const answers = sqliteTable("answers", {
     attemptId: text("attempt_id").notNull(),

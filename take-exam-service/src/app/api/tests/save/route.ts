@@ -10,7 +10,7 @@ export async function POST(request: Request) {
         const db = createDb(env.DB);
 
         const test = (await request.json()) as MockTest;
-        await savePublishedTest(db, test);
+        await savePublishedTest(db, test, env.EXAM_CACHE);
 
         return NextResponse.json({ success: true });
     } catch (error) {

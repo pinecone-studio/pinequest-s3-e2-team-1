@@ -1,11 +1,7 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "take-exam-service",
-	"main": ".open-next/worker.js",
+	"main": "src/entry.ts",
 	"compatibility_date": "2026-03-17",
 	"compatibility_flags": [
 		"nodejs_compat",
@@ -30,8 +26,30 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "mock-exam-db",
-			"database_id": "YOUR_DATABASE_ID_HERE"
+			"database_name": "take-exams",
+			"database_id": "20cb8740-9127-475d-bcc4-17e425493950",
+			"migrations_dir": "drizzle/migrations"
 		}
-	]
+	],
+	"kv_namespaces": [
+		{
+			"binding": "EXAM_CACHE",
+			"id": "7aa69814b3574a6185786008957a21c3"
+		}
+	],
+	"queues": {
+		"producers": [
+			{
+				"binding": "EXAM_SUBMISSION_QUEUE",
+				"queue": "exam-submission-queue"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "exam-submission-queue",
+				"max_batch_size": 10,
+				"max_batch_timeout": 30
+			}
+		]
+	}
 }

@@ -16,7 +16,7 @@ export type ExamAttemptRecord = {
 	timeLimitMinutes: number;
 	studentId: string;
 	studentName: string;
-	status: "in_progress" | "submitted" | "approved";
+	status: "in_progress" | "processing" | "submitted" | "approved";
 	startedAt: string;
 	expiresAt: string;
 	submittedAt?: string;
