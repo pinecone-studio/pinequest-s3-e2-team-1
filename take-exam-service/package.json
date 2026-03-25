@@ -15,6 +15,7 @@
 		"db:migrate": "drizzle-kit migrate"
 	},
 	"dependencies": {
+		"@apollo/client": "^4.1.6",
 		"@opennextjs/cloudflare": "^1.17.1",
 		"drizzle-orm": "^0.45.1",
 		"graphql": "^16.13.1",
