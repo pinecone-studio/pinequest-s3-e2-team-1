@@ -1,5 +1,2 @@
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-
-export const test = sqliteTable("test", {
-  id: text("id").primaryKey(),
-});
+/** Drizzle: бүх хүснэгтийг `schema/tables/` дотор модульчилж, энд нэгтгэн export хийнэ. */
+export * from "./schema/index";
