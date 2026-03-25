@@ -8,17 +8,22 @@ import type {
   SubmitAnswersResponse,
   TeacherTestSummary,
   StudentInfo,
-} from "@shared/contracts/mock-exam";
+} from "@/lib/exam-service/types";
 
-const gqlRequest = async (query: string, variables: any = {}) => {
+const gqlRequest = async <T,>(
+  query: string,
+  variables: Record<string, unknown> = {},
+): Promise<T> => {
   const res = await fetch("/api/graphql", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, variables }),
   });
 
-  // Cast the response to handle GraphQL data and errors
-  const { data, errors } = (await res.json()) as { data: any; errors?: any[] };
+  const { data, errors } = (await res.json()) as {
+    data: T;
+    errors?: Array<{ message: string }>;
+  };
 
   if (errors) throw new Error(errors[0].message);
   return data;
@@ -41,7 +46,7 @@ export default function StudentApp() {
 
   const fetchStudents = async () => {
     try {
-      const { students } = await gqlRequest(
+      const { students } = await gqlRequest<{ students: StudentInfo[] }>(
         `query { students { id name className } }`,
       );
       setAvailableStudents(students || []);
@@ -96,7 +101,10 @@ export default function StudentApp() {
 
   const fetchEverything = async () => {
     try {
-      const data = await gqlRequest(`
+      const data = await gqlRequest<{
+        availableTests: TeacherTestSummary[];
+        attempts: AttemptSummary[];
+      }>(`
         query {
           availableTests {
             id title description updatedAt
@@ -140,7 +148,7 @@ export default function StudentApp() {
   const handleStartExam = (testId: string) => {
     startTransition(async () => {
       try {
-        const data = await gqlRequest(
+        const data = await gqlRequest<{ startExam: StartExamResponse }>(
           `
           mutation Start($testId: String!, $sid: String!, $sname: String!) {
             startExam(testId: $testId, studentId: $sid, studentName: $sname) {
@@ -176,7 +184,7 @@ export default function StudentApp() {
           }),
         );
 
-        const data = await gqlRequest(
+        const data = await gqlRequest<{ submitAnswers: SubmitAnswersResponse }>(
           `
           mutation Submit($aid: String!, $ans: [AnswerInput!]!, $fin: Boolean!) {
             submitAnswers(attemptId: $aid, answers: $ans, finalize: $fin) {
@@ -203,7 +211,7 @@ export default function StudentApp() {
   const handleResumeExam = (attemptId: string) => {
     startTransition(async () => {
       try {
-        const data = await gqlRequest(
+        const data = await gqlRequest<{ resumeExam: StartExamResponse }>(
           `
           mutation Resume($aid: String!) {
             resumeExam(attemptId: $aid) {
