@@ -2,14 +2,16 @@
 
 import {
   ChevronDown,
+  ImagePlus,
   LoaderCircle,
   Keyboard,
   Plus,
   Trash2,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState, type ChangeEvent } from "react";
 
 import MathInput from "@/components/math-input";
+import MathPreviewText from "@/components/math-preview-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +37,8 @@ type DifficultyLevel = "easy" | "medium" | "advanced";
 
 type BaseQuestion = {
   id: string;
+  imageAlt: string;
+  imageDataUrl?: string;
   points: number;
   prompt: string;
   type: QuestionType;
@@ -59,12 +63,20 @@ type GeneratedExamPayload = {
   questions?: Array<{
     answerLatex?: string;
     correctOption?: number | null;
+    imageAlt?: string;
     options?: string[];
     points?: number;
     prompt?: string;
     responseGuide?: string;
+    sourceImageName?: string;
     type?: QuestionType;
   }>;
+};
+type UploadAttachmentPayload = {
+  data?: string;
+  mimeType: string;
+  name: string;
+  text?: string;
 };
 
 let questionSequence = 0;
@@ -77,6 +89,8 @@ function nextQuestionId() {
 function createMcqQuestion(overrides?: Partial<McqQuestion>): McqQuestion {
   return {
     id: overrides?.id ?? nextQuestionId(),
+    imageAlt: overrides?.imageAlt ?? "",
+    imageDataUrl: overrides?.imageDataUrl,
     type: "mcq",
     prompt: overrides?.prompt ?? "",
     points: overrides?.points ?? 1,
@@ -93,6 +107,8 @@ function createMcqQuestion(overrides?: Partial<McqQuestion>): McqQuestion {
 function createMathQuestion(overrides?: Partial<MathQuestion>): MathQuestion {
   return {
     id: overrides?.id ?? nextQuestionId(),
+    imageAlt: overrides?.imageAlt ?? "",
+    imageDataUrl: overrides?.imageDataUrl,
     type: "math",
     prompt: overrides?.prompt ?? "",
     points: overrides?.points ?? 2,
@@ -172,6 +188,8 @@ function normalizeGeneratedQuestions(
           typeof question.correctOption === "number"
             ? question.correctOption
             : null,
+        imageAlt: question.imageAlt?.trim() ?? "",
+        imageDataUrl: undefined,
         options:
           question.options?.length && question.options.length >= 2
             ? question.options.slice(0, 6)
@@ -190,6 +208,8 @@ function normalizeGeneratedQuestions(
     .map((question) =>
       createMathQuestion({
         answerLatex: question.answerLatex?.trim() ?? "",
+        imageAlt: question.imageAlt?.trim() ?? "",
+        imageDataUrl: undefined,
         points:
           typeof question.points === "number" && question.points > 0
             ? question.points
@@ -221,19 +241,145 @@ function normalizeGeneratedQuestions(
   }));
 }
 
+function normalizeImportedQuestions(
+  payload: GeneratedExamPayload,
+  sourceImagesByName: Record<string, string> = {},
+) {
+  const rawQuestions = Array.isArray(payload.questions)
+    ? payload.questions
+    : [];
+
+  return rawQuestions
+    .filter((question) => question.type === "mcq" || question.type === "math")
+    .map((question) => {
+      if (question.type === "mcq") {
+        return createMcqQuestion({
+          correctOption:
+            typeof question.correctOption === "number"
+              ? question.correctOption
+              : null,
+          imageAlt: question.imageAlt?.trim() ?? "",
+          imageDataUrl: question.sourceImageName
+            ? sourceImagesByName[question.sourceImageName]
+            : undefined,
+          options:
+            question.options?.length && question.options.length >= 2
+              ? question.options.slice(0, 6)
+              : undefined,
+          points:
+            typeof question.points === "number" && question.points > 0
+              ? question.points
+              : 1,
+          prompt: question.prompt?.trim() ?? "",
+        });
+      }
+
+      return createMathQuestion({
+        answerLatex: question.answerLatex?.trim() ?? "",
+        imageAlt: question.imageAlt?.trim() ?? "",
+        imageDataUrl: question.sourceImageName
+          ? sourceImagesByName[question.sourceImageName]
+          : undefined,
+        points:
+          typeof question.points === "number" && question.points > 0
+            ? question.points
+            : 2,
+        prompt: question.prompt?.trim() ?? "",
+        responseGuide:
+          question.responseGuide?.trim() ??
+          "Бодолтын бүх алхмаа тодорхой бичнэ үү.",
+      });
+    });
+}
+
+function readFileAsBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = reader.result;
+
+      if (typeof result !== "string") {
+        reject(new Error(`${file.name} файлыг уншиж чадсангүй.`));
+        return;
+      }
+
+      resolve(result.split(",")[1] ?? "");
+    };
+
+    reader.onerror = () => {
+      reject(new Error(`${file.name} файлыг уншиж чадсангүй.`));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error(`${file.name} зургийг уншиж чадсангүй.`));
+        return;
+      }
+
+      resolve(reader.result);
+    };
+
+    reader.onerror = () => {
+      reject(new Error(`${file.name} зургийг уншиж чадсангүй.`));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+async function serializeAttachment(
+  file: File,
+): Promise<UploadAttachmentPayload> {
+  const mimeType = file.type || "application/octet-stream";
+
+  if (mimeType.startsWith("text/")) {
+    return {
+      mimeType,
+      name: file.name,
+      text: await file.text(),
+    };
+  }
+
+  return {
+    data: await readFileAsBase64(file),
+    mimeType,
+    name: file.name,
+  };
+}
+
 function MathAssistField({
   id,
   multiline = false,
   onChange,
   placeholder,
+  previewDisplayMode = false,
+  previewForceMath = false,
+  secondaryAction,
   value,
 }: {
   id?: string;
   multiline?: boolean;
   onChange: (value: string) => void;
   placeholder?: string;
+  previewDisplayMode?: boolean;
+  previewForceMath?: boolean;
+  secondaryAction?: {
+    active?: boolean;
+    icon: React.ReactNode;
+    onClick: () => void;
+  };
   value: string;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [mathValue, setMathValue] = useState("");
   const inputRef = useRef<TextLikeElement | null>(null);
@@ -283,6 +429,15 @@ function MathAssistField({
     });
   }
 
+  function startEditing() {
+    setIsEditing(true);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      syncSelection();
+    });
+  }
+
   const sharedProps = {
     className: cn(
       multiline
@@ -296,26 +451,61 @@ function MathAssistField({
     placeholder,
     value,
   };
+  const shouldShowRenderedPreview =
+    !isEditing && !isKeyboardOpen && Boolean(value.trim());
 
   return (
     <div className="w-full space-y-2">
       <div className="relative">
-        {multiline ? (
-          <textarea
-            ref={(node) => {
-              inputRef.current = node;
-            }}
-            {...sharedProps}
-            onChange={(event) => onChange(event.target.value)}
-          />
+        {shouldShowRenderedPreview ? (
+          <button
+            type="button"
+            className={cn(
+              multiline
+                ? "flex min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 pr-12 text-left text-base transition-colors outline-none hover:border-ring md:text-sm dark:bg-input/30"
+                : "flex min-h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 pr-12 text-left text-base transition-colors outline-none hover:border-ring md:text-sm dark:bg-input/30",
+            )}
+            onClick={startEditing}
+          >
+            <MathPreviewText
+              content={value}
+              displayMode={previewDisplayMode}
+              forceMath={previewForceMath}
+              className="w-full text-foreground"
+            />
+          </button>
         ) : (
-          <input
-            ref={(node) => {
-              inputRef.current = node;
-            }}
-            {...sharedProps}
-            onChange={(event) => onChange(event.target.value)}
-          />
+          <>
+            {multiline ? (
+              <textarea
+                ref={(node) => {
+                  inputRef.current = node;
+                }}
+                {...sharedProps}
+                onBlur={() => {
+                  if (!isKeyboardOpen) {
+                    setIsEditing(false);
+                  }
+                }}
+                onChange={(event) => onChange(event.target.value)}
+                onFocus={() => setIsEditing(true)}
+              />
+            ) : (
+              <input
+                ref={(node) => {
+                  inputRef.current = node;
+                }}
+                {...sharedProps}
+                onBlur={() => {
+                  if (!isKeyboardOpen) {
+                    setIsEditing(false);
+                  }
+                }}
+                onChange={(event) => onChange(event.target.value)}
+                onFocus={() => setIsEditing(true)}
+              />
+            )}
+          </>
         )}
         <Button
           type="button"
@@ -323,12 +513,34 @@ function MathAssistField({
           size="icon-sm"
           className="absolute right-1 top-1"
           onClick={() => {
-            syncSelection();
+            setIsEditing(true);
             setIsKeyboardOpen((current) => !current);
+
+            requestAnimationFrame(() => {
+              inputRef.current?.focus();
+              syncSelection();
+            });
           }}
         >
           <Keyboard />
         </Button>
+        {secondaryAction ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={cn(
+              "absolute right-1 top-8",
+              secondaryAction.active && "bg-muted",
+            )}
+            onClick={() => {
+              setIsEditing(true);
+              secondaryAction.onClick();
+            }}
+          >
+            {secondaryAction.icon}
+          </Button>
+        ) : null}
       </div>
 
       <Collapsible open={isKeyboardOpen} onOpenChange={setIsKeyboardOpen}>
@@ -345,6 +557,7 @@ function MathAssistField({
               onClick={() => {
                 setMathValue("");
                 setIsKeyboardOpen(false);
+                setIsEditing(false);
               }}
             >
               Хаах
@@ -409,33 +622,35 @@ function McqOptionEditor({
   option: string;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-background/70 p-2">
-      <button
-        type="button"
-        className={cn(
-          "flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition",
-          isCorrect
-            ? "border-emerald-500 bg-emerald-500 text-white"
-            : "border-border bg-background text-muted-foreground hover:text-foreground",
-        )}
-        onClick={onMarkCorrect}
-      >
-        {String.fromCharCode(65 + index)}
-      </button>
-      <MathAssistField
-        value={option}
-        onChange={onChange}
-        placeholder={`Сонголт ${String.fromCharCode(65 + index)}`}
-      />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        disabled={!canRemove}
-        onClick={onRemove}
-      >
-        <Trash2 />
-      </Button>
+    <div className="rounded-2xl border border-border/70 bg-background/70 p-2">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition",
+            isCorrect
+              ? "border-emerald-500 bg-emerald-500 text-white"
+              : "border-border bg-background text-muted-foreground hover:text-foreground",
+          )}
+          onClick={onMarkCorrect}
+        >
+          {String.fromCharCode(65 + index)}
+        </button>
+        <MathAssistField
+          value={option}
+          onChange={onChange}
+          placeholder={`Сонголт ${String.fromCharCode(65 + index)}`}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          disabled={!canRemove}
+          onClick={onRemove}
+        >
+          <Trash2 />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -458,6 +673,31 @@ function QuestionEditor({
   ) => void;
   question: ExamQuestion;
 }) {
+  const fieldId = useId();
+  const [isImageToolsOpen, setIsImageToolsOpen] = useState(
+    Boolean(question.imageDataUrl),
+  );
+  const questionImageInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleQuestionImageChange(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const imageDataUrl = await readFileAsDataUrl(file);
+
+    onUpdate(question.id, (current) => ({
+      ...current,
+      imageAlt: current.imageAlt || file.name,
+      imageDataUrl,
+    }));
+    setIsImageToolsOpen(true);
+  }
+
   return (
     <Card className="border border-border/70 bg-card/90 shadow-sm">
       <CardHeader className="gap-3">
@@ -487,9 +727,9 @@ function QuestionEditor({
       <CardContent className="space-y-5">
         <div className="grid gap-4 md:grid-cols-[1fr_140px]">
           <div className="space-y-2">
-            <Label htmlFor={`${question.id}-prompt`}>Асуулт</Label>
+            <Label htmlFor={`${fieldId}-prompt`}>Асуулт</Label>
             <MathAssistField
-              id={`${question.id}-prompt`}
+              id={`${fieldId}-prompt`}
               value={question.prompt}
               multiline
               onChange={(nextValue) =>
@@ -499,13 +739,18 @@ function QuestionEditor({
                 }))
               }
               placeholder="Асуултын текстээ энд бичнэ үү..."
+              secondaryAction={{
+                active: isImageToolsOpen,
+                icon: <ImagePlus />,
+                onClick: () => setIsImageToolsOpen((current) => !current),
+              }}
             />
           </div>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor={`${question.id}-points`}>Оноо</Label>
+              <Label htmlFor={`${fieldId}-points`}>Оноо</Label>
               <Input
-                id={`${question.id}-points`}
+                id={`${fieldId}-points`}
                 type="number"
                 min={1}
                 value={question.points}
@@ -519,6 +764,68 @@ function QuestionEditor({
             </div>
           </div>
         </div>
+        <Collapsible open={isImageToolsOpen} onOpenChange={setIsImageToolsOpen}>
+          <div className="overflow-hidden rounded-2xl border border-border/70 bg-muted/20">
+            <CollapsibleContent className="space-y-3 border-t border-border/70 p-4">
+              {question.imageDataUrl ? (
+                <img
+                  src={question.imageDataUrl}
+                  alt={question.imageAlt || "Question image"}
+                  className="max-h-64 rounded-2xl border border-border object-contain"
+                />
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border/80 bg-background px-4 py-6 text-sm text-muted-foreground">
+                  Одоогоор зураг хавсаргаагүй байна.
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>Зургийн тайлбар</Label>
+                <Input
+                  value={question.imageAlt}
+                  onChange={(event) =>
+                    onUpdate(question.id, (current) => ({
+                      ...current,
+                      imageAlt: event.target.value,
+                    }))
+                  }
+                  placeholder="Жишээ: График, дүрс, хүснэгтийн тайлбар"
+                />
+              </div>
+              <input
+                ref={questionImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  void handleQuestionImageChange(event);
+                }}
+              />
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => questionImageInputRef.current?.click()}
+                >
+                  <ImagePlus />
+                  Зураг нэмэх
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() =>
+                    onUpdate(question.id, (current) => ({
+                      ...current,
+                      imageAlt: "",
+                      imageDataUrl: undefined,
+                    }))
+                  }
+                >
+                  Зураг арилгах
+                </Button>
+              </div>
+            </CollapsibleContent>
+          </div>
+        </Collapsible>
 
         {question.type === "mcq" ? (
           <div className="space-y-3">
@@ -618,11 +925,11 @@ function QuestionEditor({
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor={`${question.id}-guide`}>
+              <Label htmlFor={`${fieldId}-guide`}>
                 Сурагчид өгөх заавар
               </Label>
               <MathAssistField
-                id={`${question.id}-guide`}
+                id={`${fieldId}-guide`}
                 value={question.responseGuide}
                 onChange={(nextValue) =>
                   onUpdate(question.id, (current) => {
@@ -643,6 +950,8 @@ function QuestionEditor({
               <Label>Зөв хариу</Label>
               <MathAssistField
                 value={question.answerLatex}
+                previewDisplayMode
+                previewForceMath
                 onChange={(nextValue) =>
                   onUpdate(question.id, (current) => {
                     if (current.type !== "math") {
@@ -682,12 +991,30 @@ function PreviewQuestion({
               {buildQuestionLabel(question.type)}
             </Badge>
           </div>
-          <p className="text-base leading-7 text-foreground">
-            {question.prompt.trim() || "Гарчиггүй асуулт"}
-          </p>
+          <MathPreviewText
+            content={question.prompt.trim() || "Гарчиггүй асуулт"}
+            className="text-base leading-7 text-foreground"
+          />
         </div>
         <Badge variant="outline">{question.points} оноо</Badge>
       </div>
+
+      {(question.imageDataUrl || question.imageAlt) && (
+        <div className="mt-4 space-y-3">
+          {question.imageDataUrl ? (
+            <img
+              src={question.imageDataUrl}
+              alt={question.imageAlt || "Question image"}
+              className="max-h-72 rounded-2xl border border-border object-contain"
+            />
+          ) : null}
+          {question.imageAlt ? (
+            <div className="rounded-2xl border border-dashed border-border/80 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+              Зургийн тайлбар: {question.imageAlt}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {question.type === "mcq" ? (
         <div className="mt-4 space-y-2">
@@ -699,24 +1026,40 @@ function PreviewQuestion({
               <div className="flex size-8 items-center justify-center rounded-full border border-border text-sm font-semibold text-muted-foreground">
                 {String.fromCharCode(65 + optionIndex)}
               </div>
-              <span className="text-sm text-foreground">
-                {option.trim() ||
-                  `Сонголт ${String.fromCharCode(65 + optionIndex)}`}
-              </span>
+              <MathPreviewText
+                content={
+                  option.trim() ||
+                  `Сонголт ${String.fromCharCode(65 + optionIndex)}`
+                }
+                className="text-sm text-foreground"
+              />
             </div>
           ))}
         </div>
       ) : (
         <div className="mt-4 space-y-3">
           <div className="rounded-2xl border border-dashed border-border/80 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            {question.responseGuide.trim() ||
-              "Хариултаа математик тэмдэглэгээ ашиглан бичнэ үү."}
+            <MathPreviewText
+              content={
+                question.responseGuide.trim() ||
+                "Хариултаа математик тэмдэглэгээ ашиглан бичнэ үү."
+              }
+            />
           </div>
           <div className="rounded-2xl border border-border/70 bg-background px-4 py-5 text-sm text-muted-foreground">
             Сурагчийн хариу бичих хэсэг
           </div>
           <div className="rounded-2xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-            Зөв хариу: {question.answerLatex.trim() || "Одоогоор оруулаагүй"}
+            <div className="mb-2">Зөв хариу:</div>
+            {question.answerLatex.trim() ? (
+              <MathPreviewText
+                content={question.answerLatex}
+                displayMode
+                forceMath
+              />
+            ) : (
+              "Одоогоор оруулаагүй"
+            )}
           </div>
         </div>
       )}
@@ -861,6 +1204,7 @@ function EditorSection({
 }
 
 export default function MathExam() {
+  const generatorFileInputRef = useRef<HTMLInputElement | null>(null);
   const [examTitle, setExamTitle] = useState("Жишиг шалгалт");
   const [questions, setQuestions] = useState<ExamQuestion[]>([
     createMcqQuestion({
@@ -884,12 +1228,15 @@ export default function MathExam() {
     difficulty: "medium" as DifficultyLevel,
     mathCount: 2,
     mcqCount: 4,
+    sourceContext: "",
     totalPoints: 20,
     topics: "Квадрат функц, тэгшитгэл, илэрхийлэл хялбарчлах",
   });
   const [generatorError, setGeneratorError] = useState("");
+  const [isExtractingSource, setIsExtractingSource] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
+  const [sourceFiles, setSourceFiles] = useState<File[]>([]);
 
   const totalPoints = questions.reduce(
     (sum, question) => sum + question.points,
@@ -982,8 +1329,15 @@ export default function MathExam() {
     setIsGenerating(true);
 
     try {
+      const attachments = await Promise.all(
+        sourceFiles.map((file) => serializeAttachment(file)),
+      );
+
       const response = await fetch("/api/gemini-exam", {
-        body: JSON.stringify(generatorSettings),
+        body: JSON.stringify({
+          ...generatorSettings,
+          attachments,
+        }),
         headers: {
           "Content-Type": "application/json",
         },
@@ -1027,6 +1381,80 @@ export default function MathExam() {
     }
   }
 
+  async function handleSourceFilesSelected(files: File[]) {
+    setSourceFiles(files);
+    setIsGeneratorOpen(false);
+
+    if (files.length === 0) {
+      setGeneratorSettings((current) => ({
+        ...current,
+        sourceContext: "",
+      }));
+      return;
+    }
+
+    setGeneratorError("");
+    setIsExtractingSource(true);
+
+    try {
+      const attachments = await Promise.all(
+        files.map((file) => serializeAttachment(file)),
+      );
+
+      const response = await fetch("/api/gemini-extract", {
+        body: JSON.stringify({ attachments }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      const payload = (await response.json()) as
+        | { error?: string; exam?: GeneratedExamPayload }
+        | undefined;
+      const exam = payload?.exam;
+
+      if (!response.ok || !exam) {
+        throw new Error(
+          payload?.error || "Файлаас асуултуудыг таньж чадсангүй.",
+        );
+      }
+
+      const normalizedImportedQuestions = normalizeImportedQuestions(exam);
+
+      if (normalizedImportedQuestions.length === 0) {
+        throw new Error("Файлаас танигдсан асуулт олдсонгүй.");
+      }
+
+      const sourceImagesByName = Object.fromEntries(
+        await Promise.all(
+          files
+            .filter((file) => file.type.startsWith("image/"))
+            .map(async (file) => [file.name, await readFileAsDataUrl(file)]),
+        ),
+      ) as Record<string, string>;
+
+      setQuestions(normalizeImportedQuestions(exam, sourceImagesByName));
+      setExamTitle(exam.title?.trim() || "Docs-оос импортолсон шалгалт");
+      setEditorSections({
+        math: true,
+        mcq: true,
+      });
+      setPreviewSections({
+        math: true,
+        mcq: true,
+      });
+    } catch (error) {
+      setGeneratorError(
+        error instanceof Error
+          ? error.message
+          : "Файлаас асуултуудыг таньж чадсангүй.",
+      );
+    } finally {
+      setIsExtractingSource(false);
+    }
+  }
+
   return (
     <section className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.12),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.14),_transparent_32%),linear-gradient(180deg,_rgba(248,250,252,0.96),_rgba(241,245,249,0.98))] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto grid max-w-7xl gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -1037,19 +1465,40 @@ export default function MathExam() {
                 <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
                   Жишиг Шалгалт
                 </Badge>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsGeneratorOpen((current) => !current)}
-                >
-                  AI Generate
-                  <ChevronDown
-                    className={cn(
-                      "transition-transform",
-                      isGeneratorOpen && "rotate-180",
-                    )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    ref={generatorFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.txt,.md,.doc,.docx,image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      void handleSourceFilesSelected(
+                        Array.from(event.target.files ?? []),
+                      );
+                    }}
                   />
-                </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => generatorFileInputRef.current?.click()}
+                  >
+                    Docs file
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsGeneratorOpen((current) => !current)}
+                  >
+                    AI Generate
+                    <ChevronDown
+                      className={cn(
+                        "transition-transform",
+                        isGeneratorOpen && "rotate-180",
+                      )}
+                    />
+                  </Button>
+                </div>
               </div>
               <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
                 <div className="space-y-2">
@@ -1157,6 +1606,45 @@ export default function MathExam() {
                       </div>
                     </div>
                     <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Хавсаргасан материал</Label>
+                        <div className="rounded-2xl border border-border/70 bg-background/70 px-4 py-3 text-sm text-muted-foreground">
+                          {sourceFiles.length > 0 ? (
+                            <div className="space-y-1">
+                              {sourceFiles.map((file) => (
+                                <div key={`${file.name}-${file.size}`}>
+                                  {file.name}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div>Баримт эсвэл зураг хавсаргаагүй байна.</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="generator-source-context">
+                          Материалаас уншсан агуулга
+                        </Label>
+                        <Textarea
+                          id="generator-source-context"
+                          value={generatorSettings.sourceContext}
+                          onChange={(event) =>
+                            setGeneratorSettings((current) => ({
+                              ...current,
+                              sourceContext: event.target.value,
+                            }))
+                          }
+                          className="min-h-32"
+                          placeholder="Энэ хэсэг нь AI Generate-д нэмэлт эх материал болгон ашиглагдана."
+                        />
+                        {isExtractingSource && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <LoaderCircle className="size-4 animate-spin" />
+                            Файлаас асуултуудыг таньж байна
+                          </div>
+                        )}
+                      </div>
                       <div className="space-y-2">
                         <Label>Түвшин</Label>
                         <div className="flex flex-wrap gap-2">
