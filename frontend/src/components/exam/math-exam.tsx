@@ -1,10 +1,11 @@
 "use client";
 
-import { useMutation } from "@apollo/client/react";
+import { useLazyQuery, useMutation } from "@apollo/client/react";
 import { useState } from "react";
 
 import { MathExamControls } from "@/components/exam/math-exam-controls";
 import { EditorSection } from "@/components/exam/math-exam-editor-section";
+import { runMathExamDemo } from "@/components/exam/demo-button";
 import { Button } from "@/components/ui/button";
 
 import {
@@ -24,6 +25,10 @@ import {
 } from "@/lib/math-exam-api";
 import { SaveNewMathExamDocument } from "@/gql/create-exam-documents";
 import {
+  GetNewMathExamDocument,
+  ListNewMathExamsDocument,
+} from "@/gql/create-exam-documents";
+import {
   MathExamQuestionType,
   type SaveNewMathExamInput,
   type SaveNewMathExamPayload,
@@ -35,6 +40,9 @@ import { PreviewSection } from "./math-exam-student";
 export default function MathExam() {
   const [examTitle, setExamTitle] = useState("Жишиг шалгалт");
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
+  const [bankExams, setBankExams] = useState<{ examId: string; title: string }[]>(
+    [],
+  );
   const [previewSections, setPreviewSections] = useState(
     createDefaultSectionState,
   );
@@ -54,6 +62,12 @@ export default function MathExam() {
   const [saving, setSaving] = useState(false);
 
   const [saveNewMathExamMutation] = useMutation(SaveNewMathExamDocument);
+  const [fetchExamList] = useLazyQuery(ListNewMathExamsDocument, {
+    fetchPolicy: "network-only",
+  });
+  const [fetchExamById] = useLazyQuery(GetNewMathExamDocument, {
+    fetchPolicy: "network-only",
+  });
 
   const {
     totalPoints,
@@ -66,6 +80,146 @@ export default function MathExam() {
   } = getQuestionCollections(questions);
   const requestedQuestionCount =
     generatorSettings.mcqCount + generatorSettings.mathCount;
+
+  function sanitizeImportedLatexArtifacts(value: string) {
+    if (!value) return value;
+
+    // Undo common "escaped dollar" artifacts that appear in stored text.
+    // Examples seen:
+    // - "\\$cdot"  -> "\\cdot"
+    // - "\\$right" -> "\\right"
+    // - "^{7$}"    -> "^{7}"
+    let next = value
+      .replace(/\\\$(?=[A-Za-z])/g, "\\")
+      .replace(/\\\$\{/g, "\\{");
+
+    // Remove trailing '$' before a closing brace/paren/bracket.
+    next = next.replace(/\$([}\]\)])/g, "$1");
+
+    // If there are still stray dollar signs (not used as delimiters), prefer removing them.
+    // We keep it conservative: only remove dollars when there are no matching pairs.
+    const dollarCount = (next.match(/\$/g) ?? []).length;
+    if (dollarCount > 0 && dollarCount % 2 === 1) {
+      next = next.replace(/\$/g, "");
+    }
+
+    return next;
+  }
+
+  function restoreInlineMathDelimiters(value: string) {
+    if (!value) return value;
+    if (value.includes("$")) return value;
+
+    // Wrap ascii-only math-ish expressions containing =, ^, or _ with $...$
+    // Example: "D=b^2-4ac." => "$D=b^2-4ac$."
+    const pattern =
+      /([A-Za-z0-9][A-Za-z0-9\s=+\-*/^_()[\]{}.,|:]*[=^_][A-Za-z0-9\s=+\-*/^_()[\]{}.,|:]*[A-Za-z0-9])([.?!,;:]?)/g;
+
+    return value.replace(pattern, (_full, expr: string, punct: string) => {
+      const trimmed = expr.trim();
+      if (!trimmed) return _full;
+      return `$${trimmed}$${punct ?? ""}`;
+    });
+  }
+
+  async function handleRequestBankExams() {
+    try {
+      const listResult = await fetchExamList({ variables: { limit: 50 } });
+      const exams =
+        (listResult.data as
+          | { listNewMathExams?: { examId: string; title: string }[] }
+          | undefined)?.listNewMathExams ?? [];
+      setBankExams(exams);
+    } catch {
+      setBankExams([]);
+    }
+  }
+
+  async function handleImportFromBank(examIdRaw: string) {
+    setGeneratorError("");
+    setSaveError(null);
+    setSavedExamId(null);
+
+    try {
+      const examResult = await fetchExamById({
+        variables: { examId: examIdRaw },
+      });
+      const exam = (
+        examResult.data as
+          | {
+              getNewMathExam?: {
+                examId: string;
+                title: string;
+                mcqCount: number;
+                mathCount: number;
+                totalPoints: number;
+                generator?: {
+                  difficulty?: string | null;
+                  topics?: string | null;
+                  sourceContext?: string | null;
+                } | null;
+                questions?: any[] | null;
+              } | null;
+            }
+          | undefined
+      )?.getNewMathExam;
+      if (!exam) {
+        throw new Error("Сонгосон шалгалтын дэлгэрэнгүй ирсэнгүй.");
+      }
+
+      setIsGeneratorOpen(false);
+      setSourceFiles([]);
+      setExamTitle(exam.title);
+      setGeneratorSettings((current) => ({
+        ...current,
+        difficulty:
+          exam.generator?.difficulty === "easy" ||
+          exam.generator?.difficulty === "medium" ||
+          exam.generator?.difficulty === "advanced"
+            ? exam.generator.difficulty
+            : current.difficulty,
+        topics: exam.generator?.topics ?? "",
+        sourceContext: exam.generator?.sourceContext ?? "",
+        mcqCount: exam.mcqCount,
+        mathCount: exam.mathCount,
+        totalPoints: exam.totalPoints,
+      }));
+
+      const normalizeImportedText = (value: string) =>
+        restoreInlineMathDelimiters(sanitizeImportedLatexArtifacts(value));
+
+      const nextQuestions: ExamQuestion[] = (exam.questions ?? []).map((q: any) =>
+        q.type === MathExamQuestionType.Mcq
+          ? createMcqQuestion({
+              id: q.id,
+              prompt: normalizeImportedText(q.prompt ?? ""),
+              points: q.points,
+              imageAlt: q.imageAlt ?? "",
+              imageDataUrl: q.imageDataUrl ?? undefined,
+              options: (q.options ?? []).map((opt: string) =>
+                normalizeImportedText(opt),
+              ),
+              correctOption: q.correctOption ?? null,
+            })
+          : createMathQuestion({
+              id: q.id,
+              prompt: normalizeImportedText(q.prompt ?? ""),
+              points: q.points,
+              imageAlt: q.imageAlt ?? "",
+              imageDataUrl: q.imageDataUrl ?? undefined,
+              responseGuide: normalizeImportedText(q.responseGuide ?? ""),
+              answerLatex: q.answerLatex ?? "",
+            }),
+      );
+
+      setQuestions(nextQuestions);
+      resetSectionState();
+    } catch (e) {
+      setGeneratorError(
+        e instanceof Error ? e.message : "Сангаас шалгалт татахад алдаа гарлаа.",
+      );
+    }
+  }
 
   function resetSectionState() {
     setEditorSections(createDefaultSectionState());
@@ -112,69 +266,17 @@ export default function MathExam() {
   }
 
   function handleDemo() {
-    setGeneratorError("");
-    setSaveError(null);
-    setSavedExamId(null);
-    setIsGeneratorOpen(false);
-    setSourceFiles([]);
-
-    setExamTitle("9-р анги — Математик (5 тест + 1 задгай)");
-    setGeneratorSettings((current) => ({
-      ...current,
-      difficulty: "medium",
-      mcqCount: 5,
-      mathCount: 1,
-      totalPoints: 6,
-      topics: "Квадрат тэгшитгэл, Пифагорын теорем, квадрат язгуур",
-      sourceContext: "",
-    }));
-
-    setQuestions(
-      [
-        ...Array.from({ length: 5 }, (_, idx): ExamQuestion => {
-          const n = idx + 1;
-          // 9-р ангийн математикийн энгийн demo тестүүд (LaTeX ашиглаж болно)
-          return createMcqQuestion({
-            prompt:
-              n === 1
-                ? "Дараах тэгшитгэлийг бод. $x^2 - 5x + 6 = 0$"
-                : n === 2
-                  ? "Пифагорын теоремоор $a=3$, $b=4$ бол гипотенуз $c$ хэд вэ?"
-                  : n === 3
-                    ? "Илэрхийллийг хялбарчил. $\\sqrt{50}$"
-                    : n === 4
-                      ? "Функц $y=2x+1$ үед $x=3$ бол $y$ хэд вэ?"
-                      : "Квадрат тэгшитгэлийн дискриминант $D=b^2-4ac$. $x^2-4x+1=0$ үед $D$ хэд вэ?",
-            points: 1,
-            options:
-              n === 1
-                ? ["$x=2,3$", "$x=1,6$", "$x=-2,-3$", "$x=0,6$"]
-                : n === 2
-                  ? ["$c=5$", "$c=6$", "$c=7$", "$c=8$"]
-                  : n === 3
-                    ? [
-                        "$5\\sqrt{2}$",
-                        "$10\\sqrt{5}$",
-                        "$25\\sqrt{2}$",
-                        "$5\\sqrt{5}$",
-                      ]
-                    : n === 4
-                      ? ["5", "6", "7", "8"]
-                      : ["$12$", "$16$", "$-12$", "$-16$"],
-            correctOption:
-              n === 1 ? 0 : n === 2 ? 0 : n === 3 ? 0 : n === 4 ? 2 : 0,
-          });
-        }),
-        createMathQuestion({
-          prompt:
-            "Задгай: Дараах тэгшитгэлийг бодож, хариуг хялбарчил. $x^2-2x-3=0$",
-          points: 1,
-          responseGuide: "Бодолтын алхмуудаа бичээд, эцсийн хариуг $...$ хэлбэрээр өг.",
-          answerLatex: "x = 3,\\,-1",
-        }),
-      ],
-    );
-    resetSectionState();
+    runMathExamDemo({
+      setGeneratorError,
+      setSaveError,
+      setSavedExamId,
+      setIsGeneratorOpen,
+      setSourceFiles,
+      setExamTitle,
+      setGeneratorSettings,
+      setQuestions,
+      resetSectionState,
+    });
   }
 
   function handleResetAll() {
@@ -313,6 +415,7 @@ export default function MathExam() {
       if (!examId) {
         throw new Error("Хариу дээр examId ирээгүй байна.");
       }
+      handleResetAll();
       setSavedExamId(examId);
     } catch (e) {
       setSaveError(
@@ -341,6 +444,9 @@ export default function MathExam() {
             onExamTitleChange={setExamTitle}
             onGenerateExam={handleGenerateExam}
             onGeneratorOpenChange={setIsGeneratorOpen}
+            bankExams={bankExams}
+            onRequestBankExams={handleRequestBankExams}
+            onImportFromBank={handleImportFromBank}
             onReset={handleResetAll}
             onSourceFilesSelected={handleSourceFilesSelected}
             requestedQuestionCount={requestedQuestionCount}

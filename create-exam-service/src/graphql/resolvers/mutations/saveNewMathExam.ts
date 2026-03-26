@@ -153,6 +153,7 @@ export const saveNewMathExamMutation = {
 
 		return {
 			examId: id,
+			title: input.title.trim() || "Нэргүй шалгалт",
 			createdAt,
 			updatedAt: now,
 		};

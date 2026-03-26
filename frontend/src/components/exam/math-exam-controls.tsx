@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, LoaderCircle, Plus } from "lucide-react";
+import { ChevronDown, Database, LoaderCircle, Plus } from "lucide-react";
 import {
   useRef,
   type ChangeEvent,
@@ -8,10 +8,19 @@ import {
   type SetStateAction,
 } from "react";
 
+import { DemoButton } from "@/components/exam/demo-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,6 +54,9 @@ type MathExamControlsProps = {
   onExamTitleChange: (value: string) => void;
   onGenerateExam: () => void;
   onGeneratorOpenChange: (open: boolean) => void;
+  bankExams: { examId: string; title: string }[];
+  onRequestBankExams: () => void;
+  onImportFromBank: (examId: string) => void;
   onReset: () => void;
   onSourceFilesSelected: (files: File[]) => void;
   requestedQuestionCount: number;
@@ -69,6 +81,9 @@ export function MathExamControls({
   onExamTitleChange,
   onGenerateExam,
   onGeneratorOpenChange,
+  bankExams,
+  onRequestBankExams,
+  onImportFromBank,
   onReset,
   onSourceFilesSelected,
   requestedQuestionCount,
@@ -77,6 +92,13 @@ export function MathExamControls({
   stats,
 }: MathExamControlsProps) {
   const generatorFileInputRef = useRef<HTMLInputElement | null>(null);
+  const pinnedTitles = [
+    "9-р анги — Математик (5 тест + 1 задгай)",
+    "VIII анги БШ",
+  ] as const;
+  const pinnedExams = pinnedTitles
+    .map((title) => bankExams.find((exam) => exam.title === title))
+    .filter((exam): exam is { examId: string; title: string } => Boolean(exam));
 
   function handleSourceFileChange(event: ChangeEvent<HTMLInputElement>) {
     void onSourceFilesSelected(Array.from(event.target.files ?? []));
@@ -99,6 +121,30 @@ export function MathExamControls({
               className="hidden"
               onChange={handleSourceFileChange}
             />
+            <DropdownMenu onOpenChange={(open) => open && onRequestBankExams()}>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline">
+                  <Database />
+                  Сангаас оруулах
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>Өмнөх шалгалтууд</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {pinnedExams.length > 0 ? (
+                  pinnedExams.map((exam) => (
+                    <DropdownMenuItem
+                      key={exam.examId}
+                      onSelect={() => onImportFromBank(exam.examId)}
+                    >
+                      {exam.title}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled>Хоосон байна</DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               type="button"
               variant="outline"
@@ -159,7 +205,10 @@ export function MathExamControls({
             </Button>
           </div>
         </div>
-        <Collapsible open={isGeneratorOpen} onOpenChange={onGeneratorOpenChange}>
+        <Collapsible
+          open={isGeneratorOpen}
+          onOpenChange={onGeneratorOpenChange}
+        >
           <CollapsibleContent className="space-y-4 border-t border-border/70 pt-4">
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="grid gap-4 sm:grid-cols-3">
@@ -336,9 +385,7 @@ export function MathExamControls({
           <ExamStat label="Нийт оноо" value={String(stats.totalPoints)} />
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4">
-          <Button type="button" variant="outline" onClick={onDemo}>
-            Demo
-          </Button>
+          <DemoButton onDemo={onDemo} />
           <Button type="button" variant="outline" onClick={onReset}>
             Reset
           </Button>
