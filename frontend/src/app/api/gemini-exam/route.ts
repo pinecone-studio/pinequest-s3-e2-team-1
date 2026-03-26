@@ -1,19 +1,8 @@
-type DifficultyLevel = "easy" | "medium" | "advanced";
-
-type GenerateExamRequest = {
-  attachments?: Array<{
-    data?: string;
-    mimeType?: string;
-    name?: string;
-    text?: string;
-  }>;
-  difficulty?: DifficultyLevel;
-  mathCount?: number;
-  mcqCount?: number;
-  sourceContext?: string;
-  topics?: string;
-  totalPoints?: number;
-};
+import type {
+  DifficultyLevel,
+  GenerateExamRequest,
+  GeneratedExamPayload,
+} from "@/lib/math-exam-contract";
 
 function cleanJsonBlock(value: string) {
   const trimmed = value.trim();
@@ -267,7 +256,7 @@ JSON бүтэц:
       );
     }
 
-    const exam = JSON.parse(cleanJsonBlock(text));
+    const exam = JSON.parse(cleanJsonBlock(text)) as GeneratedExamPayload;
 
     return Response.json({ exam });
   } catch (error) {

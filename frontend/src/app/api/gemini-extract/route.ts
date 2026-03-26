@@ -1,4 +1,11 @@
 import mammoth from "mammoth";
+import mammothUnzipModule from "mammoth/lib/unzip";
+import mammothXmlModule from "mammoth/lib/xml";
+
+import type {
+  ExtractExamRequest,
+  GeneratedExamPayload,
+} from "@/lib/math-exam-contract";
 
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -29,38 +36,15 @@ type DocxZipFile = {
   read: (name: string, encoding?: string) => Promise<string>;
 };
 
-const mammothUnzip = require("mammoth/lib/unzip") as {
+const mammothUnzip = mammothUnzipModule as {
   openZip: (options: { buffer: Buffer }) => Promise<DocxZipFile>;
 };
 
-const mammothXml = require("mammoth/lib/xml") as {
+const mammothXml = mammothXmlModule as {
   readString: (
     xmlString: string,
     namespaceMap: Record<string, string>,
   ) => Promise<XmlElementNode>;
-};
-
-type ExtractRequest = {
-  attachments?: Array<{
-    data?: string;
-    mimeType?: string;
-    name?: string;
-    text?: string;
-  }>;
-};
-type ExtractedExamPayload = {
-  title?: string;
-  questions?: Array<{
-    answerLatex?: string;
-    correctOption?: number | null;
-    imageAlt?: string;
-    options?: string[];
-    points?: number;
-    prompt?: string;
-    responseGuide?: string;
-    sourceImageName?: string;
-    type?: "mcq" | "math";
-  }>;
 };
 
 function cleanJsonBlock(value: string) {
@@ -646,7 +630,7 @@ async function normalizeAttachments(attachments: AttachmentPayload[]) {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as ExtractRequest;
+    const body = (await request.json()) as ExtractExamRequest;
     const attachments = Array.isArray(body.attachments) ? body.attachments : [];
 
     if (attachments.length === 0) {
@@ -812,7 +796,7 @@ JSON бүтэц:
       );
     }
 
-    const exam = JSON.parse(cleanJsonBlock(extractedText)) as ExtractedExamPayload;
+    const exam = JSON.parse(cleanJsonBlock(extractedText)) as GeneratedExamPayload;
 
     if (!Array.isArray(exam.questions) || exam.questions.length === 0) {
       return Response.json(
