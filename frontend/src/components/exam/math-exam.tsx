@@ -110,6 +110,16 @@ export default function MathExam() {
     if (!value) return value;
     if (value.includes("$")) return value;
 
+    // Wrap obvious LaTeX commands (e.g. \sqrt{50}, \frac{1}{2}) inline.
+    // Example: "Илэрхийллийг хялбарчил. \sqrt{50}" -> "Илэрхийллийг хялбарчил. $\sqrt{50}$"
+    const withWrappedCommands = value.replace(
+      /(\\[A-Za-z]+)(\s*(?:\{[^}]*\}|\[[^\]]*\]))+/g,
+      (full) => `$${full.trim()}$`,
+    );
+    if (withWrappedCommands !== value) {
+      return withWrappedCommands;
+    }
+
     // Wrap ascii-only math-ish expressions containing =, ^, or _ with $...$
     // Example: "D=b^2-4ac." => "$D=b^2-4ac$."
     const pattern =
