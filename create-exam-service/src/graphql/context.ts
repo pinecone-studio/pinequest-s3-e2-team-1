@@ -7,6 +7,8 @@ export interface GraphQLContext {
 	env: {
 		DB?: D1Database;
 		GEMINI_API_KEY?: string;
+		/** Optional override for Gemini model name (e.g. `gemini-flash-latest`) */
+		GEMINI_MODEL?: string;
 		/** `1` / `true` — `generateExamQuestions` AI-аас өмнө input-ийг консолд бичнэ */
 		LOG_GRAPHQL_GENERATION?: string;
 	};
@@ -18,12 +20,14 @@ export async function createGraphQLContext(): Promise<GraphQLContext> {
 	const e = env as CloudflareEnv & {
 		DB?: D1Database;
 		GEMINI_API_KEY?: string;
+		GEMINI_MODEL?: string;
 		LOG_GRAPHQL_GENERATION?: string;
 	};
 	return {
 		env: {
 			DB: e.DB,
 			GEMINI_API_KEY: e.GEMINI_API_KEY ?? process.env.GEMINI_API_KEY,
+			GEMINI_MODEL: e.GEMINI_MODEL ?? process.env.GEMINI_MODEL,
 			LOG_GRAPHQL_GENERATION:
 				e.LOG_GRAPHQL_GENERATION ?? process.env.LOG_GRAPHQL_GENERATION,
 		},

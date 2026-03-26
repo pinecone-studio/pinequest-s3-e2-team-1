@@ -27,16 +27,10 @@ export type DifficultyDistributionInput = {
   medium: Scalars['Int']['input'];
 };
 
-export type DifficultyFormatsInput = {
-  easy: QuestionFormat;
-  hard: QuestionFormat;
-  medium: QuestionFormat;
-};
-
 export type DifficultyPointsInput = {
-  easyPoints?: InputMaybe<Scalars['Float']['input']>;
-  hardPoints?: InputMaybe<Scalars['Float']['input']>;
-  mediumPoints?: InputMaybe<Scalars['Float']['input']>;
+  easyPoints?: InputMaybe<Scalars['Int']['input']>;
+  hardPoints?: InputMaybe<Scalars['Int']['input']>;
+  mediumPoints?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type EditableQuestionInput = {
@@ -51,9 +45,9 @@ export type EditableQuestionInput = {
 
 export type ExamGenerationInput = {
   difficultyDistribution: DifficultyDistributionInput;
-  difficultyFormats: DifficultyFormatsInput;
   difficultyPoints?: InputMaybe<DifficultyPointsInput>;
   durationMinutes: Scalars['Int']['input'];
+  examContent: Scalars['String']['input'];
   examDate: Scalars['String']['input'];
   examTime: Scalars['String']['input'];
   examType: ExamType;
@@ -64,6 +58,31 @@ export type ExamGenerationInput = {
   totalQuestionCount: Scalars['Int']['input'];
 };
 
+export type ExamGenerationResult = {
+  __typename?: 'ExamGenerationResult';
+  createdAt: Scalars['String']['output'];
+  errorLog?: Maybe<Scalars['String']['output']>;
+  examId: Scalars['ID']['output'];
+  questions: Array<GeneratedQuestion>;
+  status: ExamStatus;
+  updatedAt: Scalars['String']['output'];
+};
+
+export enum ExamStatus {
+  Draft = 'DRAFT',
+  Failed = 'FAILED',
+  Generating = 'GENERATING',
+  Published = 'PUBLISHED'
+}
+
+export enum ExamType {
+  Finalterm = 'FINALTERM',
+  Midterm = 'MIDTERM',
+  Periodic_1 = 'PERIODIC_1',
+  Periodic_2 = 'PERIODIC_2',
+  Practice = 'PRACTICE'
+}
+
 export type FormatDistributionInput = {
   fillIn: Scalars['Int']['input'];
   matching: Scalars['Int']['input'];
@@ -71,25 +90,6 @@ export type FormatDistributionInput = {
   singleChoice: Scalars['Int']['input'];
   written: Scalars['Int']['input'];
 };
-
-export type ExamGenerationResult = {
-  __typename?: 'ExamGenerationResult';
-  examId: Scalars['ID']['output'];
-  questions: Array<GeneratedQuestion>;
-};
-
-export enum ExamStatus {
-  Draft = 'DRAFT',
-  Published = 'PUBLISHED'
-}
-
-export enum ExamType {
-  FinalTerm = 'FINAL_TERM',
-  Midterm = 'MIDTERM',
-  Practice = 'PRACTICE',
-  Periodic_1 = 'PERIODIC_1',
-  Periodic_2 = 'PERIODIC_2'
-}
 
 export type GeneratedQuestion = {
   __typename?: 'GeneratedQuestion';
@@ -132,6 +132,7 @@ export enum QuestionFormat {
 }
 
 export type SaveExamInput = {
+  errorLog?: InputMaybe<Scalars['String']['input']>;
   examId?: InputMaybe<Scalars['ID']['input']>;
   generation: ExamGenerationInput;
   questions: Array<EditableQuestionInput>;
@@ -140,6 +141,9 @@ export type SaveExamInput = {
 
 export type SaveExamPayload = {
   __typename?: 'SaveExamPayload';
+  createdAt: Scalars['String']['output'];
+  errorLog?: Maybe<Scalars['String']['output']>;
   examId: Scalars['ID']['output'];
   status: ExamStatus;
+  updatedAt: Scalars['String']['output'];
 };

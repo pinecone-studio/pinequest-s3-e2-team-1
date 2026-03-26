@@ -66,6 +66,8 @@
 			// Workers Logs эсвэл: npx wrangler tail create-exam-service
 			// Унтраах: "0" | Dashboard → Variables → LOG_GRAPHQL_GENERATION
 			"LOG_GRAPHQL_GENERATION": "1",
+			// Gemini model override (optional). Example: "gemini-flash-latest"
+			"GEMINI_MODEL": "gemini-flash-latest"
 			// "GRAPHQL_CORS_ORIGINS": "https://your-frontend.pages.dev"
 		},
 		// GEMINI_API_KEY: wrangler secret put GEMINI_API_KEY эсвэл .dev.vars
