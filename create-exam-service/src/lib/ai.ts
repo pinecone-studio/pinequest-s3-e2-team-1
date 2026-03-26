@@ -5,7 +5,13 @@ import type {
   GeneratedQuestionPayload,
 } from "../graphql/types";
 
-const MODEL = "gemini-1.5-flash";
+/**
+ * Google Generative Language API (v1beta) дээр model нэршил үе үе солигддог.
+ * - `gemini-1.5-flash` зарим төсөл/region дээр v1beta generateContent-д дэмжигдэхгүй болох тохиолдол бий.
+ * - Deploy дээр хурдан засварлахын тулд env-ээр override хийх боломжтой болгов.
+ */
+// See: https://ai.google.dev/gemini-api/docs/models (model strings change over time)
+const DEFAULT_MODEL = "gemini-flash-latest";
 
 function randomUUID(): string {
   return globalThis.crypto.randomUUID();
@@ -21,6 +27,7 @@ type GeminiErrorInfo = {
     | "quota"
     | "rate_limited"
     | "auth"
+    | "model"
     | "network"
     | "unknown";
   retryAfterSeconds?: number;
@@ -49,6 +56,20 @@ function classifyGeminiError(e: unknown): GeminiErrorInfo {
   const rawMessage = e instanceof Error ? e.message : String(e);
   const msg = rawMessage.toLowerCase();
   const retryAfterSeconds = parseRetryDelaySeconds(rawMessage);
+
+  // Model not found / method not supported (usually 404)
+  if (
+    msg.includes("404") &&
+    (msg.includes("model") || msg.includes("models/")) &&
+    (msg.includes("not found") || msg.includes("not supported"))
+  ) {
+    return {
+      kind: "model",
+      userMessage:
+        "Gemini model олдсонгүй/дэмжигдэхгүй байна (404). GEMINI_MODEL-оо `gemini-flash-latest` эсвэл `gemini-2.5-flash` зэрэг одоогоор дэмжигддэг model string рүү солино уу.",
+      rawMessage,
+    };
+  }
 
   // Leaked/compromised key
   if (
@@ -250,6 +271,7 @@ function parseQuestionsPayload(text: string): unknown[] {
 export async function generateExamQuestionsWithAI(
   apiKey: string,
   input: AiGenerationInput,
+  opts?: { model?: string },
 ): Promise<
   Array<{
     id: string;
@@ -275,18 +297,60 @@ export async function generateExamQuestionsWithAI(
     );
   }
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: MODEL,
-    generationConfig: {
-      responseMimeType: "application/json",
-    },
-  });
+  const envModel =
+    (opts?.model && opts.model.trim()) ||
+    (typeof process !== "undefined" && process.env?.GEMINI_MODEL
+      ? process.env.GEMINI_MODEL.trim()
+      : "") ||
+    "";
+  const candidates = Array.from(
+    new Set(
+      [
+        envModel,
+        DEFAULT_MODEL,
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-pro",
+      ].filter(Boolean),
+    ),
+  );
 
   const prompt = buildPrompt(input);
-  let text: string;
+  let text = "";
+  let usedModelName = candidates[0] ?? DEFAULT_MODEL;
   try {
-    const result = await model.generateContent(prompt);
-    text = result.response.text();
+    let lastErr: unknown = null;
+    for (const modelName of candidates) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: "application/json",
+          },
+        });
+        const result = await model.generateContent(prompt);
+        text = result.response.text();
+        usedModelName = modelName;
+        lastErr = null;
+        break;
+      } catch (e0) {
+        lastErr = e0;
+        const info0 = classifyGeminiError(e0);
+        // Model 404 үед дараагийн candidate-ийг туршина.
+        if (info0.kind === "model") {
+          console.error(
+            "[generateExamQuestions] Gemini error (model not supported):",
+            modelName,
+            info0.rawMessage,
+          );
+          continue;
+        }
+        throw e0;
+      }
+    }
+    if (lastErr) {
+      throw lastErr;
+    }
   } catch (e) {
     const info = classifyGeminiError(e);
     // Debug: Cloudflare/Workers log дээр Gemini-ийн үндсэн шалтгааныг харах (API key value хэвлэхгүй)
@@ -304,7 +368,13 @@ export async function generateExamQuestionsWithAI(
     ) {
       try {
         await sleep(info.retryAfterSeconds * 1000);
-        const retryResult = await model.generateContent(prompt);
+        const retryModel = genAI.getGenerativeModel({
+          model: usedModelName,
+          generationConfig: {
+            responseMimeType: "application/json",
+          },
+        });
+        const retryResult = await retryModel.generateContent(prompt);
         text = retryResult.response.text();
       } catch (e2) {
         const info2 = classifyGeminiError(e2);

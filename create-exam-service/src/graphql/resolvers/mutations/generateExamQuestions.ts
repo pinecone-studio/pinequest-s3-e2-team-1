@@ -70,7 +70,9 @@ export const generateExamQuestionsMutation = {
 				difficultyDistribution: args.input.difficultyDistribution,
 				formatDistribution: args.input.formatDistribution ?? null,
 			};
-			const questions = await generateExamQuestionsWithAI(apiKey, aiInput);
+			const questions = await generateExamQuestionsWithAI(apiKey, aiInput, {
+				model: ctx.env.GEMINI_MODEL,
+			});
 
 			const toDifficulty = (raw: string): Difficulty => {
 				if (raw === "EASY") return "EASY" as Difficulty;

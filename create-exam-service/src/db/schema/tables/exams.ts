@@ -25,10 +25,6 @@ export const exams = sqliteTable("exams", {
 	distEasy: integer("dist_easy"),
 	distMedium: integer("dist_medium"),
 	distHard: integer("dist_hard"),
-	// Legacy formats (deprecated; previously used by difficultyFormats)
-	formatEasy: text("format_easy"),
-	formatMedium: text("format_medium"),
-	formatHard: text("format_hard"),
 	// Format distribution (new)
 	formatSingleChoice: integer("format_single_choice"),
 	formatMultipleChoice: integer("format_multiple_choice"),

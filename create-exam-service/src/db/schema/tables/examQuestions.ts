@@ -1,4 +1,5 @@
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { exams } from "./exams";
 
 /**
  * Шалгалтын асуултууд (row-per-question).
@@ -7,7 +8,9 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
  */
 export const examQuestions = sqliteTable("exam_questions", {
 	id: text("id").primaryKey(),
-	examId: text("exam_id").notNull(),
+	examId: text("exam_id")
+		.notNull()
+		.references(() => exams.id, { onDelete: "cascade" }),
 	position: integer("position").notNull(),
 
 	text: text("text").notNull(),

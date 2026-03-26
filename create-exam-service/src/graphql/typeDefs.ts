@@ -36,9 +36,9 @@ export const typeDefs = /* GraphQL */ `
   }
 
   input DifficultyPointsInput {
-    easyPoints: Float
-    mediumPoints: Float
-    hardPoints: Float
+    easyPoints: Int
+    mediumPoints: Int
+    hardPoints: Int
   }
 
   input FormatDistributionInput {

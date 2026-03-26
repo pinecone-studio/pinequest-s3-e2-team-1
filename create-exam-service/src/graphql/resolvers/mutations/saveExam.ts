@@ -65,9 +65,6 @@ export const saveExamMutation = {
         distEasy: typeof dist?.easy === "number" ? dist.easy : null,
         distMedium: typeof dist?.medium === "number" ? dist.medium : null,
         distHard: typeof dist?.hard === "number" ? dist.hard : null,
-        formatEasy: null,
-        formatMedium: null,
-        formatHard: null,
         formatSingleChoice:
           typeof fmt?.singleChoice === "number" ? fmt.singleChoice : null,
         formatMultipleChoice:
@@ -117,9 +114,6 @@ export const saveExamMutation = {
           distEasy: typeof dist?.easy === "number" ? dist.easy : null,
           distMedium: typeof dist?.medium === "number" ? dist.medium : null,
           distHard: typeof dist?.hard === "number" ? dist.hard : null,
-          formatEasy: null,
-          formatMedium: null,
-          formatHard: null,
           formatSingleChoice:
             typeof fmt?.singleChoice === "number" ? fmt.singleChoice : null,
           formatMultipleChoice:

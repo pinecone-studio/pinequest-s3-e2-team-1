@@ -30,9 +30,9 @@ export type DifficultyDistributionInput = {
 };
 
 export type DifficultyPointsInput = {
-  easyPoints?: InputMaybe<Scalars['Float']['input']>;
-  hardPoints?: InputMaybe<Scalars['Float']['input']>;
-  mediumPoints?: InputMaybe<Scalars['Float']['input']>;
+  easyPoints?: InputMaybe<Scalars['Int']['input']>;
+  hardPoints?: InputMaybe<Scalars['Int']['input']>;
+  mediumPoints?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type EditableQuestionInput = {
@@ -60,14 +60,6 @@ export type ExamGenerationInput = {
   totalQuestionCount: Scalars['Int']['input'];
 };
 
-export type FormatDistributionInput = {
-  fillIn: Scalars['Int']['input'];
-  matching: Scalars['Int']['input'];
-  multipleChoice: Scalars['Int']['input'];
-  singleChoice: Scalars['Int']['input'];
-  written: Scalars['Int']['input'];
-};
-
 export type ExamGenerationResult = {
   __typename?: 'ExamGenerationResult';
   createdAt: Scalars['String']['output'];
@@ -86,12 +78,20 @@ export enum ExamStatus {
 }
 
 export enum ExamType {
-  FinalTerm = 'FINALTERM',
+  Finalterm = 'FINALTERM',
   Midterm = 'MIDTERM',
-  Practice = 'PRACTICE',
   Periodic_1 = 'PERIODIC_1',
-  Periodic_2 = 'PERIODIC_2'
+  Periodic_2 = 'PERIODIC_2',
+  Practice = 'PRACTICE'
 }
+
+export type FormatDistributionInput = {
+  fillIn: Scalars['Int']['input'];
+  matching: Scalars['Int']['input'];
+  multipleChoice: Scalars['Int']['input'];
+  singleChoice: Scalars['Int']['input'];
+  written: Scalars['Int']['input'];
+};
 
 export type GeneratedQuestion = {
   __typename?: 'GeneratedQuestion';
@@ -233,7 +233,7 @@ export type ResolversTypes = ResolversObject<{
   ExamGenerationResult: ResolverTypeWrapper<ExamGenerationResult>;
   ExamStatus: ExamStatus;
   ExamType: ExamType;
-  Float: ResolverTypeWrapper<Scalars['Float']['output']>;
+  FormatDistributionInput: FormatDistributionInput;
   GeneratedQuestion: ResolverTypeWrapper<GeneratedQuestion>;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
@@ -253,7 +253,7 @@ export type ResolversParentTypes = ResolversObject<{
   EditableQuestionInput: EditableQuestionInput;
   ExamGenerationInput: ExamGenerationInput;
   ExamGenerationResult: ExamGenerationResult;
-  Float: Scalars['Float']['output'];
+  FormatDistributionInput: FormatDistributionInput;
   GeneratedQuestion: GeneratedQuestion;
   ID: Scalars['ID']['output'];
   Int: Scalars['Int']['output'];

@@ -82,7 +82,7 @@ const EXAM_TYPES: { value: ExamType; label: string }[] = [
   { value: ExamType.Periodic_1, label: "Явцын шалгалт 1" },
   { value: ExamType.Periodic_2, label: "Явцын шалгалт 2" },
   { value: ExamType.Midterm, label: "Дундын шалгалт" },
-  { value: ExamType.FinalTerm, label: "Жилийн эцсийн шалгалт" },
+  { value: ExamType.Finalterm, label: "Жилийн эцсийн шалгалт" },
   { value: ExamType.Practice, label: "Давтлага шалгалт" },
 ];
 
@@ -835,8 +835,12 @@ export default function GenerateExamPage() {
 
                 {topics.length ? (
                   <div className="flex flex-wrap gap-2">
-                    {topics.map((t) => (
-                      <Badge key={t} variant="secondary" className="gap-1 pr-1">
+                    {topics.map((t, idx) => (
+                      <Badge
+                        key={`${t}-${idx}`}
+                        variant="secondary"
+                        className="gap-1 pr-1"
+                      >
                         <span className="truncate">{t}</span>
                         <button
                           type="button"
@@ -1234,8 +1238,8 @@ export default function GenerateExamPage() {
                 <p className="mt-2 text-sm leading-relaxed">{q.text}</p>
                 {q.options && q.options.length > 0 ? (
                   <ul className="mt-2 list-inside list-disc text-sm">
-                    {q.options.map((o) => (
-                      <li key={o}>{o}</li>
+                    {q.options.map((o, idx) => (
+                      <li key={`${q.id}-opt-${idx}`}>{o}</li>
                     ))}
                   </ul>
                 ) : null}
