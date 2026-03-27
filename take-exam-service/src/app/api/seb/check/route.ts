@@ -1,8 +1,28 @@
 import { NextResponse } from "next/server";
-import { validateSebRequest, validateSebVersion } from "@/lib/seb/verify";
+import {
+	getSebClientDetails,
+	isSebEnforcementEnabled,
+	validateSebRequest,
+	validateSebVersion,
+} from "@/lib/seb/verify";
 
 export async function GET(request: Request) {
-	const validation = validateSebRequest(request, { requireSeb: true });
+	if (!isSebEnforcementEnabled()) {
+		return NextResponse.json(
+			{
+				client: getSebClientDetails(request),
+				ok: true,
+				message: "SEB шалгалт dev горимд алгасагдлаа.",
+			},
+			{
+				headers: {
+					"Cache-Control": "no-store",
+				},
+			},
+		);
+	}
+
+	const validation = validateSebRequest(request);
 
 	if (!validation.ok) {
 		return NextResponse.json(
@@ -10,7 +30,11 @@ export async function GET(request: Request) {
 				ok: false,
 				message: validation.message,
 			},
-			{ status: 403 },
+			{
+				headers: {
+					"Cache-Control": "no-store",
+				},
+			},
 		);
 	}
 
@@ -23,14 +47,25 @@ export async function GET(request: Request) {
 				message: versionValidation.message,
 				ok: false,
 			},
-			{ status: 403 },
+			{
+				headers: {
+					"Cache-Control": "no-store",
+				},
+			},
 		);
 	}
 
-	return NextResponse.json({
-		client: versionValidation.client,
-		ok: true,
-		message: "Safe Exam Browser verification амжилттай боллоо.",
-		configKey: "configKey" in validation ? validation.configKey : undefined,
-	});
+	return NextResponse.json(
+		{
+			client: versionValidation.client,
+			ok: true,
+			message: "Safe Exam Browser verification амжилттай боллоо.",
+			configKey: "configKey" in validation ? validation.configKey : undefined,
+		},
+		{
+			headers: {
+				"Cache-Control": "no-store",
+			},
+		},
+	);
 }
