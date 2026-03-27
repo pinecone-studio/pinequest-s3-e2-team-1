@@ -89,6 +89,11 @@ export function ExamSessionMetadataForm({
 }: ExamSessionMetadataFormProps) {
   const [topicDraft, setTopicDraft] = React.useState("");
   const [saveHint, setSaveHint] = React.useState<string | null>(null);
+  const [isMounted, setIsMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const topicSuggestions = metadata.subject
     ? TOPICS_BY_SUBJECT[metadata.subject] ?? []
@@ -203,7 +208,7 @@ export function ExamSessionMetadataForm({
         </h2>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" size="sm" onClick={handleFillDemo}>
-            Demo
+            Демо
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={handleReset}>
             Цэвэрлэх
@@ -380,7 +385,7 @@ export function ExamSessionMetadataForm({
             value={metadata.examDate}
             onChange={(e) => patch({ examDate: e.target.value })}
           />
-          {examDateMnLabel ? (
+          {isMounted && examDateMnLabel ? (
             <p className="text-xs text-muted-foreground">{examDateMnLabel}</p>
           ) : null}
         </div>
