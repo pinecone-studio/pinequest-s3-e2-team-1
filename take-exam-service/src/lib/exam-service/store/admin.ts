@@ -59,6 +59,15 @@ export const approveAttempt = async (
 		throw new Error("Зөвхөн илгээгдсэн шалгалтыг батлах боломжтой.");
 	}
 
+	const test = await db.query.tests.findFirst({
+		where: eq(schema.tests.id, attempt.testId),
+	});
+	if (test?.answerKeySource === "teacher_service") {
+		throw new Error(
+			"Энэ шалгалтын зөв хариулт багшийн талд байгаа тул эндээс approve хийхгүй.",
+		);
+	}
+
 	const resultRows = await getAttemptResults(db, attemptId);
 	const result = computeResult(resultRows);
 

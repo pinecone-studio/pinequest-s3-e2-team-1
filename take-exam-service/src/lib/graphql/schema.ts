@@ -25,9 +25,26 @@ export const typeDefs = /* GraphQL */ `
     updatedAt: String!
   }
 
+  type ExternalExamSummary {
+    examId: ID!
+    title: String!
+    updatedAt: String!
+  }
+
+  type ExternalExamImportResult {
+    examId: ID!
+    importedTestId: ID!
+    title: String!
+  }
+
   type ExamOption {
     id: ID!
     text: String!
+  }
+
+  type ExistingAnswer {
+    questionId: ID!
+    selectedOptionId: String
   }
 
   type StudentExamQuestion {
@@ -40,6 +57,7 @@ export const typeDefs = /* GraphQL */ `
     imageUrl: String
     audioUrl: String
     videoUrl: String
+    responseGuide: String
   }
 
   type ExamSession {
@@ -73,6 +91,13 @@ export const typeDefs = /* GraphQL */ `
     dangerCount: Int!
     lastEventAt: String
     recentEvents: [AttemptMonitoringEvent!]!
+  }
+
+  type AttemptFeedback {
+    headline: String!
+    summary: String!
+    strengths: [String!]!
+    improvements: [String!]!
   }
 
   type QuestionResult {
@@ -109,6 +134,20 @@ export const typeDefs = /* GraphQL */ `
     submittedAt: String
     result: AttemptResultSummary
     monitoring: AttemptMonitoringSummary
+    feedback: AttemptFeedback
+  }
+
+  type AttemptLiveFeedItem {
+    attemptId: ID!
+    testId: ID!
+    title: String!
+    studentId: String!
+    studentName: String!
+    status: String!
+    startedAt: String!
+    submittedAt: String
+    monitoring: AttemptMonitoringSummary
+    latestEvent: AttemptMonitoringEvent
   }
 
   type StartExamPayload {
@@ -118,6 +157,7 @@ export const typeDefs = /* GraphQL */ `
     studentName: String!
     startedAt: String!
     expiresAt: String!
+    existingAnswers: [ExistingAnswer!]
     exam: ExamSession!
     progress: ExamProgress!
   }
@@ -127,16 +167,21 @@ export const typeDefs = /* GraphQL */ `
     status: String!
     progress: ExamProgress!
     result: AttemptResultSummary
+    feedback: AttemptFeedback
   }
 
   type Query {
     students: [Student!]!
     availableTests: [Test!]!
     attempts: [AttemptSummary!]!
+    liveMonitoringFeed(limit: Int): [AttemptLiveFeedItem!]!
+    externalNewMathExams(limit: Int): [ExternalExamSummary!]!
   }
 
   type Mutation {
     saveTest(test: String!): Boolean!
+    importNewMathExam(examId: ID!): ExternalExamImportResult!
+    syncExternalNewMathExams(limit: Int): [ExternalExamImportResult!]!
     startExam(testId: String!, studentId: String!, studentName: String!): StartExamPayload!
     resumeExam(attemptId: String!): StartExamPayload!
     submitAnswers(attemptId: String!, answers: [AnswerInput!]!, finalize: Boolean!): SubmitAnswersPayload!

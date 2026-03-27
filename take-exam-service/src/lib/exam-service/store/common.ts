@@ -33,3 +33,11 @@ export const getQuestionOptions = (question: any) =>
 	typeof question.options === "string" ? JSON.parse(question.options) : question.options;
 
 export const getOptionId = (option: any) => option.id;
+
+export const normalizeFreeResponseAnswer = (value?: string | null) =>
+	(value ?? "")
+		.toLowerCase()
+		.replace(/\\,/g, ",")
+		.replace(/\$+/g, "")
+		.replace(/\s+/g, "")
+		.trim();

@@ -11,7 +11,7 @@ type TakeExamProps = {
   flaggedQuestions: Record<string, boolean>;
   isMutating: boolean;
   timeLeftLabel: string;
-  onSelectAnswer: (questionId: string, optionId: string) => void;
+  onSelectAnswer: (questionId: string, value: string) => void;
   onSubmit: (finalize: boolean) => void;
   onToggleFlag: (questionId: string) => void;
 };
@@ -121,40 +121,61 @@ export function TakeExam({
                   )}
 
                   <div className="space-y-5 pl-1">
-                    {question.options.map((option) => {
-                      const selected = selectedOptionId === option.id;
+                    {question.type === "math" ? (
+                      <div className="space-y-3">
+                        <textarea
+                          value={selectedOptionId ?? ""}
+                          onChange={(event) =>
+                            onSelectAnswer(
+                              question.questionId,
+                              event.target.value,
+                            )
+                          }
+                          placeholder="Хариугаа энд бичнэ үү..."
+                          className="min-h-32 w-full rounded-2xl border border-[#bfe2f5] bg-white px-4 py-3 text-[16px] text-slate-900 outline-none transition focus:border-[#2a9ee9]"
+                        />
+                        {question.responseGuide && (
+                          <p className="text-sm text-slate-500">
+                            {question.responseGuide}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      question.options.map((option) => {
+                        const selected = selectedOptionId === option.id;
 
-                      return (
-                        <label
-                          key={option.id}
-                          className="flex cursor-pointer items-center gap-4 text-[18px] text-slate-800"
-                        >
-                          <span
-                            className={`grid h-8 w-8 place-items-center rounded-full border-2 transition ${
-                              selected
-                                ? "border-[#2a9ee9] bg-white"
-                                : "border-slate-300 bg-white"
-                            }`}
+                        return (
+                          <label
+                            key={option.id}
+                            className="flex cursor-pointer items-center gap-4 text-[18px] text-slate-800"
                           >
                             <span
-                              className={`h-3.5 w-3.5 rounded-full transition ${
-                                selected ? "bg-[#2a9ee9]" : "bg-transparent"
+                              className={`grid h-8 w-8 place-items-center rounded-full border-2 transition ${
+                                selected
+                                  ? "border-[#2a9ee9] bg-white"
+                                  : "border-slate-300 bg-white"
                               }`}
+                            >
+                              <span
+                                className={`h-3.5 w-3.5 rounded-full transition ${
+                                  selected ? "bg-[#2a9ee9]" : "bg-transparent"
+                                }`}
+                              />
+                            </span>
+                            <input
+                              type="radio"
+                              name={question.questionId}
+                              checked={selected}
+                              onChange={() =>
+                                onSelectAnswer(question.questionId, option.id)
+                              }
+                              className="sr-only"
                             />
-                          </span>
-                          <input
-                            type="radio"
-                            name={question.questionId}
-                            checked={selected}
-                            onChange={() =>
-                              onSelectAnswer(question.questionId, option.id)
-                            }
-                            className="sr-only"
-                          />
-                          <span>{option.text}</span>
-                        </label>
-                      );
-                    })}
+                            <span>{option.text}</span>
+                          </label>
+                        );
+                      })
+                    )}
                   </div>
                 </article>
               );

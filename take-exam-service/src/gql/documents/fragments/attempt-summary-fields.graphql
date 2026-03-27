@@ -16,4 +16,7 @@ fragment AttemptSummaryFields on AttemptSummary {
   result {
     ...AttemptResultSummaryFields
   }
+  feedback {
+    ...AttemptFeedbackFields
+  }
 }

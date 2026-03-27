@@ -21,9 +21,26 @@ type Test {
   updatedAt: String!
 }
 
+type ExternalExamSummary {
+  examId: ID!
+  title: String!
+  updatedAt: String!
+}
+
+type ExternalExamImportResult {
+  examId: ID!
+  importedTestId: ID!
+  title: String!
+}
+
 type ExamOption {
   id: ID!
   text: String!
+}
+
+type ExistingAnswer {
+  questionId: ID!
+  selectedOptionId: String
 }
 
 type StudentExamQuestion {
@@ -36,6 +53,7 @@ type StudentExamQuestion {
   imageUrl: String
   audioUrl: String
   videoUrl: String
+  responseGuide: String
 }
 
 type ExamSession {
@@ -69,6 +87,13 @@ type AttemptMonitoringSummary {
   dangerCount: Int!
   lastEventAt: String
   recentEvents: [AttemptMonitoringEvent!]!
+}
+
+type AttemptFeedback {
+  headline: String!
+  summary: String!
+  strengths: [String!]!
+  improvements: [String!]!
 }
 
 type QuestionResult {
@@ -105,6 +130,20 @@ type AttemptSummary {
   submittedAt: String
   result: AttemptResultSummary
   monitoring: AttemptMonitoringSummary
+  feedback: AttemptFeedback
+}
+
+type AttemptLiveFeedItem {
+  attemptId: ID!
+  testId: ID!
+  title: String!
+  studentId: String!
+  studentName: String!
+  status: String!
+  startedAt: String!
+  submittedAt: String
+  monitoring: AttemptMonitoringSummary
+  latestEvent: AttemptMonitoringEvent
 }
 
 type StartExamPayload {
@@ -114,6 +153,7 @@ type StartExamPayload {
   studentName: String!
   startedAt: String!
   expiresAt: String!
+  existingAnswers: [ExistingAnswer!]
   exam: ExamSession!
   progress: ExamProgress!
 }
@@ -123,16 +163,21 @@ type SubmitAnswersPayload {
   status: String!
   progress: ExamProgress!
   result: AttemptResultSummary
+  feedback: AttemptFeedback
 }
 
 type Query {
   students: [Student!]!
   availableTests: [Test!]!
   attempts: [AttemptSummary!]!
+  liveMonitoringFeed(limit: Int): [AttemptLiveFeedItem!]!
+  externalNewMathExams(limit: Int): [ExternalExamSummary!]!
 }
 
 type Mutation {
   saveTest(test: String!): Boolean!
+  importNewMathExam(examId: ID!): ExternalExamImportResult!
+  syncExternalNewMathExams(limit: Int): [ExternalExamImportResult!]!
   startExam(testId: String!, studentId: String!, studentName: String!): StartExamPayload!
   resumeExam(attemptId: String!): StartExamPayload!
   submitAnswers(attemptId: String!, answers: [AnswerInput!]!, finalize: Boolean!): SubmitAnswersPayload!

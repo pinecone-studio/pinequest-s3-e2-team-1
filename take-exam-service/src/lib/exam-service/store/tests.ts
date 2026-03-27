@@ -14,6 +14,8 @@ export const savePublishedTest = async (
 	await db.insert(schema.tests).values({
 		id: test.id,
 		generatorTestId: test.id,
+		answerKeySource: test.answerKeySource ?? "local",
+		sourceService: test.sourceService ?? null,
 		title: test.title,
 		description: test.description,
 		gradeLevel: test.criteria.gradeLevel,
@@ -23,10 +25,12 @@ export const savePublishedTest = async (
 		timeLimitMinutes: test.timeLimitMinutes,
 		status: "published",
 	}).onConflictDoUpdate({
-		target: schema.tests.id,
-		set: {
-			generatorTestId: test.id,
-			title: test.title,
+			target: schema.tests.id,
+			set: {
+				generatorTestId: test.id,
+				answerKeySource: test.answerKeySource ?? "local",
+				sourceService: test.sourceService ?? null,
+				title: test.title,
 			description: test.description,
 			gradeLevel: test.criteria.gradeLevel,
 			className: test.criteria.className,
@@ -42,12 +46,15 @@ export const savePublishedTest = async (
 		await db.insert(schema.questions).values({
 			id: question.id,
 			testId: test.id,
+			type: question.type,
 			prompt: question.prompt,
 			options: JSON.stringify(question.options),
 			correctOptionId: question.correctOptionId,
 			explanation: question.explanation,
 			points: question.points,
 			competency: question.competency,
+			responseGuide: question.responseGuide,
+			answerLatex: question.answerLatex,
 			imageUrl: question.imageUrl,
 			audioUrl: question.audioUrl,
 			videoUrl: question.videoUrl,
@@ -55,12 +62,15 @@ export const savePublishedTest = async (
 		}).onConflictDoUpdate({
 			target: schema.questions.id,
 			set: {
+				type: question.type,
 				prompt: question.prompt,
 				options: JSON.stringify(question.options),
 				correctOptionId: question.correctOptionId,
 				explanation: question.explanation,
 				points: question.points,
 				competency: question.competency,
+				responseGuide: question.responseGuide,
+				answerLatex: question.answerLatex,
 				imageUrl: question.imageUrl,
 				audioUrl: question.audioUrl,
 				videoUrl: question.videoUrl,

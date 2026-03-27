@@ -52,6 +52,7 @@ type StudentPageShellProps = {
   availableStudents: StudentInfo[];
   completedAttemptsLength: number;
   completionRate: number;
+  completedByTestId: Map<string, AttemptSummary>;
   error: string | null;
   filteredTests: TeacherTestSummary[];
   inProgressByTestId: Map<string, AttemptSummary>;
@@ -77,6 +78,44 @@ type StatCardProps = {
   value: string;
 };
 
+type FeedbackPanelProps = {
+  feedback: NonNullable<GetProgressResponse["feedback"]>;
+};
+
+function FeedbackPanel({ feedback }: FeedbackPanelProps) {
+  return (
+    <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-slate-800">
+      <div className="flex items-center gap-2 font-semibold text-sky-900">
+        <FileText className="h-4 w-4" />
+        {feedback.headline}
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-700">{feedback.summary}</p>
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
+            Сайн тал
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
+            {feedback.strengths.map((item) => (
+              <li key={item}>• {item}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
+            Сайжруулах зүйл
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
+            {feedback.improvements.map((item) => (
+              <li key={item}>• {item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatCard({ caption, icon: Icon, title, value }: StatCardProps) {
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
@@ -95,6 +134,7 @@ function StatCard({ caption, icon: Icon, title, value }: StatCardProps) {
 }
 
 type TestCardsGridProps = {
+  completedByTestId: Map<string, AttemptSummary>;
   emptyMessage: string;
   filteredTests: TeacherTestSummary[];
   inProgressByTestId: Map<string, AttemptSummary>;
@@ -105,6 +145,7 @@ type TestCardsGridProps = {
 };
 
 function TestCardsGrid({
+  completedByTestId,
   emptyMessage,
   filteredTests,
   inProgressByTestId,
@@ -133,6 +174,7 @@ function TestCardsGrid({
     <div className="grid gap-4 lg:grid-cols-3">
       {filteredTests.map((test) => {
         const resumableAttempt = inProgressByTestId.get(test.id);
+        const completedAttempt = completedByTestId.get(test.id);
 
         return (
           <article
@@ -144,6 +186,11 @@ function TestCardsGrid({
               <h3 className="text-lg font-semibold text-slate-900">
                 {test.title}
               </h3>
+              {completedAttempt && (
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                  Дууссан
+                </span>
+              )}
               <p className="flex items-center gap-2 text-sm text-slate-500">
                 <BookOpen className="h-4 w-4" />
                 {test.criteria.subject}
@@ -171,6 +218,14 @@ function TestCardsGrid({
                 )}
                 Үргэлжлүүлэх
                 <ArrowRight className="h-4 w-4" />
+              </button>
+            ) : completedAttempt ? (
+              <button
+                disabled={true}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-500"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Өгсөн шалгалт
               </button>
             ) : (
               <button
@@ -201,6 +256,7 @@ export function StudentPageShell({
   averageScore,
   availableStudents,
   completedAttemptsLength,
+  completedByTestId,
   completionRate,
   error,
   filteredTests,
@@ -392,18 +448,29 @@ export function StudentPageShell({
 
                     {latestProgress &&
                       (latestProgress.status === "submitted" ||
-                        latestProgress.status === "processing") && (
-                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700">
-                          <div className="flex items-center gap-2 font-semibold">
-                            <FileCheck2 className="h-4 w-4" />
-                            {latestProgress.status === "processing"
-                              ? "Шалгалтыг боловсруулж байна"
-                              : "Шалгалт амжилттай илгээгдлээ"}
+                        latestProgress.status === "processing" ||
+                        latestProgress.status === "approved") && (
+                        <div className="space-y-4">
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700">
+                            <div className="flex items-center gap-2 font-semibold">
+                              <FileCheck2 className="h-4 w-4" />
+                              {latestProgress.status === "processing"
+                                ? "Шалгалтыг боловсруулж байна"
+                                : latestProgress.status === "approved"
+                                  ? "Шалгалтын дүн бэлэн боллоо"
+                                  : "Шалгалт амжилттай илгээгдлээ"}
+                            </div>
+                            <p className="mt-1 text-sm text-emerald-700/90">
+                              {latestProgress.status === "approved" &&
+                              latestProgress.result
+                                ? `${latestProgress.result.maxScore} онооноос ${latestProgress.result.score} авч, ${latestProgress.result.percentage}% гүйцэтгэл үзүүллээ.`
+                                : "Таны хариулт амжилттай бүртгэгдсэн. Батлагдсаны дараа дүн хэсэгт харагдана."}
+                            </p>
                           </div>
-                          <p className="mt-1 text-sm text-emerald-700/90">
-                            Таны хариулт амжилттай бүртгэгдсэн. Батлагдсаны
-                            дараа дүн хэсэгт харагдана.
-                          </p>
+
+                          {latestProgress.feedback && (
+                            <FeedbackPanel feedback={latestProgress.feedback} />
+                          )}
                         </div>
                       )}
 
@@ -418,6 +485,7 @@ export function StudentPageShell({
                         </span>
                       </div>
                       <TestCardsGrid
+                        completedByTestId={completedByTestId}
                         emptyMessage="Танд тохирох идэвхтэй шалгалт олдсонгүй."
                         filteredTests={filteredTests}
                         inProgressByTestId={inProgressByTestId}
@@ -444,6 +512,7 @@ export function StudentPageShell({
                       </div>
                     </div>
                     <TestCardsGrid
+                      completedByTestId={completedByTestId}
                       emptyMessage="Одоогоор шалгалт алга."
                       filteredTests={filteredTests}
                       inProgressByTestId={inProgressByTestId}
@@ -486,6 +555,10 @@ export function StudentPageShell({
                         icon={TrendingUp}
                       />
                     </div>
+
+                    {latestProgress?.feedback && (
+                      <FeedbackPanel feedback={latestProgress.feedback} />
+                    )}
 
                     <div className="space-y-2">
                       <h4 className="text-2xl font-semibold text-slate-900">

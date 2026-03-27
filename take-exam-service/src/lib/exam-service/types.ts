@@ -18,8 +18,12 @@ export type ExamOption = {
 	text: string;
 };
 
+export type ExamQuestionType = "single-choice" | "math";
+export type AnswerKeySource = "local" | "teacher_service";
+
 export type ExamQuestion = {
 	id: string;
+	type: ExamQuestionType;
 	prompt: string;
 	options: ExamOption[];
 	correctOptionId: string;
@@ -29,6 +33,8 @@ export type ExamQuestion = {
 	imageUrl?: string | null;
 	audioUrl?: string | null;
 	videoUrl?: string | null;
+	responseGuide?: string | null;
+	answerLatex?: string | null;
 };
 
 export type ExamTest = {
@@ -38,6 +44,8 @@ export type ExamTest = {
 	criteria: TestCriteria;
 	timeLimitMinutes: number;
 	questions: ExamQuestion[];
+	answerKeySource?: AnswerKeySource;
+	sourceService?: string | null;
 	updatedAt?: string;
 	status?: "draft" | "published" | "archived";
 };
@@ -87,6 +95,13 @@ export type AttemptMonitoringSummary = {
 	recentEvents: AttemptMonitoringEvent[];
 };
 
+export type AttemptFeedback = {
+	headline: string;
+	summary: string;
+	strengths: string[];
+	improvements: string[];
+};
+
 export type ExamQuestionResult = {
 	questionId: string;
 	selectedOptionId: string | null;
@@ -109,7 +124,7 @@ export type ExamResultSummary = {
 
 export type StudentExamQuestion = {
 	questionId: string;
-	type: "single-choice";
+	type: ExamQuestionType;
 	prompt: string;
 	options: ExamOption[];
 	points: number;
@@ -117,6 +132,7 @@ export type StudentExamQuestion = {
 	imageUrl?: string | null;
 	audioUrl?: string | null;
 	videoUrl?: string | null;
+	responseGuide?: string | null;
 };
 
 export type ExamSession = {
@@ -145,9 +161,23 @@ export type GetProgressResponse = {
 	status: AttemptStatus;
 	progress: ExamProgress;
 	result?: ExamResultSummary;
+	feedback?: AttemptFeedback;
 };
 
 export type SubmitAnswersResponse = GetProgressResponse;
+
+export type AttemptLiveFeedItem = {
+	attemptId: string;
+	testId: string;
+	title: string;
+	studentId: string;
+	studentName: string;
+	status: AttemptStatus;
+	startedAt: string;
+	submittedAt?: string;
+	monitoring?: AttemptMonitoringSummary;
+	latestEvent?: AttemptMonitoringEvent;
+};
 
 export type AttemptSummary = {
 	attemptId: string;
@@ -163,4 +193,5 @@ export type AttemptSummary = {
 	submittedAt?: string;
 	result?: ExamResultSummary;
 	monitoring?: AttemptMonitoringSummary;
+	feedback?: AttemptFeedback;
 };

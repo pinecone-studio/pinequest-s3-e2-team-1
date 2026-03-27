@@ -4,12 +4,15 @@ import { ensureExamSchema } from "@/lib/db/bootstrap";
 import type {
 	ExamAnswerInput,
 	ProctoringEventSeverity,
+	StartExamResponse,
 } from "@/lib/exam-service/types";
 import {
 	approveAttempt,
+	importExternalNewMathExam,
 	logAttemptActivity,
 	resumeExamAttempt,
 	savePublishedTest,
+	syncExternalNewMathExams,
 	startExamAttempt,
 	submitExamAnswers,
 } from "@/lib/exam-service/store";
@@ -18,6 +21,18 @@ type ResolverEnv = {
 	DB: D1Database;
 	EXAM_CACHE?: KVNamespace;
 	EXAM_SUBMISSION_QUEUE?: Queue<unknown>;
+	TEACHER_SUBMISSION_WEBHOOK_URL?: string;
+	GEMINI_API_KEY?: string;
+	GEMINI_MODEL?: string;
+	AI?: {
+		run: (
+			model: string,
+			input: {
+				messages: Array<{ role: "system" | "user"; content: string }>;
+				response_format?: { type: "json_object" };
+			},
+		) => Promise<{ response?: string }>;
+	};
 };
 
 type ResolverContext = {
@@ -34,6 +49,16 @@ type AttemptActivityInput = {
 
 const getResolverEnv = () =>
 	(getCloudflareContext() as unknown as ResolverContext).env;
+
+const toGraphqlStartExamPayload = (payload: StartExamResponse) => ({
+	...payload,
+	existingAnswers: Object.entries(payload.existingAnswers ?? {}).map(
+		([questionId, selectedOptionId]) => ({
+			questionId,
+			selectedOptionId,
+		}),
+	),
+});
 
 export const mutations = {
 	saveTest: async (_parent: unknown, { test }: { test: string }) => {
@@ -55,12 +80,17 @@ export const mutations = {
 		const env = getResolverEnv();
 		const db = createDb(env.DB);
 		await ensureExamSchema(env.DB);
-		return startExamAttempt(
-			db,
-			testId,
-			studentId,
-			studentName,
-			env.EXAM_CACHE,
+		const existingTest = await db.query.tests.findFirst({
+			where: (table, { eq }) => eq(table.id, testId),
+			columns: { id: true },
+		});
+
+		if (!existingTest) {
+			await importExternalNewMathExam(db, testId, env.EXAM_CACHE);
+		}
+
+		return toGraphqlStartExamPayload(
+			await startExamAttempt(db, testId, studentId, studentName, env.EXAM_CACHE),
 		);
 	},
 	resumeExam: async (
@@ -70,7 +100,9 @@ export const mutations = {
 		const env = getResolverEnv();
 		const db = createDb(env.DB);
 		await ensureExamSchema(env.DB);
-		return resumeExamAttempt(db, attemptId, env.EXAM_CACHE);
+		return toGraphqlStartExamPayload(
+			await resumeExamAttempt(db, attemptId, env.EXAM_CACHE),
+		);
 	},
 	submitAnswers: async (
 		_parent: unknown,
@@ -94,6 +126,10 @@ export const mutations = {
 			finalize,
 			env.EXAM_SUBMISSION_QUEUE,
 			env.EXAM_CACHE,
+			env.TEACHER_SUBMISSION_WEBHOOK_URL,
+			env.AI,
+			env.GEMINI_API_KEY,
+			env.GEMINI_MODEL,
 		);
 	},
 	approveAttempt: async (
@@ -118,5 +154,23 @@ export const mutations = {
 		await ensureExamSchema(env.DB);
 		await logAttemptActivity(db, attemptId, input);
 		return true;
+	},
+	importNewMathExam: async (
+		_parent: unknown,
+		{ examId }: { examId: string },
+	) => {
+		const env = getResolverEnv();
+		const db = createDb(env.DB);
+		await ensureExamSchema(env.DB);
+		return importExternalNewMathExam(db, examId, env.EXAM_CACHE);
+	},
+	syncExternalNewMathExams: async (
+		_parent: unknown,
+		{ limit }: { limit?: number },
+	) => {
+		const env = getResolverEnv();
+		const db = createDb(env.DB);
+		await ensureExamSchema(env.DB);
+		return syncExternalNewMathExams(db, env.EXAM_CACHE, limit ?? 20);
 	},
 };

@@ -1,18 +1,11 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { toast } from "sonner";
 import {
   type AttemptActivityInput,
   logAttemptActivityRequest,
 } from "./student-page-api";
 import type { StartExamResponse } from "@/lib/exam-service/types";
-
-const monitoringToastStyle = {
-  background: "#e6f5fd",
-  border: "1px solid #9fdafb",
-  color: "#0f3b53",
-} as const;
 
 export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
   const [now, setNow] = useState(Date.now());
@@ -33,15 +26,6 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
   useEffect(() => {
     activeAttemptRef.current = activeAttempt;
   }, [activeAttempt]);
-
-  const showMonitoringToast = useEffectEvent(
-    (title: string, description: string) => {
-      toast(title, {
-        description,
-        style: monitoringToastStyle,
-      });
-    },
-  );
 
   const recordAttemptActivity = useEffectEvent(
     async ({
@@ -74,12 +58,10 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       } catch {
         // Monitoring events are best-effort and must not block the exam.
       }
-
-      showMonitoringToast(title, detail);
     },
   );
 
-  const getBreakpoint = (width: number) => {
+  const getBreakpoint = (width: number): "lg" | "md" | "sm" => {
     if (width < 640) return "sm";
     if (width < 1024) return "md";
     return "lg";
@@ -302,7 +284,11 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
 
     const handleResize = () => {
       const previousViewport = viewportRef.current;
-      const nextViewport = {
+      const nextViewport: {
+        breakpoint: "lg" | "md" | "sm";
+        height: number;
+        width: number;
+      } = {
         breakpoint: getBreakpoint(window.innerWidth),
         height: window.innerHeight,
         width: window.innerWidth,

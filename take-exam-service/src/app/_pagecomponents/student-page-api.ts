@@ -7,6 +7,7 @@ import {
   GetStudentsDocument,
   LogAttemptActivityDocument,
   ResumeExamDocument,
+  SyncExternalNewMathExamsDocument,
   StartExamDocument,
   SubmitAnswersDocument,
   type GetStudentDashboardQuery,
@@ -17,6 +18,7 @@ import {
   type SubmitAnswersMutation,
 } from "@/gql/generated";
 import type {
+  AttemptFeedback,
   AttemptMonitoringEvent,
   AttemptMonitoringSummary,
   AttemptSummary,
@@ -121,6 +123,21 @@ const mapMonitoringSummary = (
   };
 };
 
+const mapAttemptFeedback = (
+  feedback:
+    | Nullable<DashboardAttempt["feedback"]>
+    | Nullable<SubmitAnswersMutation["submitAnswers"]["feedback"]>,
+): AttemptFeedback | undefined => {
+  if (!feedback) return undefined;
+
+  return {
+    headline: feedback.headline,
+    summary: feedback.summary,
+    strengths: [...feedback.strengths],
+    improvements: [...feedback.improvements],
+  };
+};
+
 const mapExamResultSummary = (
   result: Nullable<DashboardAttempt["result"]>,
 ): ExamResultSummary | undefined => {
@@ -186,6 +203,7 @@ const mapAttemptSummary = (
   submittedAt: attempt.submittedAt ?? undefined,
   monitoring: mapMonitoringSummary(attempt.monitoring),
   result: mapExamResultSummary(attempt.result),
+  feedback: mapAttemptFeedback(attempt.feedback),
 });
 
 const mapExamProgress = (
@@ -209,6 +227,12 @@ const mapStartExamResponse = (
   studentName: payload.studentName,
   startedAt: payload.startedAt,
   expiresAt: payload.expiresAt,
+  existingAnswers: Object.fromEntries(
+    (payload.existingAnswers ?? []).map((answer) => [
+      answer.questionId,
+      answer.selectedOptionId ?? null,
+    ]),
+  ),
   exam: {
     testId: payload.exam.testId,
     title: payload.exam.title,
@@ -224,13 +248,14 @@ const mapStartExamResponse = (
     },
     questions: payload.exam.questions.map((question) => ({
       questionId: question.questionId,
-      type: question.type as "single-choice",
+      type: question.type as "single-choice" | "math",
       prompt: question.prompt,
       points: question.points,
       competency: question.competency ?? undefined,
       imageUrl: question.imageUrl ?? undefined,
       audioUrl: question.audioUrl ?? undefined,
       videoUrl: question.videoUrl ?? undefined,
+      responseGuide: question.responseGuide ?? undefined,
       options: question.options.map((option) => ({
         id: option.id,
         text: option.text,
@@ -267,6 +292,7 @@ const mapSubmitAnswersResponse = (
         ),
       }
     : undefined,
+  feedback: mapAttemptFeedback(payload.feedback),
 });
 
 export const loadStudentsData = async (): Promise<StudentInfo[]> => {
@@ -287,6 +313,28 @@ export const loadDashboardPayload = async (): Promise<{
   }
 
   const data = await gqlRequest(GetStudentDashboardDocument);
+
+  if (data.availableTests.length > 0) {
+    return {
+      availableTests: data.availableTests.map(mapTest),
+      attempts: data.attempts.map(mapAttemptSummary),
+    };
+  }
+
+  try {
+    await gqlRequest(SyncExternalNewMathExamsDocument, { limit: 1 });
+    const syncedData = await gqlRequest(GetStudentDashboardDocument);
+
+    return {
+      availableTests: syncedData.availableTests.map(mapTest),
+      attempts: syncedData.attempts.map(mapAttemptSummary),
+    };
+  } catch (error) {
+    console.error(
+      "Failed to sync external exams before loading dashboard:",
+      error,
+    );
+  }
 
   return {
     availableTests: data.availableTests.map(mapTest),

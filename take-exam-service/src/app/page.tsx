@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TakeExam } from "@/app/_component/take-exam";
 import {
   resumeExamRequest,
@@ -30,6 +30,7 @@ import { useSebAccess } from "@/app/_pagecomponents/use-seb-access";
 import { useStudentDashboardData } from "@/app/_pagecomponents/use-student-dashboard-data";
 
 export default function StudentAppPage() {
+  const ACTIVE_ATTEMPT_STORAGE_KEY = "active_exam_attempt";
   const [activeAttempt, setActiveAttempt] = useState<StartExamResponse | null>(
     null,
   );
@@ -43,6 +44,8 @@ export default function StudentAppPage() {
     useState<NavigationSection>("dashboard");
   const [error, setError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const autosaveInFlightRef = useRef(false);
+  const autoResumeAttemptIdRef = useRef<string | null>(null);
   const { isSebChecking, verifySebAccess } = useSebAccess();
   const {
     activeTestsCount,
@@ -50,6 +53,7 @@ export default function StudentAppPage() {
     availableStudents,
     averageScore,
     completedAttempts,
+    completedByTestId,
     completionRate,
     filteredTests,
     inProgressByTestId,
@@ -65,24 +69,35 @@ export default function StudentAppPage() {
   const { resetActivityTracking, timeLeftMs } = useExamMonitoring(activeAttempt);
   const { answers, clearAnswers, setAnswers } = usePersistedExamAnswers(
     activeAttempt?.attemptId ?? null,
+    activeAttempt?.existingAnswers ?? null,
   );
 
   useAnimatedDocumentTitle("Сурагч Портал");
 
-  const openAttempt = (attempt: StartExamResponse) => {
-    setActiveAttempt(attempt);
-    setLatestProgress(null);
-    setFlaggedQuestions({});
-    resetActivityTracking();
-  };
+  const openAttempt = useCallback(
+    (attempt: StartExamResponse) => {
+      setActiveAttempt(attempt);
+      setLatestProgress(null);
+      setFlaggedQuestions({});
+      resetActivityTracking();
+      sessionStorage.setItem(
+        ACTIVE_ATTEMPT_STORAGE_KEY,
+        JSON.stringify({
+          attemptId: attempt.attemptId,
+          studentId: attempt.studentId,
+        }),
+      );
+    },
+    [ACTIVE_ATTEMPT_STORAGE_KEY, resetActivityTracking],
+  );
 
-  const showSebFriendlyWarning = (message?: string) => {
+  const showSebFriendlyWarning = useCallback((message?: string) => {
     const warning = getSebFriendlyWarning(message);
     setError(warning.description);
     toast.warning(warning.title, {
       description: warning.description,
     });
-  };
+  }, []);
 
   const handleStartExam = async (testId: string) => {
     if (!selectedStudent) {
@@ -174,6 +189,7 @@ export default function StudentAppPage() {
         setActiveAttempt(null);
         setFlaggedQuestions({});
         resetActivityTracking();
+        sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
         setActiveSection("results");
         await loadDashboardData();
       }
@@ -193,6 +209,152 @@ export default function StudentAppPage() {
       : activeSection === "tests"
         ? "Идэвхтэй шалгалтууд"
         : "Шалгалтын дүн";
+
+  useEffect(() => {
+    if (activeAttempt || isInitialLoading || availableStudents.length === 0) {
+      return;
+    }
+
+    const savedAttempt = sessionStorage.getItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+    if (!savedAttempt) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedAttempt) as {
+        attemptId?: string;
+        studentId?: string;
+      };
+
+      if (
+        parsed.studentId &&
+        parsed.studentId !== selectedStudentId &&
+        availableStudents.some((student) => student.id === parsed.studentId)
+      ) {
+        setSelectedStudentId(parsed.studentId);
+      }
+    } catch {
+      sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+    }
+  }, [
+    activeAttempt,
+    availableStudents,
+    isInitialLoading,
+    selectedStudentId,
+    setSelectedStudentId,
+  ]);
+
+  useEffect(() => {
+    if (
+      isInitialLoading ||
+      isSebChecking ||
+      isMutating ||
+      activeAttempt ||
+      !selectedStudent
+    ) {
+      return;
+    }
+
+    const savedAttempt = sessionStorage.getItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+    if (!savedAttempt) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedAttempt) as {
+        attemptId?: string;
+        studentId?: string;
+      };
+
+      if (!parsed.attemptId || !parsed.studentId) {
+        sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+        return;
+      }
+
+      if (parsed.studentId !== selectedStudent.id) {
+        return;
+      }
+
+      if (autoResumeAttemptIdRef.current === parsed.attemptId) {
+        return;
+      }
+
+      const attemptId = parsed.attemptId;
+      if (!attemptId) {
+        sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+        return;
+      }
+
+      autoResumeAttemptIdRef.current = attemptId;
+
+      void (async () => {
+        setError(null);
+        setIsMutating(true);
+
+        try {
+          const sebCheck = await verifySebAccess();
+          if (!sebCheck.ok) {
+            showSebFriendlyWarning(sebCheck.message);
+            return;
+          }
+
+          const resumedAttempt = await resumeExamRequest(attemptId);
+          openAttempt(resumedAttempt);
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : "Шалгалтыг сэргээж чадсангүй.",
+          );
+        } finally {
+          setIsMutating(false);
+        }
+      })();
+    } catch {
+      sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+    }
+  }, [
+    activeAttempt,
+    isInitialLoading,
+    isMutating,
+    isSebChecking,
+    openAttempt,
+    selectedStudent,
+    showSebFriendlyWarning,
+    verifySebAccess,
+  ]);
+
+  useEffect(() => {
+    if (!activeAttempt || isMutating || autosaveInFlightRef.current) {
+      return;
+    }
+
+    const hasAnswers = Object.values(answers).some(
+      (value) => value !== null && value !== "",
+    );
+    if (!hasAnswers) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      autosaveInFlightRef.current = true;
+
+      try {
+        await submitAnswersRequest({
+          attemptId: activeAttempt.attemptId,
+          answers: activeAttempt.exam.questions.map((question) => ({
+            questionId: question.questionId,
+            selectedOptionId: answers[question.questionId] ?? null,
+          })),
+          finalize: false,
+        });
+      } catch (err) {
+        console.error("Failed to autosave exam answers:", err);
+      } finally {
+        autosaveInFlightRef.current = false;
+      }
+    }, 2500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeAttempt, answers, isMutating]);
 
   if (activeAttempt) {
     return (
@@ -226,6 +388,7 @@ export default function StudentAppPage() {
           averageScore={averageScore}
           availableStudents={availableStudents}
           completedAttemptsLength={completedAttempts.length}
+          completedByTestId={completedByTestId}
           completionRate={completionRate}
           error={error}
           filteredTests={filteredTests}

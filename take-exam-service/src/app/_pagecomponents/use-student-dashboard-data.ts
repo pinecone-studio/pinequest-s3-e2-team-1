@@ -71,25 +71,32 @@ export function useStudentDashboardData({
     return map;
   }, [studentAttempts]);
 
+  const completedByTestId = useMemo(() => {
+    const map = new Map<string, AttemptSummary>();
+
+    studentAttempts
+      .filter(
+        (attempt) =>
+          attempt.status === "approved" || attempt.status === "submitted",
+      )
+      .forEach((attempt) => {
+        const existing = map.get(attempt.testId);
+        if (
+          !existing ||
+          new Date(existing.startedAt) < new Date(attempt.startedAt)
+        ) {
+          map.set(attempt.testId, attempt);
+        }
+      });
+
+    return map;
+  }, [studentAttempts]);
+
   const filteredTests = useMemo(() => {
     if (!selectedStudent) return [];
 
-    return Array.from(
+    const dedupedTests = Array.from(
       tests
-        .filter((test) => {
-          const studentClass = selectedStudent.className.trim().toUpperCase();
-          const testClass = test.criteria.className.trim().toUpperCase();
-          const classMatched = testClass === "" || testClass === studentClass;
-          if (!classMatched) return false;
-
-          const alreadyFinished = studentAttempts.some(
-            (attempt) =>
-              attempt.testId === test.id &&
-              (attempt.status === "submitted" || attempt.status === "approved"),
-          );
-
-          return !alreadyFinished;
-        })
         .reduce((map, test) => {
           const key = testKey(test);
           const existing = map.get(key);
@@ -105,9 +112,27 @@ export function useStudentDashboardData({
         }, new Map<string, TeacherTestSummary>())
         .values(),
     );
-  }, [selectedStudent, studentAttempts, tests]);
 
-  const activeTestsCount = filteredTests.length;
+    const resumableTest = dedupedTests.find((test) =>
+      inProgressByTestId.has(test.id),
+    );
+    if (resumableTest) {
+      return [resumableTest];
+    }
+
+    const nextAvailableTest = dedupedTests.find(
+      (test) => !completedByTestId.has(test.id),
+    );
+    if (nextAvailableTest) {
+      return [nextAvailableTest];
+    }
+
+    return dedupedTests.slice(0, 1);
+  }, [completedByTestId, inProgressByTestId, selectedStudent, tests]);
+
+  const activeTestsCount = filteredTests.filter(
+    (test) => !completedByTestId.has(test.id),
+  ).length;
 
   const completionRate = approvedAttempts.length
     ? Math.round(
@@ -227,6 +252,7 @@ export function useStudentDashboardData({
     availableStudents,
     averageScore,
     completedAttempts,
+    completedByTestId,
     completionRate,
     filteredTests,
     inProgressByTestId,
