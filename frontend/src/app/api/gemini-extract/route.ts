@@ -297,7 +297,9 @@ function readXmlNodeText(node: XmlNode): string {
       return joinXmlChildrenText(node.children);
     case "m:eqArr":
       return getChildElements(node, "m:e")
-        .map((element) => normalizeEquationLineForAlignment(readXmlNodeText(element)))
+        .map((element) =>
+          normalizeEquationLineForAlignment(readXmlNodeText(element)),
+        )
         .join(" \\\\ ");
     case "m:f":
       return `\\frac{${readMathArgument(node.first("m:num"))}}{${readMathArgument(node.first("m:den"))}}`;
@@ -677,7 +679,7 @@ export async function POST(request: Request) {
 Дүрэм:
 - Зөвхөн JSON буцаа. Тайлбар, markdown, code fence бүү нэм.
 - Асуулт бүрийг дарааллаар нь Q1, Q2 гэж таньж ав.
-- Prompt талбарт боломжтой бол асуултын дугаарыг хадгал. Жишээ: "Q1. ..."
+- Prompt талбарт боломжтой бол асуултын дугаарыг хадгал. Жишээ: "1. ..."
 - Материалыг бүү хураангуйл, бүү дүгнэ, бүү товчил.
 - Асуулт, сонголт, хариу, оноо, тайлбар байвал яг тексттэй нь хадгал.
 - Текстийг бүү хураангуйл. Тоо, томьёо, илэрхийлэл, бутархай, зэргийг яг байгаа хэлбэрээр нь хадгал.
@@ -796,7 +798,9 @@ JSON бүтэц:
       );
     }
 
-    const exam = JSON.parse(cleanJsonBlock(extractedText)) as GeneratedExamPayload;
+    const exam = JSON.parse(
+      cleanJsonBlock(extractedText),
+    ) as GeneratedExamPayload;
 
     if (!Array.isArray(exam.questions) || exam.questions.length === 0) {
       return Response.json(
