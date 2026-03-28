@@ -14,27 +14,29 @@ import {
 const MODEL = "@cf/meta/llama-3-8b-instruct" as const;
 
 const SYSTEM_MESSAGE = `
-Чи бол боловсролын эксперт. Өгөгдсөн асуултыг уншаад заавал МОНГОЛ хэлээр (explanation, tags, options, correctAnswer, source, skillLevel) хариул.
-Агуулгад нь тулгуурлан хамгийн тохиромжтой suggestedType-ийг өөрөө сонго:
-- MCQ: Олон сонголттой асуулт бол. Заавал яг 4 сонголт зохиож options массивт оруул.
-- MATCHING: Хоёр багана холбох асуулт бол. options-д ["A-1", "B-2"] хэлбэртэй массив оруул.
-- FILL_IN: Нөхөх зайтай асуулт бол. options: null.
-- MATH: Математик бодлого бол.
-- FREE_TEXT: Нээлттэй асуулт бол.
+Чи бол боловсролын эксперт. Энэ хүсэлт нь зөвхөн НЭГ төрлийн үр дүн шаардана:
+олон сонголттой асуулт (MCQ) — яг ДӨРВӨН сонголт, НЭГ зөв хариулт.
 
-JSON бүтэц (жишээ утгууд; skillLevel-д зөвхөн Мэдлэг | Ойлгомж | Хэрэглээ | Шинжилгээ-ийн нэг):
+Дүрмүүд:
+- suggestedType үргэлж "MCQ" байна.
+- options нь яг 4 элементтэй string массив; сонголтууд монгол/тоо/томьёо байж болно, утга нь өөр хоорондоо өөр байна.
+- correctAnswer нь options доторх нэг сонголтын яг тэр тексттэй таарна (хуулж тавь).
+- Асуулт нь математик, физик, ерөнхий мэдлэг — аль ч байсан дээрх MCQ хэлбэрээр зохио.
+
+Монгол хэлээр: explanation, tags, source, skillLevel.
+
+JSON бүтэц (skillLevel: Мэдлэг | Ойлгомж | Хэрэглээ | Шинжилгээ-ийн нэг):
 {
-  "difficulty": "MEDIUM",
-  "points": 2,
+  "difficulty": "EASY" | "MEDIUM" | "HARD",
+  "points": number,
   "suggestedType": "MCQ",
-  "options": ["А", "Б", "В", "Г"],
-  "correctAnswer": "Зөв хариултын текст",
+  "options": ["сонголт1", "сонголт2", "сонголт3", "сонголт4"],
+  "correctAnswer": "сонголтуудын нэгтэй яг ижил мөр",
   "explanation": "Монгол хэлээрх аргачлал",
   "tags": ["сэдэв"],
-  "source": "ЭЕШ",
+  "source": "Эх сурвалжийн таамаглал",
   "skillLevel": "Ойлгомж"
 }
-source талбарт асуултын эх сурвалжийг таамагла (жишээ нь: ЭЕШ, Сурах бичиг, Олимпиад).
 Зөвхөн цэвэр JSON буцаа.
 `.trim();
 
@@ -55,18 +57,39 @@ function parseDifficulty(v: unknown): Difficulty {
   return Difficulty.Medium;
 }
 
-function parseSuggestedType(v: unknown): QuestionAnalysisSuggestedType {
-  const s = String(v ?? "")
-    .toUpperCase()
-    .replace(/-/g, "_");
-  if (s === "MCQ") return QuestionAnalysisSuggestedType.Mcq;
-  if (s === "MATCHING") return QuestionAnalysisSuggestedType.Matching;
-  if (s === "FILL_IN" || s === "FILLIN")
-    return QuestionAnalysisSuggestedType.FillIn;
-  if (s === "MATH") return QuestionAnalysisSuggestedType.Math;
-  if (s === "FREE_TEXT" || s === "FREETEXT")
-    return QuestionAnalysisSuggestedType.FreeText;
-  return QuestionAnalysisSuggestedType.FreeText;
+const MCQ_OPTION_LABELS = ["А", "Б", "В", "Г"] as const;
+
+/**
+ * Энэ mutation зөвхөн MCQ — үргэлж яг 4 сонголт, зөв хариулт нь тэдний нэг.
+ */
+function ensureFourMcqOptions(
+  options: string[] | null,
+  correctAnswer: string,
+): { options: string[]; correctAnswer: string } {
+  const cleaned = (options ?? [])
+    .map((x) => String(x).trim())
+    .filter((s) => s.length > 0);
+  const four: string[] = cleaned.slice(0, 4);
+  while (four.length < 4) {
+    const label = MCQ_OPTION_LABELS[four.length];
+    four.push(`${label} хувилбар (засах)`);
+  }
+
+  let answer = correctAnswer.trim();
+  if (answer && !four.includes(answer)) {
+    const lower = answer.toLowerCase();
+    const byCase = four.find((o) => o.toLowerCase() === lower);
+    if (byCase) answer = byCase;
+    else {
+      const contains = four.find(
+        (o) => o.includes(answer) || answer.includes(o),
+      );
+      answer = contains ?? four[0] ?? answer;
+    }
+  }
+  if (!answer) answer = four[0] ?? "";
+
+  return { options: four, correctAnswer: answer };
 }
 
 type Args = { prompt: string };
@@ -111,21 +134,25 @@ export const analyzeQuestionMutation = {
       const tags = Array.isArray(tagsRaw) ? tagsRaw.map((x) => String(x)) : [];
 
       const optionsRaw = parsed.options;
-      const options =
+      const optionsFromAi =
         optionsRaw === null || optionsRaw === undefined
           ? null
           : Array.isArray(optionsRaw)
             ? optionsRaw.map((x) => String(x))
             : null;
 
+      const correctRaw = String(parsed.correctAnswer ?? "");
+      const { options: optionsFour, correctAnswer: correctFixed } =
+        ensureFourMcqOptions(optionsFromAi, correctRaw);
+
       return {
         difficulty: parseDifficulty(parsed.difficulty),
         points,
         tags,
         explanation: String(parsed.explanation ?? ""),
-        options,
-        correctAnswer: String(parsed.correctAnswer ?? ""),
-        suggestedType: parseSuggestedType(parsed.suggestedType),
+        options: optionsFour,
+        correctAnswer: correctFixed,
+        suggestedType: QuestionAnalysisSuggestedType.Mcq,
         source: String(parsed.source ?? "Тодорхойгүй").trim() || "Тодорхойгүй",
         skillLevel: String(parsed.skillLevel ?? "Ойлгомж").trim() || "Ойлгомж",
       };

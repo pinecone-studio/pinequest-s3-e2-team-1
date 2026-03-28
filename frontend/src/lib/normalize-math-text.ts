@@ -1,3 +1,17 @@
+/**
+ * Хэрэглэгчийн бичвэр / редактор — `$...$` хадгална (KaTeX tokenize-д шаардлагатай).
+ * DB-ээс ирсэн delimiter-гүй мөрт {@link normalizeBackendMathText} ашиглана.
+ */
+export function normalizePreviewMathText(raw: string): string {
+  if (!raw) return raw;
+  let next = raw
+    .replace(/\\\$(?=[A-Za-z])/g, "\\")
+    .replace(/\\\$(?=\{)/g, "\\")
+    .replace(/\\\\(?=[A-Za-z])/g, "\\")
+    .replace(/\$([}\]\)])/g, "$1");
+  return next.trim();
+}
+
 export function normalizeBackendMathText(raw: string): string {
   return restoreInlineMathDelimiters(normalizeBackendLatexArtifacts(raw));
 }
