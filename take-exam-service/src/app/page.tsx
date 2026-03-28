@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TakeExam } from "@/app/_component/take-exam";
 import {
+  logQuestionMetricsRequest,
   resumeExamRequest,
   startExamRequest,
   submitAnswersRequest,
@@ -31,6 +32,7 @@ import { useStudentDashboardData } from "@/app/_pagecomponents/use-student-dashb
 
 export default function StudentAppPage() {
   const ACTIVE_ATTEMPT_STORAGE_KEY = "active_exam_attempt";
+  const FREE_TEXT_COMMIT_DELAY_MS = 900;
   const [activeAttempt, setActiveAttempt] = useState<StartExamResponse | null>(
     null,
   );
@@ -46,6 +48,15 @@ export default function StudentAppPage() {
   const [isMutating, setIsMutating] = useState(false);
   const autosaveInFlightRef = useRef(false);
   const autoResumeAttemptIdRef = useRef<string | null>(null);
+  const mathAnswerCommitTimersRef = useRef<Record<string, number>>({});
+  const committedMathAnswersRef = useRef<Record<string, string>>({});
+  const questionMetricsRef = useRef<
+    Record<string, { answerChangeCount: number; dwellMs: number }>
+  >({});
+  const activeQuestionTimingRef = useRef<{
+    questionId: string;
+    startedAt: number;
+  } | null>(null);
   const { isSebChecking, verifySebAccess } = useSebAccess();
   const {
     activeTestsCount,
@@ -66,7 +77,13 @@ export default function StudentAppPage() {
     selectedStudentId,
     setSelectedStudentId,
   } = useStudentDashboardData({ setError });
-  const { resetActivityTracking, timeLeftMs } = useExamMonitoring(activeAttempt);
+  const {
+    markInteraction,
+    recordBehaviorEvent,
+    resetActivityTracking,
+    timeLeftMs,
+    trackQuestionView,
+  } = useExamMonitoring(activeAttempt);
   const { answers, clearAnswers, setAnswers } = usePersistedExamAnswers(
     activeAttempt?.attemptId ?? null,
     activeAttempt?.existingAnswers ?? null,
@@ -74,11 +91,206 @@ export default function StudentAppPage() {
 
   useAnimatedDocumentTitle("Сурагч Портал");
 
+  const normalizeFreeTextAnswer = useCallback((value?: string | null) => {
+    return value?.replace(/\s+/g, " ").trim() ?? "";
+  }, []);
+
+  const resetQuestionMetricsTracking = useCallback(() => {
+    Object.values(mathAnswerCommitTimersRef.current).forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    mathAnswerCommitTimersRef.current = {};
+    committedMathAnswersRef.current = {};
+    questionMetricsRef.current = {};
+    activeQuestionTimingRef.current = null;
+  }, []);
+
+  const getQuestionMeta = useCallback(
+    (questionId: string) => {
+      const index = activeAttempt?.exam.questions.findIndex(
+        (question) => question.questionId === questionId,
+      );
+      const question = activeAttempt?.exam.questions[index ?? -1];
+
+      return {
+        index: index != null && index >= 0 ? index + 1 : null,
+        totalQuestions: activeAttempt?.exam.questions.length ?? 0,
+        type: question?.type ?? "single-choice",
+      };
+    },
+    [activeAttempt],
+  );
+
+  const commitActiveQuestionDwell = useCallback((endedAt = Date.now()) => {
+    const activeQuestion = activeQuestionTimingRef.current;
+    if (!activeQuestion) {
+      return;
+    }
+
+    const elapsedMs = Math.max(0, endedAt - activeQuestion.startedAt);
+    if (elapsedMs > 0) {
+      const current = questionMetricsRef.current[activeQuestion.questionId] ?? {
+        answerChangeCount: 0,
+        dwellMs: 0,
+      };
+      current.dwellMs += elapsedMs;
+      questionMetricsRef.current[activeQuestion.questionId] = current;
+    }
+
+    activeQuestionTimingRef.current = {
+      questionId: activeQuestion.questionId,
+      startedAt: endedAt,
+    };
+  }, []);
+
+  const commitMathAnswerSnapshot = useCallback(
+    (questionId: string, nextRawValue: string | null | undefined) => {
+      delete mathAnswerCommitTimersRef.current[questionId];
+
+      const normalizedNext = normalizeFreeTextAnswer(nextRawValue);
+      const previousCommitted =
+        committedMathAnswersRef.current[questionId] ?? "";
+
+      if (!normalizedNext) {
+        committedMathAnswersRef.current[questionId] = "";
+        return;
+      }
+
+      const { index } = getQuestionMeta(questionId);
+
+      if (!previousCommitted) {
+        committedMathAnswersRef.current[questionId] = normalizedNext;
+        if (index) {
+          recordBehaviorEvent({
+            code: "answer-selected",
+            cooldownMs: 0,
+            detail: `${index} дугаар асуултад бичгийн хариу өгч эхэллээ.`,
+            severity: "info",
+            title: "Answer activity",
+          });
+        }
+        return;
+      }
+
+      if (previousCommitted === normalizedNext) {
+        return;
+      }
+
+      const current = questionMetricsRef.current[questionId] ?? {
+        answerChangeCount: 0,
+        dwellMs: 0,
+      };
+      current.answerChangeCount += 1;
+      questionMetricsRef.current[questionId] = current;
+      committedMathAnswersRef.current[questionId] = normalizedNext;
+
+      if (
+        (current.answerChangeCount === 3 || current.answerChangeCount === 5) &&
+        index
+      ) {
+        recordBehaviorEvent({
+          code: "answer-revised",
+          cooldownMs: 0,
+          detail: `${index} дугаар асуултын хариуг ${current.answerChangeCount} удаа өөрчиллөө.`,
+          severity: current.answerChangeCount >= 5 ? "warning" : "info",
+          title: "Answer revised",
+        });
+      }
+    },
+    [getQuestionMeta, normalizeFreeTextAnswer, recordBehaviorEvent],
+  );
+
+  const flushPendingMathAnswerCommits = useCallback(() => {
+    Object.values(mathAnswerCommitTimersRef.current).forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    mathAnswerCommitTimersRef.current = {};
+
+    if (!activeAttempt) {
+      return;
+    }
+
+    for (const question of activeAttempt.exam.questions) {
+      if (question.type !== "math") {
+        continue;
+      }
+
+      commitMathAnswerSnapshot(question.questionId, answers[question.questionId]);
+    }
+  }, [activeAttempt, answers, commitMathAnswerSnapshot]);
+
+  const handleQuestionFocus = useCallback(
+    (questionId: string) => {
+      const activeQuestion = activeQuestionTimingRef.current;
+      if (activeQuestion?.questionId === questionId) {
+        return;
+      }
+
+      commitActiveQuestionDwell();
+      activeQuestionTimingRef.current = {
+        questionId,
+        startedAt: Date.now(),
+      };
+
+      const { index, totalQuestions } = getQuestionMeta(questionId);
+      if (index && totalQuestions > 0) {
+        trackQuestionView(questionId, index, totalQuestions);
+      }
+    },
+    [commitActiveQuestionDwell, getQuestionMeta, trackQuestionView],
+  );
+
+  const flushQuestionMetrics = useCallback(async (attemptId: string) => {
+    flushPendingMathAnswerCommits();
+    commitActiveQuestionDwell();
+
+    const payload = Object.entries(questionMetricsRef.current)
+      .map(([questionId, metric]) => ({
+        questionId,
+        answerChangeCount: metric.answerChangeCount,
+        dwellMs: metric.dwellMs,
+      }))
+      .filter(
+        (metric) =>
+          (metric.answerChangeCount ?? 0) > 0 || (metric.dwellMs ?? 0) > 0,
+      );
+
+    if (payload.length === 0) {
+      return;
+    }
+
+    questionMetricsRef.current = {};
+    const activeQuestion = activeQuestionTimingRef.current;
+    if (activeQuestion) {
+      activeQuestionTimingRef.current = {
+        questionId: activeQuestion.questionId,
+        startedAt: Date.now(),
+      };
+    }
+
+    try {
+      await logQuestionMetricsRequest(attemptId, payload);
+    } catch (error) {
+      console.error("Failed to persist question metrics:", error);
+    }
+  }, [commitActiveQuestionDwell, flushPendingMathAnswerCommits]);
+
   const openAttempt = useCallback(
     (attempt: StartExamResponse) => {
       setActiveAttempt(attempt);
       setLatestProgress(null);
       setFlaggedQuestions({});
+      resetQuestionMetricsTracking();
+      committedMathAnswersRef.current = Object.fromEntries(
+        attempt.exam.questions
+          .filter((question) => question.type === "math")
+          .map((question) => [
+            question.questionId,
+            normalizeFreeTextAnswer(
+              attempt.existingAnswers?.[question.questionId] ?? null,
+            ),
+          ]),
+      );
       resetActivityTracking();
       sessionStorage.setItem(
         ACTIVE_ATTEMPT_STORAGE_KEY,
@@ -88,7 +300,12 @@ export default function StudentAppPage() {
         }),
       );
     },
-    [ACTIVE_ATTEMPT_STORAGE_KEY, resetActivityTracking],
+    [
+      ACTIVE_ATTEMPT_STORAGE_KEY,
+      normalizeFreeTextAnswer,
+      resetActivityTracking,
+      resetQuestionMetricsTracking,
+    ],
   );
 
   const showSebFriendlyWarning = useCallback((message?: string) => {
@@ -154,10 +371,74 @@ export default function StudentAppPage() {
   };
 
   const handleSelectAnswer = (questionId: string, optionId: string) => {
+    markInteraction();
+
+    const previousValue = answers[questionId];
+    const { index, type } = getQuestionMeta(questionId);
+
+    if (type === "math") {
+      const existingTimer = mathAnswerCommitTimersRef.current[questionId];
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+      }
+
+      mathAnswerCommitTimersRef.current[questionId] = window.setTimeout(() => {
+        commitMathAnswerSnapshot(questionId, optionId);
+      }, FREE_TEXT_COMMIT_DELAY_MS);
+    } else {
+      const current = questionMetricsRef.current[questionId] ?? {
+        answerChangeCount: 0,
+        dwellMs: 0,
+      };
+      current.answerChangeCount += 1;
+      questionMetricsRef.current[questionId] = current;
+
+      if (current.answerChangeCount === 1 && index) {
+        recordBehaviorEvent({
+          code: "answer-selected",
+          cooldownMs: 0,
+          detail: `${index} дугаар асуултад сонголтын хариу өгч эхэллээ.`,
+          severity: "info",
+          title: "Answer activity",
+        });
+      }
+
+      if (
+        (current.answerChangeCount === 3 || current.answerChangeCount === 5) &&
+        index
+      ) {
+        recordBehaviorEvent({
+          code: "answer-revised",
+          cooldownMs: 0,
+          detail: `${index} дугаар асуултын хариуг ${current.answerChangeCount} удаа өөрчиллөө.`,
+          severity: current.answerChangeCount >= 5 ? "warning" : "info",
+          title: "Answer revised",
+        });
+      }
+    }
+
+    if (type === "math" && previousValue === optionId) {
+      return;
+    }
+
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
   };
 
   const handleToggleFlag = (questionId: string) => {
+    const nextFlagState = !flaggedQuestions[questionId];
+    const { index } = getQuestionMeta(questionId);
+    if (index) {
+      recordBehaviorEvent({
+        code: nextFlagState ? "question-flagged" : "question-unflagged",
+        cooldownMs: 0,
+        detail: `${index} дугаар асуултыг ${
+          nextFlagState ? "эргэж харахаар тэмдэглэлээ" : "тэмдэглэлээс гаргалаа"
+        }.`,
+        severity: "info",
+        title: nextFlagState ? "Question flagged" : "Question unflagged",
+      });
+    }
+
     setFlaggedQuestions((prev) => ({
       ...prev,
       [questionId]: !prev[questionId],
@@ -171,10 +452,27 @@ export default function StudentAppPage() {
     setIsMutating(true);
 
     try {
+      markInteraction();
+      await flushQuestionMetrics(activeAttempt.attemptId);
+
       const payloadAnswers = activeAttempt.exam.questions.map((question) => ({
         questionId: question.questionId,
         selectedOptionId: answers[question.questionId] ?? null,
       }));
+
+      recordBehaviorEvent({
+        code: finalize ? "attempt-finalize" : "attempt-save",
+        cooldownMs: 0,
+        detail: finalize
+          ? `${payloadAnswers.filter((item) => item.selectedOptionId).length}/${
+              payloadAnswers.length
+            } асуулттайгаар эцсийн илгээлт хийлээ.`
+          : `${payloadAnswers.filter((item) => item.selectedOptionId).length}/${
+              payloadAnswers.length
+            } асуулт хадгалагдлаа.`,
+        severity: "info",
+        title: finalize ? "Final submit" : "Save progress",
+      });
 
       const submittedProgress = await submitAnswersRequest({
         attemptId: activeAttempt.attemptId,
@@ -188,6 +486,7 @@ export default function StudentAppPage() {
         clearAnswers(activeAttempt.attemptId);
         setActiveAttempt(null);
         setFlaggedQuestions({});
+        resetQuestionMetricsTracking();
         resetActivityTracking();
         sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
         setActiveSection("results");
@@ -338,6 +637,8 @@ export default function StudentAppPage() {
       autosaveInFlightRef.current = true;
 
       try {
+        markInteraction();
+        await flushQuestionMetrics(activeAttempt.attemptId);
         await submitAnswersRequest({
           attemptId: activeAttempt.attemptId,
           answers: activeAttempt.exam.questions.map((question) => ({
@@ -345,6 +646,14 @@ export default function StudentAppPage() {
             selectedOptionId: answers[question.questionId] ?? null,
           })),
           finalize: false,
+        });
+
+        recordBehaviorEvent({
+          code: "autosave-sync",
+          cooldownMs: 60_000,
+          detail: "Autosave snapshot сервертэй синк хийгдлээ.",
+          severity: "info",
+          title: "Autosave",
         });
       } catch (err) {
         console.error("Failed to autosave exam answers:", err);
@@ -354,7 +663,20 @@ export default function StudentAppPage() {
     }, 2500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeAttempt, answers, isMutating]);
+  }, [
+    activeAttempt,
+    answers,
+    flushQuestionMetrics,
+    isMutating,
+    markInteraction,
+    recordBehaviorEvent,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      resetQuestionMetricsTracking();
+    };
+  }, [resetQuestionMetricsTracking]);
 
   if (activeAttempt) {
     return (
@@ -367,6 +689,7 @@ export default function StudentAppPage() {
           flaggedQuestions={flaggedQuestions}
           isMutating={isMutating}
           timeLeftLabel={formatTimeLeft(timeLeftMs)}
+          onQuestionFocus={handleQuestionFocus}
           onSelectAnswer={handleSelectAnswer}
           onSubmit={handleSubmit}
           onToggleFlag={handleToggleFlag}

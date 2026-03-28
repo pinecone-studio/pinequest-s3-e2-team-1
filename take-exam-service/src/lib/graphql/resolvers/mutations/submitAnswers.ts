@@ -16,6 +16,9 @@ type ResolverEnv = {
     TEACHER_SUBMISSION_WEBHOOK_URL?: string;
     GEMINI_API_KEY?: string;
     GEMINI_MODEL?: string;
+    OLLAMA_API_KEY?: string;
+    OLLAMA_BASE_URL?: string;
+    OLLAMA_MODEL?: string;
     AI?: {
         run: (
             model: string,
@@ -32,6 +35,9 @@ export const submitAnswers = async (_: unknown, { attemptId, answers, finalize }
     const db = createDb(env.DB);
     const geminiApiKey = env.GEMINI_API_KEY ?? process.env.GEMINI_API_KEY;
     const geminiModel = env.GEMINI_MODEL ?? process.env.GEMINI_MODEL;
+    const ollamaApiKey = env.OLLAMA_API_KEY ?? process.env.OLLAMA_API_KEY;
+    const ollamaBaseUrl = env.OLLAMA_BASE_URL ?? process.env.OLLAMA_BASE_URL;
+    const ollamaModel = env.OLLAMA_MODEL ?? process.env.OLLAMA_MODEL;
 
     return submitExamAnswers(
         db,
@@ -44,5 +50,8 @@ export const submitAnswers = async (_: unknown, { attemptId, answers, finalize }
         env.AI,
         geminiApiKey,
         geminiModel,
+        ollamaApiKey,
+        ollamaBaseUrl,
+        ollamaModel,
     );
 };

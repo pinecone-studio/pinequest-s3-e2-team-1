@@ -8,6 +8,7 @@ import {
 	listAttempts,
 	listExternalNewMathExams,
 	listTests,
+	getTestMaterial,
 } from "@/lib/exam-service/store";
 
 type ResolverEnv = {
@@ -34,14 +35,16 @@ export const queries = {
 		}
 		return all;
 	},
-	availableTests: async () => {
-		const env = getResolverEnv();
-		const db = createDb(env.DB);
-		await ensureExamSchema(env.DB);
-		const tests = await listTests(db, env.EXAM_CACHE);
-		return tests.map((t) => ({
-			...t,
-			criteria: {
+		availableTests: async () => {
+			const env = getResolverEnv();
+			const db = createDb(env.DB);
+			await ensureExamSchema(env.DB);
+			const tests = await listTests(db, env.EXAM_CACHE);
+			return tests.map((t) => ({
+				...t,
+				answerKeySource:
+					"answerKeySource" in t ? t.answerKeySource ?? "local" : "local",
+				criteria: {
 				gradeLevel: "criteria" in t ? t.criteria.gradeLevel : t.gradeLevel,
 				className: "criteria" in t ? t.criteria.className : t.className,
 				subject: "criteria" in t ? t.criteria.subject : t.subject,
@@ -49,15 +52,21 @@ export const queries = {
 				difficulty: "criteria" in t ? t.criteria.difficulty : "medium",
 				questionCount: "criteria" in t ? t.criteria.questionCount : 0,
 			},
-		}));
-	},
-	attempts: async () => {
-		const env = getResolverEnv();
-		const db = createDb(env.DB);
-		await ensureExamSchema(env.DB);
-		return listAttempts(db);
-	},
-	liveMonitoringFeed: async (
+			}));
+		},
+		attempts: async () => {
+			const env = getResolverEnv();
+			const db = createDb(env.DB);
+			await ensureExamSchema(env.DB);
+			return listAttempts(db, env.EXAM_CACHE);
+		},
+		testMaterial: async (_: unknown, { testId }: { testId: string }) => {
+			const env = getResolverEnv();
+			const db = createDb(env.DB);
+			await ensureExamSchema(env.DB);
+			return getTestMaterial(db, testId, env.EXAM_CACHE);
+		},
+		liveMonitoringFeed: async (
 		_: unknown,
 		{ limit }: { limit?: number },
 	) => {

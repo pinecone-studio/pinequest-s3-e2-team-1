@@ -59,12 +59,19 @@ export type TeacherTestSummary = {
 	title: string;
 	description: string;
 	criteria: TestCriteria;
+	answerKeySource?: AnswerKeySource;
 	updatedAt: string;
 };
 
 export type ExamAnswerInput = {
 	questionId: string;
 	selectedOptionId: string | null;
+};
+
+export type AttemptQuestionMetricInput = {
+	questionId: string;
+	dwellMs?: number;
+	answerChangeCount?: number;
 };
 
 export type ExamProgress = {
@@ -76,7 +83,7 @@ export type ExamProgress = {
 
 export type AttemptStatus = "in_progress" | "processing" | "submitted" | "approved";
 
-export type ProctoringEventSeverity = "warning" | "danger";
+export type ProctoringEventSeverity = "info" | "warning" | "danger";
 
 export type AttemptMonitoringEvent = {
 	id: string;
@@ -89,6 +96,7 @@ export type AttemptMonitoringEvent = {
 
 export type AttemptMonitoringSummary = {
 	totalEvents: number;
+	infoCount?: number;
 	warningCount: number;
 	dangerCount: number;
 	lastEventAt?: string;
@@ -104,12 +112,17 @@ export type AttemptFeedback = {
 
 export type ExamQuestionResult = {
 	questionId: string;
+	prompt: string;
+	competency: string;
+	questionType: ExamQuestionType;
 	selectedOptionId: string | null;
 	correctOptionId: string;
 	isCorrect: boolean;
 	pointsAwarded: number;
 	maxPoints: number;
 	explanation: string;
+	dwellMs?: number;
+	answerChangeCount?: number;
 };
 
 export type ExamResultSummary = {
@@ -120,6 +133,19 @@ export type ExamResultSummary = {
 	incorrectCount: number;
 	unansweredCount: number;
 	questionResults: ExamQuestionResult[];
+};
+
+export type AttemptAnswerReviewItem = {
+	questionId: string;
+	prompt: string;
+	competency: string;
+	questionType: ExamQuestionType;
+	selectedOptionId: string | null;
+	selectedAnswerText?: string | null;
+	points: number;
+	responseGuide?: string | null;
+	dwellMs?: number;
+	answerChangeCount?: number;
 };
 
 export type StudentExamQuestion = {
@@ -179,6 +205,13 @@ export type AttemptLiveFeedItem = {
 	latestEvent?: AttemptMonitoringEvent;
 };
 
+export type TeacherSubmissionSync = {
+	status: "pending" | "sent" | "failed";
+	targetService: string;
+	lastError?: string;
+	sentAt?: string;
+};
+
 export type AttemptSummary = {
 	attemptId: string;
 	testId: string;
@@ -186,6 +219,9 @@ export type AttemptSummary = {
 	studentId: string;
 	studentName: string;
 	status: AttemptStatus;
+	criteria?: TestCriteria;
+	answerKeySource?: AnswerKeySource;
+	progress?: ExamProgress;
 	score?: number;
 	maxScore?: number;
 	percentage?: number;
@@ -194,4 +230,6 @@ export type AttemptSummary = {
 	result?: ExamResultSummary;
 	monitoring?: AttemptMonitoringSummary;
 	feedback?: AttemptFeedback;
+	teacherSync?: TeacherSubmissionSync;
+	answerReview?: AttemptAnswerReviewItem[];
 };

@@ -2,6 +2,8 @@
 # Wrangler dev / OpenNext local дээр Worker-д GEMINI түлхүүр дамжуулна.
 
 GEMINI_API_KEY=
+TAKE_EXAM_RESULT_WEBHOOK_URL=http://localhost:3002/api/teacher-submission-result
+TAKE_EXAM_RESULT_WEBHOOK_SECRET=
 
 # Deploy-тай ижил: `wrangler.jsonc` → vars.LOG_GRAPHQL_GENERATION (эсвэл Dashboard Variables).
 # 1 = фронтоос ирсэн generate input-ийг AI-аас өмнө лог (терминал / wrangler tail / Workers Logs)

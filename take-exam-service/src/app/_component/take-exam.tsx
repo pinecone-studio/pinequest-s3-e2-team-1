@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { AlertCircle, Flag, Loader2, Save, Send } from "lucide-react";
 import { MathText } from "@/components/math-text";
 import type { StartExamResponse } from "@/lib/exam-service/types";
@@ -12,6 +12,7 @@ type TakeExamProps = {
   flaggedQuestions: Record<string, boolean>;
   isMutating: boolean;
   timeLeftLabel: string;
+  onQuestionFocus?: (questionId: string) => void;
   onSelectAnswer: (questionId: string, value: string) => void;
   onSubmit: (finalize: boolean) => void;
   onToggleFlag: (questionId: string) => void;
@@ -24,11 +25,53 @@ export function TakeExam({
   flaggedQuestions,
   isMutating,
   timeLeftLabel,
+  onQuestionFocus,
   onSelectAnswer,
   onSubmit,
   onToggleFlag,
 }: TakeExamProps) {
   const questionCardRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  useEffect(() => {
+    if (!onQuestionFocus) {
+      return;
+    }
+
+    const nodes = Object.entries(questionCardRefs.current).filter(
+      (entry): entry is [string, HTMLElement] => Boolean(entry[1]),
+    );
+
+    if (nodes.length === 0) {
+      return;
+    }
+
+    onQuestionFocus(nodes[0][0]);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const topEntry = [...entries]
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+
+        if (!topEntry) {
+          return;
+        }
+
+        const questionId = (topEntry.target as HTMLElement).dataset.questionId;
+        if (questionId) {
+          onQuestionFocus(questionId);
+        }
+      },
+      {
+        rootMargin: "-12% 0px -45% 0px",
+        threshold: [0.25, 0.5, 0.75],
+      },
+    );
+
+    nodes.forEach(([, node]) => observer.observe(node));
+
+    return () => observer.disconnect();
+  }, [attempt.exam.questions, onQuestionFocus]);
 
   const scrollToQuestion = (questionId: string) => {
     questionCardRefs.current[questionId]?.scrollIntoView({
@@ -99,6 +142,7 @@ export function TakeExam({
               return (
                 <article
                   key={question.questionId}
+                  data-question-id={question.questionId}
                   ref={(node) => {
                     questionCardRefs.current[question.questionId] = node;
                   }}

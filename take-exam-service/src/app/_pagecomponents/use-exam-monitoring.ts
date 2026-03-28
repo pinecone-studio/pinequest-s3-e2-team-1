@@ -12,6 +12,10 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
   const activityCooldownRef = useRef<Record<string, number>>({});
   const activeAttemptRef = useRef<StartExamResponse | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const focusLossStartedAtRef = useRef<number | null>(null);
+  const lastInteractionAtRef = useRef(Date.now());
+  const loggedAttemptSessionRef = useRef<string | null>(null);
+  const questionViewCountsRef = useRef<Record<string, number>>({});
   const tabIdRef = useRef(
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
@@ -61,6 +65,58 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
     },
   );
 
+  const markInteraction = useEffectEvent(() => {
+    lastInteractionAtRef.current = Date.now();
+  });
+
+  const recordBehaviorEvent = useEffectEvent(
+    ({
+      code,
+      cooldownMs,
+      detail,
+      severity = "info",
+      title,
+    }: AttemptActivityInput & { cooldownMs?: number }) => {
+      markInteraction();
+      void recordAttemptActivity({
+        code,
+        cooldownMs,
+        detail,
+        severity,
+        title,
+      });
+    },
+  );
+
+  const trackQuestionView = useEffectEvent(
+    (questionId: string, index: number, totalQuestions: number) => {
+      markInteraction();
+      const nextCount = (questionViewCountsRef.current[questionId] ?? 0) + 1;
+      questionViewCountsRef.current[questionId] = nextCount;
+
+      if (nextCount === 1) {
+        void recordAttemptActivity({
+          code: "question-view",
+          cooldownMs: 0,
+          detail: `${index}/${totalQuestions} асуултыг нээлээ.`,
+          severity: "info",
+          title: "Question view",
+        });
+        return;
+      }
+
+      if (nextCount === 3 || nextCount === 5) {
+        void recordAttemptActivity({
+          code: "question-revisit",
+          cooldownMs: 0,
+          detail: `${index}/${totalQuestions} асуулт руу ${nextCount} дахь удаагаа буцаж орлоо.`,
+          severity: nextCount >= 5 ? "warning" : "info",
+          title: "Question revisit",
+        });
+      }
+    },
+  );
+
   const getBreakpoint = (width: number): "lg" | "md" | "sm" => {
     if (width < 640) return "sm";
     if (width < 1024) return "md";
@@ -86,6 +142,32 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [activeAttempt]);
+
+  useEffect(() => {
+    if (!activeAttempt) {
+      focusLossStartedAtRef.current = null;
+      lastInteractionAtRef.current = Date.now();
+      questionViewCountsRef.current = {};
+      loggedAttemptSessionRef.current = null;
+      return;
+    }
+
+    lastInteractionAtRef.current = Date.now();
+    questionViewCountsRef.current = {};
+
+    if (loggedAttemptSessionRef.current === activeAttempt.attemptId) {
+      return;
+    }
+
+    loggedAttemptSessionRef.current = activeAttempt.attemptId;
+    void recordAttemptActivity({
+      code: "attempt-session-open",
+      cooldownMs: 0,
+      detail: "Шалгалтын session энэ tab дээр эхэллээ.",
+      severity: "info",
+      title: "Session open",
+    });
+  }, [activeAttempt, recordAttemptActivity]);
 
   useEffect(() => {
     if (!activeAttempt) {
@@ -209,23 +291,61 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
     };
 
     const handleVisibilityChange = () => {
-      if (!document.hidden) return;
+      if (document.hidden) {
+        focusLossStartedAtRef.current = Date.now();
+        void recordAttemptActivity({
+          code: "visibility-hidden",
+          cooldownMs: 2_000,
+          detail: "Tab солилоо.",
+          severity: "danger",
+          title: "Tab",
+        });
+        return;
+      }
+
+      markInteraction();
+      const lostAt = focusLossStartedAtRef.current;
+      if (!lostAt) {
+        return;
+      }
+
+      const awaySeconds = Math.max(1, Math.round((Date.now() - lostAt) / 1000));
+      focusLossStartedAtRef.current = null;
       void recordAttemptActivity({
-        code: "visibility-hidden",
-        cooldownMs: 2_000,
-        detail: "Tab солилоо.",
-        severity: "danger",
-        title: "Tab",
+        code: "visibility-return",
+        cooldownMs: 0,
+        detail: `Tab руу ${awaySeconds} сек дараа буцаж орлоо.`,
+        severity: awaySeconds >= 15 ? "warning" : "info",
+        title: "Tab return",
       });
     };
 
     const handleBlur = () => {
+      focusLossStartedAtRef.current = focusLossStartedAtRef.current ?? Date.now();
       void recordAttemptActivity({
         code: "window-blur",
         cooldownMs: 2_000,
         detail: "Фокус алдагдлаа.",
         severity: "danger",
         title: "Window blur",
+      });
+    };
+
+    const handleFocus = () => {
+      markInteraction();
+      const lostAt = focusLossStartedAtRef.current;
+      if (!lostAt) {
+        return;
+      }
+
+      const awaySeconds = Math.max(1, Math.round((Date.now() - lostAt) / 1000));
+      focusLossStartedAtRef.current = null;
+      void recordAttemptActivity({
+        code: "window-focus-return",
+        cooldownMs: 0,
+        detail: `Фокус ${awaySeconds} сек алдагдсаны дараа сэргэлээ.`,
+        severity: awaySeconds >= 15 ? "warning" : "info",
+        title: "Focus return",
       });
     };
 
@@ -338,6 +458,34 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
     };
 
     const devtoolsInterval = window.setInterval(detectDevtools, 1_200);
+    const idleInterval = window.setInterval(() => {
+      if (document.hidden) {
+        return;
+      }
+
+      const idleMs = Date.now() - lastInteractionAtRef.current;
+      if (idleMs >= 90_000) {
+        void recordAttemptActivity({
+          code: "idle-90s",
+          cooldownMs: 60_000,
+          detail: `${Math.round(idleMs / 1000)} сек идэвхгүй байлаа.`,
+          severity: "warning",
+          title: "Idle",
+        });
+      } else if (idleMs >= 45_000) {
+        void recordAttemptActivity({
+          code: "idle-45s",
+          cooldownMs: 45_000,
+          detail: `${Math.round(idleMs / 1000)} сек interaction хийгээгүй байна.`,
+          severity: "info",
+          title: "Idle",
+        });
+      }
+    }, 15_000);
+
+    const handleInteraction = () => {
+      markInteraction();
+    };
 
     document.addEventListener("copy", handleClipboard);
     document.addEventListener("cut", handleClipboard);
@@ -345,22 +493,31 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
     document.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("pointerdown", handleInteraction, true);
+    document.addEventListener("touchstart", handleInteraction, true);
     window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
     window.addEventListener("resize", handleResize);
     window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("scroll", handleInteraction, true);
 
     return () => {
       window.clearTimeout(initialViewportCheckTimer);
       window.clearInterval(devtoolsInterval);
+      window.clearInterval(idleInterval);
       document.removeEventListener("copy", handleClipboard);
       document.removeEventListener("cut", handleClipboard);
       document.removeEventListener("paste", handleClipboard);
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("pointerdown", handleInteraction, true);
+      document.removeEventListener("touchstart", handleInteraction, true);
       window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("scroll", handleInteraction, true);
       broadcastChannelRef.current?.close();
       broadcastChannelRef.current = null;
       viewportRef.current = null;
@@ -376,7 +533,10 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
     : 0;
 
   return {
+    markInteraction,
+    recordBehaviorEvent,
     resetActivityTracking,
+    trackQuestionView,
     timeLeftMs,
   };
 }

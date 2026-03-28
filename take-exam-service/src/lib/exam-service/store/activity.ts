@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, ne } from "drizzle-orm";
 import type {
 	AttemptLiveFeedItem,
 	AttemptMonitoringEvent,
@@ -80,6 +80,7 @@ export const getAttemptMonitoringSummaries = async (
 	for (const row of rows) {
 		const summary = grouped.get(row.attemptId) ?? {
 			totalEvents: 0,
+			infoCount: 0,
 			warningCount: 0,
 			dangerCount: 0,
 			lastEventAt: undefined,
@@ -89,8 +90,10 @@ export const getAttemptMonitoringSummaries = async (
 		summary.totalEvents += 1;
 		if (row.severity === "danger") {
 			summary.dangerCount += 1;
-		} else {
+		} else if (row.severity === "warning") {
 			summary.warningCount += 1;
+		} else {
+			summary.infoCount = (summary.infoCount ?? 0) + 1;
 		}
 
 		if (!summary.lastEventAt) {
@@ -112,6 +115,7 @@ export const listLiveMonitoringFeed = async (
 	limit = 40,
 ): Promise<AttemptLiveFeedItem[]> => {
 	const rows = await db.query.proctoringEvents.findMany({
+		where: ne(schema.proctoringEvents.severity, "info"),
 		orderBy: [
 			desc(schema.proctoringEvents.occurredAt),
 			desc(schema.proctoringEvents.createdAt),

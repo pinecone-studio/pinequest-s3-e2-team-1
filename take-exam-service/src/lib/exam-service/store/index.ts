@@ -6,5 +6,8 @@ export {
 	syncExternalNewMathExams,
 } from "./external";
 export { processSubmissionQueueMessage, submitExamAnswers } from "./submissions";
+export { upsertAttemptQuestionMetrics } from "./question-metrics";
 export { resumeExamAttempt, startExamAttempt } from "./session";
-export { listTests, savePublishedTest } from "./tests";
+export { getTestMaterial, listTests, savePublishedTest } from "./tests";
+export { importTeacherCheckedAttempt, parseStoredTeacherResult } from "./teacher-sync";
+export type { TeacherCheckedAttemptPayload } from "./teacher-sync";

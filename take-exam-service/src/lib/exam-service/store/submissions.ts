@@ -15,7 +15,7 @@ import {
 import { computeProgress, countAnsweredQuestions } from "./common";
 import type { SubmissionQueueMessage } from "./internal-types";
 import { persistAnswerUpdates } from "./persistence";
-import { generateAttemptFeedback } from "./feedback";
+import { generateAttemptFeedback, stringifyAttemptFeedback } from "./feedback";
 import { computeResult, getAttemptResults } from "./results";
 import { syncAttemptSubmissionToTeacherService } from "./teacher-sync";
 
@@ -36,6 +36,9 @@ type SubmissionOptions = {
 	ai?: AiBinding;
 	geminiApiKey?: string;
 	geminiModel?: string;
+	ollamaApiKey?: string;
+	ollamaBaseUrl?: string;
+	ollamaModel?: string;
 };
 
 const getAttemptAnswerKeySource = async (db: DbClient, attemptId: string) => {
@@ -92,20 +95,29 @@ const finalizeLocalAttempt = async (
 		attemptState.totalQuestions,
 	);
 
+	const feedback = await generateAttemptFeedback(
+		db,
+		{ attemptId, progress, result },
+		{
+			ai: options.ai,
+			geminiApiKey: options.geminiApiKey,
+			geminiModel: options.geminiModel,
+			ollamaApiKey: options.ollamaApiKey,
+			ollamaBaseUrl: options.ollamaBaseUrl,
+			ollamaModel: options.ollamaModel,
+		},
+	);
+
+	await db.update(schema.attempts).set({
+		feedbackJson: stringifyAttemptFeedback(feedback),
+	}).where(eq(schema.attempts.id, attemptId));
+
 	return {
 		attemptId,
 		status: "approved",
 		progress,
 		result,
-		feedback: await generateAttemptFeedback(
-			db,
-			{ attemptId, progress, result },
-			{
-				ai: options.ai,
-				geminiApiKey: options.geminiApiKey,
-				geminiModel: options.geminiModel,
-			},
-		),
+		feedback,
 	};
 };
 
@@ -120,6 +132,9 @@ export const submitExamAnswers = async (
 	ai?: AiBinding,
 	geminiApiKey?: string,
 	geminiModel?: string,
+	ollamaApiKey?: string,
+	ollamaBaseUrl?: string,
+	ollamaModel?: string,
 ): Promise<SubmitAnswersResponse> => {
 	const options: SubmissionOptions = {
 		queue,
@@ -128,6 +143,9 @@ export const submitExamAnswers = async (
 		ai,
 		geminiApiKey,
 		geminiModel,
+		ollamaApiKey,
+		ollamaBaseUrl,
+		ollamaModel,
 	};
 	const attemptState = await resolveAttemptState(db, attemptId, kv);
 
@@ -158,6 +176,9 @@ export const submitExamAnswers = async (
 							ai,
 							geminiApiKey,
 							geminiModel,
+							ollamaApiKey,
+							ollamaBaseUrl,
+							ollamaModel,
 						},
 					)
 				: undefined,
@@ -182,14 +203,30 @@ export const submitExamAnswers = async (
 	}
 
 	if (queue) {
+		await persistAnswerUpdates(db, attemptId, inputAnswers);
+
 		const nextState = mergeAnswersIntoState(
 			attemptState,
 			inputAnswers,
 			finalize,
 			submittedAt,
 		);
-		status = nextState.status;
-		await cacheAttemptState(kv, nextState);
+		status = finalize ? "submitted" : nextState.status;
+
+		if (finalize) {
+			await db.update(schema.attempts).set({
+				status,
+				submittedAt: submittedAt ?? new Date().toISOString(),
+				score: null,
+				maxScore: null,
+				percentage: null,
+			}).where(eq(schema.attempts.id, attemptId));
+		}
+
+		await cacheAttemptState(kv, {
+			...nextState,
+			status,
+		});
 		await queue.send({
 			type: "UPSERT_ANSWERS",
 			attemptId,
@@ -232,21 +269,30 @@ export const submitExamAnswers = async (
 				attemptState.totalQuestions,
 			);
 
-			return {
-				attemptId,
-				status,
-				progress,
-				feedback: await generateAttemptFeedback(
+				const feedback = await generateAttemptFeedback(
 					db,
 					{ attemptId, progress },
 					{
 						ai,
 						geminiApiKey,
 						geminiModel,
+						ollamaApiKey,
+						ollamaBaseUrl,
+						ollamaModel,
 					},
-				),
-			};
-		}
+				);
+
+				await db.update(schema.attempts).set({
+					feedbackJson: stringifyAttemptFeedback(feedback),
+				}).where(eq(schema.attempts.id, attemptId));
+
+				return {
+					attemptId,
+					status,
+					progress,
+					feedback,
+				};
+			}
 
 		const nextState = mergeAnswersIntoState(attemptState, inputAnswers, false);
 		await cacheAttemptState(kv, nextState);
@@ -270,9 +316,18 @@ export const submitExamAnswers = async (
 					ai,
 					geminiApiKey,
 					geminiModel,
+					ollamaApiKey,
+					ollamaBaseUrl,
+					ollamaModel,
 				},
 			)
 		: undefined;
+
+	if (feedback) {
+		await db.update(schema.attempts).set({
+			feedbackJson: stringifyAttemptFeedback(feedback),
+		}).where(eq(schema.attempts.id, attemptId));
+	}
 
 	return {
 		attemptId,
@@ -287,6 +342,12 @@ export const processSubmissionQueueMessage = async (
 	message: SubmissionQueueMessage,
 	kv?: KVNamespace,
 	submissionWebhookUrl?: string,
+	ai?: AiBinding,
+	geminiApiKey?: string,
+	geminiModel?: string,
+	ollamaApiKey?: string,
+	ollamaBaseUrl?: string,
+	ollamaModel?: string,
 ) => {
 	if (message.type === "ANSWER_UPDATE") {
 		await persistAnswerUpdates(db, message.attemptId, [message.data]);
@@ -309,7 +370,15 @@ export const processSubmissionQueueMessage = async (
 				[],
 				cachedState,
 				submittedAt,
-				{ kv },
+				{
+					ai,
+					geminiApiKey,
+					geminiModel,
+					kv,
+					ollamaApiKey,
+					ollamaBaseUrl,
+					ollamaModel,
+				},
 			);
 			return;
 		}

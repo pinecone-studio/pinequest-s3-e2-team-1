@@ -26,11 +26,15 @@ const FALLBACK_MODEL = "@cf/openai/gpt-oss-20b";
 const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_API_BASE_URL =
 	"https://generativelanguage.googleapis.com/v1beta";
+const DEFAULT_OLLAMA_MODEL = "llama3.1";
 
 type FeedbackOptions = {
 	ai?: AiBinding;
 	geminiApiKey?: string;
 	geminiModel?: string;
+	ollamaApiKey?: string;
+	ollamaBaseUrl?: string;
+	ollamaModel?: string;
 };
 
 const safeJsonParse = (value: string): AttemptFeedback | null => {
@@ -62,6 +66,138 @@ const safeJsonParse = (value: string): AttemptFeedback | null => {
 	} catch {
 		return null;
 	}
+};
+
+export const parseAttemptFeedback = (
+	value?: string | null,
+): AttemptFeedback | undefined => {
+	if (!value) return undefined;
+	return safeJsonParse(value) ?? undefined;
+};
+
+export const stringifyAttemptFeedback = (
+	feedback?: AttemptFeedback,
+): string | null => (feedback ? JSON.stringify(feedback) : null);
+
+const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
+
+const buildSystemPrompt = () =>
+	"Та шалгалтын дараах богино, дэмжсэн өнгө аястай монгол хэлний feedback JSON үүсгэнэ. headline, summary, strengths, improvements гэсэн 4 key ашигла. strengths болон improvements нь тус бүр 1-3 мөртэй массив байна.";
+
+const buildUserPayload = (
+	progress: ExamProgress,
+	result: ExamResultSummary | undefined,
+	monitoringSummary: Awaited<
+		ReturnType<typeof getAttemptMonitoringSummaries>
+	> extends Map<string, infer TValue>
+		? TValue | undefined
+		: undefined,
+	fallback: AttemptFeedback,
+) =>
+	JSON.stringify({
+		progress,
+		result: result ?? null,
+		monitoring: monitoringSummary ?? null,
+		fallback,
+	});
+
+const generateGeminiFeedback = async (
+	systemPrompt: string,
+	userPayload: string,
+	options: FeedbackOptions,
+) => {
+	if (!options.geminiApiKey) {
+		return null;
+	}
+
+	const response = await fetch(
+		`${GEMINI_API_BASE_URL}/models/${options.geminiModel ?? DEFAULT_GEMINI_MODEL}:generateContent?key=${options.geminiApiKey}`,
+		{
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				systemInstruction: {
+					parts: [{ text: systemPrompt }],
+				},
+				contents: [
+					{
+						role: "user",
+						parts: [{ text: userPayload }],
+					},
+				],
+				generationConfig: {
+					responseMimeType: "application/json",
+					temperature: 0.4,
+				},
+			}),
+		},
+	);
+
+	if (!response.ok) {
+		throw new Error(`Gemini feedback failed with status ${response.status}`);
+	}
+
+	const payload = (await response.json()) as {
+		candidates?: Array<{
+			content?: {
+				parts?: Array<{
+					text?: string;
+				}>;
+			};
+		}>;
+	};
+	const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+	return text ? safeJsonParse(text) : null;
+};
+
+const generateOllamaFeedback = async (
+	systemPrompt: string,
+	userPayload: string,
+	options: FeedbackOptions,
+) => {
+	if (!options.ollamaBaseUrl) {
+		return null;
+	}
+
+	const response = await fetch(`${normalizeBaseUrl(options.ollamaBaseUrl)}/api/chat`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			...(options.ollamaApiKey
+				? { Authorization: `Bearer ${options.ollamaApiKey}` }
+				: {}),
+		},
+		body: JSON.stringify({
+			model: options.ollamaModel ?? DEFAULT_OLLAMA_MODEL,
+			stream: false,
+			format: "json",
+			messages: [
+				{ role: "system", content: systemPrompt },
+				{ role: "user", content: userPayload },
+			],
+		}),
+	});
+
+	if (!response.ok) {
+		throw new Error(`Ollama feedback failed with status ${response.status}`);
+	}
+
+	const payload = (await response.json()) as {
+		error?: string;
+		message?: {
+			content?: string;
+		};
+		response?: string;
+	};
+
+	if (payload.error) {
+		throw new Error(payload.error);
+	}
+
+	const content = payload.message?.content ?? payload.response;
+	return content ? safeJsonParse(content) : null;
 };
 
 const buildFallbackFeedback = (
@@ -140,57 +276,38 @@ export const generateAttemptFeedback = async (
 	);
 
 	try {
-		const systemPrompt =
-			"Та шалгалтын дараах богино, дэмжсэн өнгө аястай монгол хэлний feedback JSON үүсгэнэ. headline, summary, strengths, improvements гэсэн 4 key ашигла. strengths болон improvements нь тус бүр 1-3 мөртэй массив байна.";
-		const userPayload = JSON.stringify({
-			progress: context.progress,
-			result: context.result ?? null,
-			monitoring: monitoringSummary ?? null,
+		const systemPrompt = buildSystemPrompt();
+		const userPayload = buildUserPayload(
+			context.progress,
+			context.result,
+			monitoringSummary,
 			fallback,
-		});
+		);
 
-		if (options.geminiApiKey) {
-			const response = await fetch(
-				`${GEMINI_API_BASE_URL}/models/${options.geminiModel ?? DEFAULT_GEMINI_MODEL}:generateContent?key=${options.geminiApiKey}`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						systemInstruction: {
-							parts: [{ text: systemPrompt }],
-						},
-						contents: [
-							{
-								role: "user",
-								parts: [{ text: userPayload }],
-							},
-						],
-						generationConfig: {
-							responseMimeType: "application/json",
-							temperature: 0.4,
-						},
-					}),
-				},
+		try {
+			const geminiFeedback = await generateGeminiFeedback(
+				systemPrompt,
+				userPayload,
+				options,
 			);
-
-			if (!response.ok) {
-				throw new Error(`Gemini feedback failed with status ${response.status}`);
+			if (geminiFeedback) {
+				return geminiFeedback;
 			}
+		} catch {
+			// Try the next provider.
+		}
 
-			const payload = (await response.json()) as {
-				candidates?: Array<{
-					content?: {
-						parts?: Array<{
-							text?: string;
-						}>;
-					};
-				}>;
-			};
-			const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
-			const parsed = text ? safeJsonParse(text) : null;
-			return parsed ?? fallback;
+		try {
+			const ollamaFeedback = await generateOllamaFeedback(
+				systemPrompt,
+				userPayload,
+				options,
+			);
+			if (ollamaFeedback) {
+				return ollamaFeedback;
+			}
+		} catch {
+			// Fall through to the next provider.
 		}
 
 		if (!options.ai) {

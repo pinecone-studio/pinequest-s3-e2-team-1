@@ -50,5 +50,10 @@
    * Note: Use secrets to store sensitive data.
    * https://developers.cloudflare.com/workers/configuration/secrets/
    */
-  // "vars": {  "MY_VARIABLE": "production_value" }
+  "vars": {
+    "OLLAMA_BASE_URL": "https://diy-dial-highlight-perth.trycloudflare.com",
+    "OLLAMA_MODEL": "llama3.1",
+  },
+  // Secret example:
+  // wrangler secret put OLLAMA_API_KEY
 }

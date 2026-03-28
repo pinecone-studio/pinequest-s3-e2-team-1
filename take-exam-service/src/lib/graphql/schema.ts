@@ -22,6 +22,7 @@ export const typeDefs = /* GraphQL */ `
     title: String!
     description: String!
     criteria: TestCriteria!
+    answerKeySource: String!
     updatedAt: String!
   }
 
@@ -87,6 +88,7 @@ export const typeDefs = /* GraphQL */ `
 
   type AttemptMonitoringSummary {
     totalEvents: Int!
+    infoCount: Int
     warningCount: Int!
     dangerCount: Int!
     lastEventAt: String
@@ -102,12 +104,17 @@ export const typeDefs = /* GraphQL */ `
 
   type QuestionResult {
     questionId: ID!
+    prompt: String!
+    competency: String!
+    questionType: String!
     selectedOptionId: String
     correctOptionId: String!
     isCorrect: Boolean!
     pointsAwarded: Int!
     maxPoints: Int!
     explanation: String
+    dwellMs: Int
+    answerChangeCount: Int
   }
 
   type AttemptResultSummary {
@@ -120,6 +127,26 @@ export const typeDefs = /* GraphQL */ `
     questionResults: [QuestionResult!]!
   }
 
+  type AttemptAnswerReviewItem {
+    questionId: ID!
+    prompt: String!
+    competency: String!
+    questionType: String!
+    selectedOptionId: String
+    selectedAnswerText: String
+    points: Int!
+    responseGuide: String
+    dwellMs: Int
+    answerChangeCount: Int
+  }
+
+  type TeacherSubmissionSync {
+    status: String!
+    targetService: String!
+    lastError: String
+    sentAt: String
+  }
+
   type AttemptSummary {
     attemptId: ID!
     testId: ID!
@@ -127,6 +154,9 @@ export const typeDefs = /* GraphQL */ `
     studentId: String!
     studentName: String!
     status: String!
+    criteria: TestCriteria
+    answerKeySource: String!
+    progress: ExamProgress!
     score: Int
     maxScore: Int
     percentage: Int
@@ -135,6 +165,8 @@ export const typeDefs = /* GraphQL */ `
     result: AttemptResultSummary
     monitoring: AttemptMonitoringSummary
     feedback: AttemptFeedback
+    teacherSync: TeacherSubmissionSync
+    answerReview: [AttemptAnswerReviewItem!]
   }
 
   type AttemptLiveFeedItem {
@@ -174,6 +206,7 @@ export const typeDefs = /* GraphQL */ `
     students: [Student!]!
     availableTests: [Test!]!
     attempts: [AttemptSummary!]!
+    testMaterial(testId: ID!): ExamSession
     liveMonitoringFeed(limit: Int): [AttemptLiveFeedItem!]!
     externalNewMathExams(limit: Int): [ExternalExamSummary!]!
   }
@@ -187,6 +220,7 @@ export const typeDefs = /* GraphQL */ `
     submitAnswers(attemptId: String!, answers: [AnswerInput!]!, finalize: Boolean!): SubmitAnswersPayload!
     approveAttempt(attemptId: String!): Boolean!
     logAttemptActivity(attemptId: String!, input: AttemptActivityInput!): Boolean!
+    logQuestionMetrics(attemptId: String!, input: [QuestionMetricInput!]!): Boolean!
   }
 
   input AnswerInput {
@@ -200,6 +234,12 @@ export const typeDefs = /* GraphQL */ `
     title: String!
     detail: String!
     occurredAt: String
+  }
+
+  input QuestionMetricInput {
+    questionId: ID!
+    dwellMs: Int
+    answerChangeCount: Int
   }
 `;
 

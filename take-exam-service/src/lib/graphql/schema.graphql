@@ -18,6 +18,7 @@ type Test {
   title: String!
   description: String!
   criteria: TestCriteria!
+  answerKeySource: String!
   updatedAt: String!
 }
 
@@ -83,6 +84,7 @@ type AttemptMonitoringEvent {
 
 type AttemptMonitoringSummary {
   totalEvents: Int!
+  infoCount: Int
   warningCount: Int!
   dangerCount: Int!
   lastEventAt: String
@@ -98,12 +100,17 @@ type AttemptFeedback {
 
 type QuestionResult {
   questionId: ID!
+  prompt: String!
+  competency: String!
+  questionType: String!
   selectedOptionId: String
   correctOptionId: String!
   isCorrect: Boolean!
   pointsAwarded: Int!
   maxPoints: Int!
   explanation: String
+  dwellMs: Int
+  answerChangeCount: Int
 }
 
 type AttemptResultSummary {
@@ -116,6 +123,26 @@ type AttemptResultSummary {
   questionResults: [QuestionResult!]!
 }
 
+type AttemptAnswerReviewItem {
+  questionId: ID!
+  prompt: String!
+  competency: String!
+  questionType: String!
+  selectedOptionId: String
+  selectedAnswerText: String
+  points: Int!
+  responseGuide: String
+  dwellMs: Int
+  answerChangeCount: Int
+}
+
+type TeacherSubmissionSync {
+  status: String!
+  targetService: String!
+  lastError: String
+  sentAt: String
+}
+
 type AttemptSummary {
   attemptId: ID!
   testId: ID!
@@ -123,6 +150,9 @@ type AttemptSummary {
   studentId: String!
   studentName: String!
   status: String!
+  criteria: TestCriteria
+  answerKeySource: String!
+  progress: ExamProgress!
   score: Int
   maxScore: Int
   percentage: Int
@@ -131,6 +161,8 @@ type AttemptSummary {
   result: AttemptResultSummary
   monitoring: AttemptMonitoringSummary
   feedback: AttemptFeedback
+  teacherSync: TeacherSubmissionSync
+  answerReview: [AttemptAnswerReviewItem!]
 }
 
 type AttemptLiveFeedItem {
@@ -170,6 +202,7 @@ type Query {
   students: [Student!]!
   availableTests: [Test!]!
   attempts: [AttemptSummary!]!
+  testMaterial(testId: ID!): ExamSession
   liveMonitoringFeed(limit: Int): [AttemptLiveFeedItem!]!
   externalNewMathExams(limit: Int): [ExternalExamSummary!]!
 }
@@ -183,6 +216,7 @@ type Mutation {
   submitAnswers(attemptId: String!, answers: [AnswerInput!]!, finalize: Boolean!): SubmitAnswersPayload!
   approveAttempt(attemptId: String!): Boolean!
   logAttemptActivity(attemptId: String!, input: AttemptActivityInput!): Boolean!
+  logQuestionMetrics(attemptId: String!, input: [QuestionMetricInput!]!): Boolean!
 }
 
 input AnswerInput {
@@ -196,4 +230,10 @@ input AttemptActivityInput {
   title: String!
   detail: String!
   occurredAt: String
+}
+
+input QuestionMetricInput {
+  questionId: ID!
+  dwellMs: Int
+  answerChangeCount: Int
 }

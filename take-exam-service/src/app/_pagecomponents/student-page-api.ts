@@ -18,6 +18,7 @@ import {
   type SubmitAnswersMutation,
 } from "@/gql/generated";
 import type {
+  AttemptQuestionMetricInput,
   AttemptFeedback,
   AttemptMonitoringEvent,
   AttemptMonitoringSummary,
@@ -52,6 +53,8 @@ export type AttemptActivityInput = {
   severity: ProctoringEventSeverity;
   title: string;
 };
+
+export type QuestionMetricInput = AttemptQuestionMetricInput;
 
 export type SebCheckResponse = {
   client?: {
@@ -151,7 +154,12 @@ const mapExamResultSummary = (
     incorrectCount: result.incorrectCount,
     unansweredCount: result.unansweredCount,
     questionResults: result.questionResults.map((questionResult) => ({
+      answerChangeCount: 0,
+      competency: "",
+      dwellMs: 0,
+      prompt: "",
       questionId: questionResult.questionId,
+      questionType: "single-choice",
       selectedOptionId: questionResult.selectedOptionId ?? null,
       correctOptionId: questionResult.correctOptionId,
       isCorrect: questionResult.isCorrect,
@@ -281,7 +289,12 @@ const mapSubmitAnswersResponse = (
         unansweredCount: payload.result.unansweredCount,
         questionResults: payload.result.questionResults.map(
           (questionResult) => ({
+            answerChangeCount: 0,
+            competency: "",
+            dwellMs: 0,
+            prompt: "",
             questionId: questionResult.questionId,
+            questionType: "single-choice",
             selectedOptionId: questionResult.selectedOptionId ?? null,
             correctOptionId: questionResult.correctOptionId,
             isCorrect: questionResult.isCorrect,
@@ -394,6 +407,43 @@ export const logAttemptActivityRequest = async (
   const data = await gqlRequest(LogAttemptActivityDocument, variables);
 
   return data.logAttemptActivity;
+};
+
+export const logQuestionMetricsRequest = async (
+  attemptId: string,
+  input: QuestionMetricInput[],
+) => {
+  if (USE_MOCK_DATA) {
+    return true;
+  }
+
+  const response = await fetch("/api/graphql", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query: `
+        mutation LogQuestionMetrics(
+          $attemptId: String!
+          $input: [QuestionMetricInput!]!
+        ) {
+          logQuestionMetrics(attemptId: $attemptId, input: $input)
+        }
+      `,
+      variables: { attemptId, input },
+    }),
+  });
+
+  const payload = (await response.json()) as GraphQlResult<{
+    logQuestionMetrics: boolean;
+  }>;
+
+  if (!response.ok || payload.errors?.length || !payload.data) {
+    throw new Error(
+      payload.errors?.[0]?.message || "Question metrics хадгалж чадсангүй.",
+    );
+  }
+
+  return payload.data.logQuestionMetrics;
 };
 
 export const checkSebAccessRequest = async (): Promise<SebCheckResponse> => {

@@ -63,6 +63,8 @@ export const attempts = sqliteTable("attempts", {
     score: integer("score"),
     maxScore: integer("max_score"),
     percentage: integer("percentage"),
+    feedbackJson: text("feedback_json"),
+    teacherResultJson: text("teacher_result_json"),
     startedAt: text("started_at").notNull(),
     expiresAt: text("expires_at").notNull(),
     submittedAt: text("submitted_at"),
@@ -86,6 +88,23 @@ export const answers = sqliteTable("answers", {
     pk: primaryKey({ columns: [table.attemptId, table.questionId] }),
 }));
 
+export const attemptQuestionMetrics = sqliteTable("attempt_question_metrics", {
+    attemptId: text("attempt_id").notNull().references(() => attempts.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+    }),
+    questionId: text("question_id").notNull().references(() => questions.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+    }),
+    dwellMs: integer("dwell_ms").notNull().default(0),
+    answerChangeCount: integer("answer_change_count").notNull().default(0),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => ({
+    pk: primaryKey({ columns: [table.attemptId, table.questionId] }),
+    attemptUpdatedIdx: index("attempt_question_metrics_attempt_updated_idx").on(table.attemptId, table.updatedAt),
+}));
+
 export const proctoringEvents = sqliteTable("proctoring_events", {
     id: text("id").primaryKey(),
     attemptId: text("attempt_id").notNull().references(() => attempts.id, {
@@ -93,7 +112,7 @@ export const proctoringEvents = sqliteTable("proctoring_events", {
         onUpdate: "cascade",
     }),
     code: text("code").notNull(),
-    severity: text("severity", { enum: ["warning", "danger"] }).notNull(),
+    severity: text("severity", { enum: ["info", "warning", "danger"] }).notNull(),
     title: text("title").notNull(),
     detail: text("detail").notNull(),
     occurredAt: text("occurred_at").notNull(),
@@ -139,6 +158,7 @@ export const questionsRelations = relations(questions, ({ one, many }) => ({
         references: [tests.id],
     }),
     answers: many(answers),
+    attemptQuestionMetrics: many(attemptQuestionMetrics),
 }));
 
 export const attemptsRelations = relations(attempts, ({ one, many }) => ({
@@ -151,6 +171,7 @@ export const attemptsRelations = relations(attempts, ({ one, many }) => ({
         references: [students.id],
     }),
     answers: many(answers),
+    attemptQuestionMetrics: many(attemptQuestionMetrics),
     proctoringEvents: many(proctoringEvents),
     teacherSubmissionExports: many(teacherSubmissionExports),
 }));
@@ -162,6 +183,17 @@ export const answersRelations = relations(answers, ({ one }) => ({
     }),
     question: one(questions, {
         fields: [answers.questionId],
+        references: [questions.id],
+    }),
+}));
+
+export const attemptQuestionMetricsRelations = relations(attemptQuestionMetrics, ({ one }) => ({
+    attempt: one(attempts, {
+        fields: [attemptQuestionMetrics.attemptId],
+        references: [attempts.id],
+    }),
+    question: one(questions, {
+        fields: [attemptQuestionMetrics.questionId],
         references: [questions.id],
     }),
 }));

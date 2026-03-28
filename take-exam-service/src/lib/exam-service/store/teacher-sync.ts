@@ -1,7 +1,11 @@
 import { eq, sql } from "drizzle-orm";
+import type { ExamResultSummary } from "@/lib/exam-service/types";
 import { DbClient } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
-import { createId } from "./common";
+import { cacheAttemptState, resolveAttemptState } from "./cache";
+import { computeProgress, countAnsweredQuestions, createId } from "./common";
+import { generateAttemptFeedback, stringifyAttemptFeedback } from "./feedback";
+import { getAttemptResults } from "./results";
 
 export type TeacherSubmissionPayload = {
   attemptId: string;
@@ -14,10 +18,119 @@ export type TeacherSubmissionPayload = {
     id: string;
     name: string;
   };
+  shuffleManifest?: string | null;
   answers: Array<{
     questionId: string;
     selectedOptionId: string | null;
   }>;
+};
+
+type AiBinding = {
+  run: (
+    model: string,
+    input: {
+      messages: Array<{ role: "system" | "user"; content: string }>;
+      response_format?: { type: "json_object" };
+    },
+  ) => Promise<{ response?: string }>;
+};
+
+export type TeacherCheckedQuestionPayload = {
+  questionId: string;
+  correctOptionId?: string | null;
+  explanation?: string | null;
+  isCorrect: boolean;
+  maxPoints?: number | null;
+  pointsAwarded?: number | null;
+};
+
+export type TeacherCheckedAttemptPayload = {
+  attemptId: string;
+  checkedAt?: string;
+  externalExamId: string;
+  maxScore?: number | null;
+  percentage?: number | null;
+  questionResults: TeacherCheckedQuestionPayload[];
+  score?: number | null;
+};
+
+type TeacherCheckOptions = {
+  ai?: AiBinding;
+  geminiApiKey?: string;
+  geminiModel?: string;
+  kv?: KVNamespace;
+  ollamaApiKey?: string;
+  ollamaBaseUrl?: string;
+  ollamaModel?: string;
+};
+
+export const parseStoredTeacherResult = (
+  value?: string | null,
+): ExamResultSummary | undefined => {
+  if (!value) return undefined;
+
+  try {
+    return JSON.parse(value) as ExamResultSummary;
+  } catch {
+    return undefined;
+  }
+};
+
+const buildTeacherCheckedResult = async (
+  db: DbClient,
+  attemptId: string,
+  payload: TeacherCheckedAttemptPayload,
+): Promise<ExamResultSummary> => {
+  const rows = await getAttemptResults(db, attemptId);
+  const teacherResultByQuestionId = new Map(
+    payload.questionResults.map((question) => [question.questionId, question]),
+  );
+
+  const questionResults = rows.map((row) => {
+    const teacherQuestion = teacherResultByQuestionId.get(row.questionId);
+    const maxPoints = teacherQuestion?.maxPoints ?? row.points;
+    const pointsAwarded =
+      teacherQuestion?.pointsAwarded ??
+      (teacherQuestion?.isCorrect ? maxPoints : 0);
+
+    return {
+      answerChangeCount: row.answerChangeCount ?? 0,
+      competency: row.competency,
+      correctOptionId: teacherQuestion?.correctOptionId ?? row.correctOptionId,
+      dwellMs: row.dwellMs ?? 0,
+      explanation: teacherQuestion?.explanation ?? row.explanation,
+      isCorrect: teacherQuestion?.isCorrect ?? false,
+      maxPoints,
+      pointsAwarded,
+      prompt: row.prompt,
+      questionId: row.questionId,
+      questionType: (row.questionType as "single-choice" | "math") ?? "single-choice",
+      selectedOptionId: row.selectedOptionId,
+    };
+  });
+
+  const score =
+    payload.score ??
+    questionResults.reduce((total, question) => total + question.pointsAwarded, 0);
+  const maxScore =
+    payload.maxScore ??
+    questionResults.reduce((total, question) => total + question.maxPoints, 0);
+
+  return {
+    score,
+    maxScore,
+    percentage:
+      payload.percentage ??
+      (maxScore === 0 ? 0 : Math.round((score / maxScore) * 100)),
+    correctCount: questionResults.filter((question) => question.isCorrect).length,
+    incorrectCount: questionResults.filter(
+      (question) => question.selectedOptionId !== null && !question.isCorrect,
+    ).length,
+    unansweredCount: questionResults.filter(
+      (question) => question.selectedOptionId === null,
+    ).length,
+    questionResults,
+  };
 };
 
 const buildTeacherSubmissionPayload = async (
@@ -63,6 +176,7 @@ const buildTeacherSubmissionPayload = async (
         id: attempt.studentId,
         name: attempt.studentName,
       },
+      shuffleManifest: attempt.shuffleManifest ?? null,
       answers: answers.map((answer) => ({
         questionId: answer.questionId,
         selectedOptionId: answer.selectedOptionId,
@@ -166,4 +280,73 @@ export const syncAttemptSubmissionToTeacherService = async (
       error instanceof Error ? error.message : "Teacher submission failed",
     );
   }
+};
+
+export const importTeacherCheckedAttempt = async (
+  db: DbClient,
+  payload: TeacherCheckedAttemptPayload,
+  options: TeacherCheckOptions = {},
+) => {
+  const attempt = await db.query.attempts.findFirst({
+    where: eq(schema.attempts.id, payload.attemptId),
+  });
+
+  if (!attempt) {
+    throw new Error("Teacher result-д харгалзах attempt олдсонгүй.");
+  }
+
+  const test = await db.query.tests.findFirst({
+    where: eq(schema.tests.id, attempt.testId),
+  });
+
+  if (!test || test.answerKeySource !== "teacher_service") {
+    throw new Error("Энэ attempt teacher_service шалгалт биш байна.");
+  }
+
+  if (payload.externalExamId !== test.generatorTestId) {
+    throw new Error("externalExamId таарахгүй байна.");
+  }
+
+  const result = await buildTeacherCheckedResult(db, payload.attemptId, payload);
+  const attemptState = await resolveAttemptState(db, payload.attemptId, options.kv);
+  const progress = computeProgress(
+    countAnsweredQuestions(attemptState.answers),
+    attemptState.totalQuestions,
+  );
+  const feedback = await generateAttemptFeedback(
+    db,
+    { attemptId: payload.attemptId, progress, result },
+    {
+      ai: options.ai,
+      geminiApiKey: options.geminiApiKey,
+      geminiModel: options.geminiModel,
+      ollamaApiKey: options.ollamaApiKey,
+      ollamaBaseUrl: options.ollamaBaseUrl,
+      ollamaModel: options.ollamaModel,
+    },
+  );
+
+  await db
+    .update(schema.attempts)
+    .set({
+      status: "approved",
+      score: result.score,
+      maxScore: result.maxScore,
+      percentage: result.percentage,
+      feedbackJson: stringifyAttemptFeedback(feedback),
+      teacherResultJson: JSON.stringify(result),
+    })
+    .where(eq(schema.attempts.id, payload.attemptId));
+
+  await cacheAttemptState(options.kv, {
+    ...attemptState,
+    status: "approved",
+  });
+
+  return {
+    attemptId: payload.attemptId,
+    feedback,
+    result,
+    status: "approved" as const,
+  };
 };

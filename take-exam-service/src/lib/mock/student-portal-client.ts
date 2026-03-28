@@ -210,7 +210,12 @@ const seedResult = (
 	incorrectCount: Math.max(0, maxScore - score),
 	unansweredCount: 0,
 	questionResults: Array.from({ length: questionCount }, (_, idx) => ({
+		answerChangeCount: 0,
+		competency: "mock-competency",
+		dwellMs: 0,
+		prompt: `Mock question ${idx + 1}`,
 		questionId: `seed-q-${idx + 1}`,
+		questionType: "single-choice",
 		selectedOptionId: "a",
 		correctOptionId: idx % 4 === 0 ? "b" : "a",
 		isCorrect: idx % 4 !== 0,
@@ -306,6 +311,7 @@ const appendMockMonitoringEvent = (
 ) => {
 	const current = monitoringStore.get(attemptId) ?? {
 		totalEvents: 0,
+		infoCount: 0,
 		warningCount: 0,
 		dangerCount: 0,
 		lastEventAt: undefined,
@@ -328,8 +334,10 @@ const appendMockMonitoringEvent = (
 
 	if (input.severity === "danger") {
 		current.dangerCount += 1;
-	} else {
+	} else if (input.severity === "warning") {
 		current.warningCount += 1;
+	} else {
+		current.infoCount = (current.infoCount ?? 0) + 1;
 	}
 
 	monitoringStore.set(attemptId, current);
@@ -483,6 +491,11 @@ export const mockStudentPortalClient = {
 		const attempt = attemptsStore.find((item) => item.attemptId === attemptId);
 		if (!attempt) throw new Error("Оролдлого олдсонгүй.");
 		appendMockMonitoringEvent(attemptId, input);
+		return true;
+	},
+
+	async logQuestionMetrics() {
+		await sleep();
 		return true;
 	},
 };

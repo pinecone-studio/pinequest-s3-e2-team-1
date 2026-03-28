@@ -2,6 +2,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createDb } from "@/lib/db";
 import { ensureExamSchema } from "@/lib/db/bootstrap";
 import type {
+	AttemptQuestionMetricInput,
 	ExamAnswerInput,
 	ProctoringEventSeverity,
 	StartExamResponse,
@@ -15,6 +16,7 @@ import {
 	syncExternalNewMathExams,
 	startExamAttempt,
 	submitExamAnswers,
+	upsertAttemptQuestionMetrics,
 } from "@/lib/exam-service/store";
 
 type ResolverEnv = {
@@ -24,6 +26,9 @@ type ResolverEnv = {
 	TEACHER_SUBMISSION_WEBHOOK_URL?: string;
 	GEMINI_API_KEY?: string;
 	GEMINI_MODEL?: string;
+	OLLAMA_API_KEY?: string;
+	OLLAMA_BASE_URL?: string;
+	OLLAMA_MODEL?: string;
 	AI?: {
 		run: (
 			model: string,
@@ -55,6 +60,15 @@ const getGeminiApiKey = (env: ResolverEnv) =>
 
 const getGeminiModel = (env: ResolverEnv) =>
 	env.GEMINI_MODEL ?? process.env.GEMINI_MODEL;
+
+const getOllamaApiKey = (env: ResolverEnv) =>
+	env.OLLAMA_API_KEY ?? process.env.OLLAMA_API_KEY;
+
+const getOllamaBaseUrl = (env: ResolverEnv) =>
+	env.OLLAMA_BASE_URL ?? process.env.OLLAMA_BASE_URL;
+
+const getOllamaModel = (env: ResolverEnv) =>
+	env.OLLAMA_MODEL ?? process.env.OLLAMA_MODEL;
 
 const toGraphqlStartExamPayload = (payload: StartExamResponse) => ({
 	...payload,
@@ -136,6 +150,9 @@ export const mutations = {
 			env.AI,
 			getGeminiApiKey(env),
 			getGeminiModel(env),
+			getOllamaApiKey(env),
+			getOllamaBaseUrl(env),
+			getOllamaModel(env),
 		);
 	},
 	approveAttempt: async (
@@ -159,6 +176,19 @@ export const mutations = {
 		const db = createDb(env.DB);
 		await ensureExamSchema(env.DB);
 		await logAttemptActivity(db, attemptId, input);
+		return true;
+	},
+	logQuestionMetrics: async (
+		_parent: unknown,
+		{
+			attemptId,
+			input,
+		}: { attemptId: string; input: AttemptQuestionMetricInput[] },
+	) => {
+		const env = getResolverEnv();
+		const db = createDb(env.DB);
+		await ensureExamSchema(env.DB);
+		await upsertAttemptQuestionMetrics(db, attemptId, input);
 		return true;
 	},
 	importNewMathExam: async (
