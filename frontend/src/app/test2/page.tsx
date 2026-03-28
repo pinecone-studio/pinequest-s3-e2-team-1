@@ -225,8 +225,9 @@ const formatDwell = (milliseconds?: number | null) => {
 const getAttemptPercentage = (attempt: AttemptSummary) =>
   attempt.result?.percentage ?? attempt.percentage ?? null;
 
-const getAttemptTimestamp = (attempt: Pick<AttemptSummary, "startedAt" | "submittedAt">) =>
-  attempt.submittedAt ?? attempt.startedAt;
+const getAttemptTimestamp = (
+  attempt: Pick<AttemptSummary, "startedAt" | "submittedAt">,
+) => attempt.submittedAt ?? attempt.startedAt;
 
 const getRiskLevel = (attempt: AttemptSummary) => {
   const warningCount = attempt.monitoring?.warningCount ?? 0;
@@ -315,7 +316,9 @@ function SimpleBadge({
   className: string;
 }) {
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${className}`}>
+    <span
+      className={`rounded-full border px-2.5 py-1 text-xs font-medium ${className}`}
+    >
       {children}
     </span>
   );
@@ -325,7 +328,9 @@ export default function ExamAdminDashboardPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("live");
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
-  const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
+  const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(
+    null,
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -347,15 +352,20 @@ export default function ExamAdminDashboardPage() {
           params.set("testId", selectedTestId);
         }
 
-        const response = await fetch(`/api/take-exam-dashboard?${params.toString()}`, {
-          cache: "no-store",
-        });
+        const response = await fetch(
+          `/api/take-exam-dashboard?${params.toString()}`,
+          {
+            cache: "no-store",
+          },
+        );
         const payload = (await response.json()) as DashboardPayload & {
           message?: string;
         };
 
         if (!response.ok) {
-          throw new Error(payload.message || "Dashboard өгөгдөл татаж чадсангүй.");
+          throw new Error(
+            payload.message || "Dashboard өгөгдөл татаж чадсангүй.",
+          );
         }
 
         if (!cancelled) {
@@ -391,15 +401,22 @@ export default function ExamAdminDashboardPage() {
 
   const examCards = useMemo(() => {
     return (data?.availableTests ?? []).map((test) => {
-      const attempts = (data?.attempts ?? []).filter((attempt) => attempt.testId === test.id);
-      const approved = attempts.filter((attempt) => attempt.status === "approved");
+      const attempts = (data?.attempts ?? []).filter(
+        (attempt) => attempt.testId === test.id,
+      );
+      const approved = attempts.filter(
+        (attempt) => attempt.status === "approved",
+      );
       const liveCount = attempts.filter(
-        (attempt) => attempt.status === "in_progress" || attempt.status === "processing",
+        (attempt) =>
+          attempt.status === "in_progress" || attempt.status === "processing",
       ).length;
       const averageScore = approved.length
         ? Math.round(
-            approved.reduce((sum, attempt) => sum + (getAttemptPercentage(attempt) ?? 0), 0) /
-              approved.length,
+            approved.reduce(
+              (sum, attempt) => sum + (getAttemptPercentage(attempt) ?? 0),
+              0,
+            ) / approved.length,
           )
         : null;
 
@@ -413,7 +430,8 @@ export default function ExamAdminDashboardPage() {
   }, [data]);
 
   const selectedTest = useMemo(
-    () => examCards.find((item) => item.test.id === selectedTestId)?.test ?? null,
+    () =>
+      examCards.find((item) => item.test.id === selectedTestId)?.test ?? null,
     [examCards, selectedTestId],
   );
 
@@ -433,7 +451,9 @@ export default function ExamAdminDashboardPage() {
       .sort(
         (left, right) =>
           new Date(
-            right.latestEvent?.occurredAt ?? right.submittedAt ?? right.startedAt,
+            right.latestEvent?.occurredAt ??
+              right.submittedAt ??
+              right.startedAt,
           ).getTime() -
           new Date(
             left.latestEvent?.occurredAt ?? left.submittedAt ?? left.startedAt,
@@ -447,13 +467,19 @@ export default function ExamAdminDashboardPage() {
       return;
     }
 
-    if (!selectedAttemptId || !selectedAttempts.some((item) => item.attemptId === selectedAttemptId)) {
+    if (
+      !selectedAttemptId ||
+      !selectedAttempts.some((item) => item.attemptId === selectedAttemptId)
+    ) {
       setSelectedAttemptId(selectedAttempts[0].attemptId);
     }
   }, [selectedAttemptId, selectedAttempts]);
 
   const selectedAttempt = useMemo(
-    () => selectedAttempts.find((attempt) => attempt.attemptId === selectedAttemptId) ?? null,
+    () =>
+      selectedAttempts.find(
+        (attempt) => attempt.attemptId === selectedAttemptId,
+      ) ?? null,
     [selectedAttemptId, selectedAttempts],
   );
 
@@ -477,8 +503,12 @@ export default function ExamAdminDashboardPage() {
       const labels =
         attempt.result?.questionResults
           ?.filter((item) => !item.isCorrect)
-          .map((item) => item.competency || attempt.criteria?.topic || "Сэдэв") ??
-        attempt.answerReview?.map((item) => item.competency || attempt.criteria?.topic || "Сэдэв") ??
+          .map(
+            (item) => item.competency || attempt.criteria?.topic || "Сэдэв",
+          ) ??
+        attempt.answerReview?.map(
+          (item) => item.competency || attempt.criteria?.topic || "Сэдэв",
+        ) ??
         [];
 
       for (const label of labels) {
@@ -535,11 +565,15 @@ export default function ExamAdminDashboardPage() {
   }, [selectedAttempts]);
 
   const kpis = useMemo(() => {
-    const approved = selectedAttempts.filter((attempt) => attempt.status === "approved");
+    const approved = selectedAttempts.filter(
+      (attempt) => attempt.status === "approved",
+    );
     const averageProgress = selectedAttempts.length
       ? Math.round(
-          selectedAttempts.reduce((sum, attempt) => sum + attempt.progress.completionRate, 0) /
-            selectedAttempts.length,
+          selectedAttempts.reduce(
+            (sum, attempt) => sum + attempt.progress.completionRate,
+            0,
+          ) / selectedAttempts.length,
         )
       : null;
     const highRiskCount = selectedAttempts.filter(
@@ -547,12 +581,15 @@ export default function ExamAdminDashboardPage() {
     ).length;
     const pendingReviewCount = selectedAttempts.filter(
       (attempt) =>
-        attempt.answerKeySource === "teacher_service" && attempt.status !== "approved",
+        attempt.answerKeySource === "teacher_service" &&
+        attempt.status !== "approved",
     ).length;
     const averageScore = approved.length
       ? Math.round(
-          approved.reduce((sum, attempt) => sum + (getAttemptPercentage(attempt) ?? 0), 0) /
-            approved.length,
+          approved.reduce(
+            (sum, attempt) => sum + (getAttemptPercentage(attempt) ?? 0),
+            0,
+          ) / approved.length,
         )
       : null;
 
@@ -599,9 +636,9 @@ export default function ExamAdminDashboardPage() {
           (right.answerChangeCount ?? 0) - (left.answerChangeCount ?? 0),
       )[0];
 
-    const riskWindow = selectedFeed.slice(0, 6).filter(
-      (item) => item.latestEvent?.severity === "danger",
-    );
+    const riskWindow = selectedFeed
+      .slice(0, 6)
+      .filter((item) => item.latestEvent?.severity === "danger");
 
     return {
       mostChanged,
@@ -615,7 +652,9 @@ export default function ExamAdminDashboardPage() {
       if (attempt.answerKeySource === "teacher_service") {
         return attempt.status !== "approved";
       }
-      return Boolean(attempt.answerReview?.length || attempt.result?.questionResults.length);
+      return Boolean(
+        attempt.answerReview?.length || attempt.result?.questionResults.length,
+      );
     });
   }, [selectedAttempts]);
 
@@ -644,7 +683,8 @@ export default function ExamAdminDashboardPage() {
                 </h1>
                 <p className="max-w-3xl text-sm leading-7 text-slate-600 md:text-base">
                   Энэ хуудас mock data ашиглахгүй. `take-exam-service`-ээс бодит
-                  шалгалт, attempt, monitoring feed, review data татаад харуулна.
+                  шалгалт, attempt, monitoring feed, review data татаад
+                  харуулна.
                 </p>
               </div>
               <button
@@ -652,7 +692,11 @@ export default function ExamAdminDashboardPage() {
                 onClick={() => window.location.reload()}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                {isRefreshing ? <Loader2 className="size-4 animate-spin" /> : <Activity size={16} />}
+                {isRefreshing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Activity size={16} />
+                )}
                 Шинэчлэх
               </button>
             </div>
@@ -673,7 +717,9 @@ export default function ExamAdminDashboardPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xl font-semibold text-slate-950">{item.test.title}</p>
+                    <p className="text-xl font-semibold text-slate-950">
+                      {item.test.title}
+                    </p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                       {item.test.description}
                     </p>
@@ -696,16 +742,22 @@ export default function ExamAdminDashboardPage() {
                 <div className="mt-5 grid grid-cols-3 gap-3">
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <p className="text-xs text-slate-500">Сурагч</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">{item.studentCount}</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                      {item.studentCount}
+                    </p>
                   </div>
                   <div className="rounded-2xl bg-sky-50 p-3">
                     <p className="text-xs text-sky-700">Live</p>
-                    <p className="mt-1 text-lg font-semibold text-sky-900">{item.liveCount}</p>
+                    <p className="mt-1 text-lg font-semibold text-sky-900">
+                      {item.liveCount}
+                    </p>
                   </div>
                   <div className="rounded-2xl bg-emerald-50 p-3">
                     <p className="text-xs text-emerald-700">Дундаж</p>
                     <p className="mt-1 text-lg font-semibold text-emerald-900">
-                      {item.averageScore != null ? `${item.averageScore}%` : "--"}
+                      {item.averageScore != null
+                        ? `${item.averageScore}%`
+                        : "--"}
                     </p>
                   </div>
                 </div>
@@ -729,8 +781,8 @@ export default function ExamAdminDashboardPage() {
               {selectedTest.title}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              {selectedTest.criteria.className} • {selectedTest.criteria.subject} •{" "}
-              {selectedTest.criteria.topic}
+              {selectedTest.criteria.className} •{" "}
+              {selectedTest.criteria.subject} • {selectedTest.criteria.topic}
             </p>
           </div>
 
@@ -804,7 +856,10 @@ export default function ExamAdminDashboardPage() {
                   {isRefreshing ? "Шинэчилж байна..." : "Систем идэвхтэй"}
                 </div>
                 <div className="relative">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Search
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
                   <input
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
@@ -831,7 +886,11 @@ export default function ExamAdminDashboardPage() {
               />
               <StatCard
                 title="Дундаж явц"
-                value={kpis.averageProgress != null ? `${kpis.averageProgress}%` : "--"}
+                value={
+                  kpis.averageProgress != null
+                    ? `${kpis.averageProgress}%`
+                    : "--"
+                }
                 caption="Completion rate-ийн дундаж"
                 icon={Activity}
               />
@@ -876,34 +935,49 @@ export default function ExamAdminDashboardPage() {
                             <th className="px-5 py-3 font-medium">Төлөв</th>
                             <th className="px-5 py-3 font-medium">Явц</th>
                             <th className="px-5 py-3 font-medium">Эрсдэл</th>
-                            <th className="px-5 py-3 font-medium">Monitoring</th>
-                            <th className="px-5 py-3 font-medium text-right">Оноо</th>
+                            <th className="px-5 py-3 font-medium">
+                              Monitoring
+                            </th>
+                            <th className="px-5 py-3 font-medium text-right">
+                              Оноо
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {filteredAttempts.map((attempt) => {
                             const risk = getRiskLevel(attempt);
                             const percentage = getAttemptPercentage(attempt);
-                            const isSelected = attempt.attemptId === selectedAttemptId;
+                            const isSelected =
+                              attempt.attemptId === selectedAttemptId;
 
                             return (
                               <tr
                                 key={attempt.attemptId}
-                                onClick={() => setSelectedAttemptId(attempt.attemptId)}
+                                onClick={() =>
+                                  setSelectedAttemptId(attempt.attemptId)
+                                }
                                 className={`cursor-pointer transition hover:bg-slate-50 ${
                                   isSelected ? "bg-indigo-50/60" : ""
                                 }`}
                               >
                                 <td className="px-5 py-4">
                                   <div>
-                                    <p className="font-medium text-slate-900">{attempt.studentName}</p>
+                                    <p className="font-medium text-slate-900">
+                                      {attempt.studentName}
+                                    </p>
                                     <p className="text-xs text-slate-500">
-                                      {formatDateTime(getAttemptTimestamp(attempt))}
+                                      {formatDateTime(
+                                        getAttemptTimestamp(attempt),
+                                      )}
                                     </p>
                                   </div>
                                 </td>
                                 <td className="px-5 py-4">
-                                  <SimpleBadge className={getStatusBadgeClassName(attempt.status)}>
+                                  <SimpleBadge
+                                    className={getStatusBadgeClassName(
+                                      attempt.status,
+                                    )}
+                                  >
                                     {getStatusLabel(attempt.status)}
                                   </SimpleBadge>
                                 </td>
@@ -912,7 +986,9 @@ export default function ExamAdminDashboardPage() {
                                     <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-100">
                                       <div
                                         className="h-full rounded-full bg-indigo-500"
-                                        style={{ width: `${attempt.progress.completionRate}%` }}
+                                        style={{
+                                          width: `${attempt.progress.completionRate}%`,
+                                        }}
                                       />
                                     </div>
                                     <span className="text-xs text-slate-500">
@@ -921,12 +997,15 @@ export default function ExamAdminDashboardPage() {
                                   </div>
                                 </td>
                                 <td className="px-5 py-4">
-                                  <SimpleBadge className={getRiskBadgeClassName(risk)}>
+                                  <SimpleBadge
+                                    className={getRiskBadgeClassName(risk)}
+                                  >
                                     {risk}
                                   </SimpleBadge>
                                 </td>
                                 <td className="px-5 py-4 text-slate-600">
-                                  {attempt.monitoring?.warningCount ?? 0} warning /{" "}
+                                  {attempt.monitoring?.warningCount ?? 0}{" "}
+                                  warning /{" "}
                                   {attempt.monitoring?.dangerCount ?? 0} danger
                                 </td>
                                 <td className="px-5 py-4 text-right font-semibold text-slate-900">
@@ -966,7 +1045,9 @@ export default function ExamAdminDashboardPage() {
                                       : "bg-sky-500"
                                 }`}
                               />
-                              <p className="font-medium text-slate-900">{item.studentName}</p>
+                              <p className="font-medium text-slate-900">
+                                {item.studentName}
+                              </p>
                             </div>
                             <p className="mt-1 text-sm text-slate-600">
                               {item.latestEvent?.title ?? "Event"}:{" "}
@@ -976,7 +1057,9 @@ export default function ExamAdminDashboardPage() {
                           <div className="shrink-0 text-right">
                             <p className="text-xs text-slate-400">
                               {formatRelativeTime(
-                                item.latestEvent?.occurredAt ?? item.submittedAt ?? item.startedAt,
+                                item.latestEvent?.occurredAt ??
+                                  item.submittedAt ??
+                                  item.startedAt,
                               )}
                             </p>
                             <p className="mt-1 text-xs text-slate-500">
@@ -1001,7 +1084,11 @@ export default function ExamAdminDashboardPage() {
                         </p>
                       </div>
                       {selectedAttempt && (
-                        <SimpleBadge className={getStatusBadgeClassName(selectedAttempt.status)}>
+                        <SimpleBadge
+                          className={getStatusBadgeClassName(
+                            selectedAttempt.status,
+                          )}
+                        >
                           {getStatusLabel(selectedAttempt.status)}
                         </SimpleBadge>
                       )}
@@ -1014,7 +1101,8 @@ export default function ExamAdminDashboardPage() {
                             {selectedAttempt.studentName}
                           </p>
                           <p className="mt-1 text-sm text-slate-500">
-                            {selectedAttempt.criteria?.subject} • {selectedAttempt.criteria?.topic}
+                            {selectedAttempt.criteria?.subject} •{" "}
+                            {selectedAttempt.criteria?.topic}
                           </p>
                         </div>
 
@@ -1052,23 +1140,31 @@ export default function ExamAdminDashboardPage() {
                             Event timeline
                           </p>
                           <div className="space-y-3">
-                            {(selectedAttempt.monitoring?.recentEvents ?? []).slice(0, 6).map((event) => (
-                              <div
-                                key={event.id}
-                                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <p className="font-medium text-slate-900">{event.title}</p>
-                                  <p className="text-xs text-slate-400">
-                                    {formatDateTime(event.occurredAt)}
+                            {(selectedAttempt.monitoring?.recentEvents ?? [])
+                              .slice(0, 6)
+                              .map((event) => (
+                                <div
+                                  key={event.id}
+                                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <p className="font-medium text-slate-900">
+                                      {event.title}
+                                    </p>
+                                    <p className="text-xs text-slate-400">
+                                      {formatDateTime(event.occurredAt)}
+                                    </p>
+                                  </div>
+                                  <p className="mt-1 text-sm text-slate-600">
+                                    {event.detail}
                                   </p>
                                 </div>
-                                <p className="mt-1 text-sm text-slate-600">{event.detail}</p>
-                              </div>
-                            ))}
-                            {(selectedAttempt.monitoring?.recentEvents ?? []).length === 0 && (
+                              ))}
+                            {(selectedAttempt.monitoring?.recentEvents ?? [])
+                              .length === 0 && (
                               <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">
-                                Одоогоор monitoring timeline бүртгэгдээгүй байна.
+                                Одоогоор monitoring timeline бүртгэгдээгүй
+                                байна.
                               </div>
                             )}
                           </div>
@@ -1082,25 +1178,29 @@ export default function ExamAdminDashboardPage() {
                   </div>
 
                   <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h2 className="text-lg font-semibold text-slate-950">Шалгалтын материал</h2>
+                    <h2 className="text-lg font-semibold text-slate-950">
+                      Шалгалтын материал
+                    </h2>
                     <p className="mt-1 text-sm text-slate-500">
                       Сонгосон шалгалтын асуултууд
                     </p>
                     {data?.testMaterial?.testId === selectedTest.id ? (
                       <div className="mt-4 space-y-3">
-                        {data.testMaterial.questions.slice(0, 4).map((question, index) => (
-                          <div
-                            key={question.questionId}
-                            className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                          >
-                            <p className="font-medium text-slate-900">
-                              {index + 1}. {question.prompt}
-                            </p>
-                            <p className="mt-2 text-xs text-slate-500">
-                              {question.points} оноо • {question.type}
-                            </p>
-                          </div>
-                        ))}
+                        {data.testMaterial.questions
+                          .slice(0, 4)
+                          .map((question, index) => (
+                            <div
+                              key={question.questionId}
+                              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                            >
+                              <p className="font-medium text-slate-900">
+                                {index + 1}. {question.prompt}
+                              </p>
+                              <p className="mt-2 text-xs text-slate-500">
+                                {question.points} оноо • {question.type}
+                              </p>
+                            </div>
+                          ))}
                       </div>
                     ) : (
                       <div className="mt-4 rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">
@@ -1146,7 +1246,10 @@ export default function ExamAdminDashboardPage() {
                         </p>
                         <p className="mt-2 text-sm leading-6 text-emerald-800">
                           Батлагдсан attempt-уудын дундаж оноо{" "}
-                          {kpis.averageScore != null ? `${kpis.averageScore}%` : "--"} байна.
+                          {kpis.averageScore != null
+                            ? `${kpis.averageScore}%`
+                            : "--"}{" "}
+                          байна.
                         </p>
                       </div>
                     </div>
@@ -1182,11 +1285,23 @@ export default function ExamAdminDashboardPage() {
                     <div className="mt-6 h-72">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={scoreDistribution}>
-                          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                          <CartesianGrid
+                            vertical={false}
+                            strokeDasharray="3 3"
+                            stroke="#e2e8f0"
+                          />
+                          <XAxis
+                            dataKey="name"
+                            tickLine={false}
+                            axisLine={false}
+                          />
                           <YAxis tickLine={false} axisLine={false} />
                           <Tooltip />
-                          <Bar dataKey="count" fill="#6366f1" radius={[8, 8, 0, 0]} />
+                          <Bar
+                            dataKey="count"
+                            fill="#6366f1"
+                            radius={[8, 8, 0, 0]}
+                          />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -1212,7 +1327,10 @@ export default function ExamAdminDashboardPage() {
                               paddingAngle={4}
                             >
                               {riskChartData.map((item, index) => (
-                                <Cell key={`${item.name}-${index}`} fill={item.color} />
+                                <Cell
+                                  key={`${item.name}-${index}`}
+                                  fill={item.color}
+                                />
                               ))}
                             </Pie>
                             <Tooltip />
@@ -1221,12 +1339,17 @@ export default function ExamAdminDashboardPage() {
                       </div>
                       <div className="space-y-3">
                         {riskChartData.map((item) => (
-                          <div key={item.name} className="flex items-center gap-3">
+                          <div
+                            key={item.name}
+                            className="flex items-center gap-3"
+                          >
                             <span
                               className="size-3 rounded-full"
                               style={{ backgroundColor: item.color }}
                             />
-                            <span className="w-28 text-sm text-slate-600">{item.name}</span>
+                            <span className="w-28 text-sm text-slate-600">
+                              {item.name}
+                            </span>
                             <span className="text-sm font-semibold text-slate-900">
                               {item.value}
                             </span>
@@ -1251,7 +1374,8 @@ export default function ExamAdminDashboardPage() {
                           key={item.name}
                           className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900"
                         >
-                          <span className="font-semibold">{item.name}</span> • {item.count}
+                          <span className="font-semibold">{item.name}</span> •{" "}
+                          {item.count}
                         </div>
                       ))
                     ) : (
@@ -1272,7 +1396,8 @@ export default function ExamAdminDashboardPage() {
                       Review хийх оролдлогууд
                     </h2>
                     <p className="text-sm text-slate-500">
-                      Teacher-side check эсвэл answer review шаардлагатай attempt
+                      Teacher-side check эсвэл answer review шаардлагатай
+                      attempt
                     </p>
                   </div>
                   <div className="space-y-2 p-3">
@@ -1289,12 +1414,16 @@ export default function ExamAdminDashboardPage() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="font-medium text-slate-900">{attempt.studentName}</p>
+                            <p className="font-medium text-slate-900">
+                              {attempt.studentName}
+                            </p>
                             <p className="mt-1 text-xs text-slate-500">
                               {formatDateTime(getAttemptTimestamp(attempt))}
                             </p>
                           </div>
-                          <SimpleBadge className={getStatusBadgeClassName(attempt.status)}>
+                          <SimpleBadge
+                            className={getStatusBadgeClassName(attempt.status)}
+                          >
                             {getStatusLabel(attempt.status)}
                           </SimpleBadge>
                         </div>
@@ -1339,7 +1468,9 @@ export default function ExamAdminDashboardPage() {
                           </p>
                         </div>
                         <div className="rounded-2xl bg-slate-50 p-4">
-                          <p className="text-xs text-slate-500">Correct / Incorrect</p>
+                          <p className="text-xs text-slate-500">
+                            Correct / Incorrect
+                          </p>
                           <p className="mt-1 text-2xl font-semibold text-slate-900">
                             {selectedAttempt.result
                               ? `${selectedAttempt.result.correctCount} / ${selectedAttempt.result.incorrectCount}`
@@ -1354,7 +1485,8 @@ export default function ExamAdminDashboardPage() {
                         </div>
                       </div>
 
-                      {selectedAttempt.answerReview && selectedAttempt.answerReview.length > 0 ? (
+                      {selectedAttempt.answerReview &&
+                      selectedAttempt.answerReview.length > 0 ? (
                         <div>
                           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
                             <FileText size={16} />
@@ -1401,48 +1533,51 @@ export default function ExamAdminDashboardPage() {
                             Result analytics
                           </h3>
                           <div className="space-y-3">
-                            {selectedAttempt.result.questionResults.map((item, index) => (
-                              <div
-                                key={item.questionId}
-                                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <p className="font-medium text-slate-900">
-                                    {index + 1}. {item.prompt}
-                                  </p>
-                                  <SimpleBadge
-                                    className={
-                                      item.isCorrect
-                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                        : "border-rose-200 bg-rose-50 text-rose-700"
-                                    }
-                                  >
-                                    {item.isCorrect ? "Зөв" : "Буруу"}
-                                  </SimpleBadge>
+                            {selectedAttempt.result.questionResults.map(
+                              (item, index) => (
+                                <div
+                                  key={item.questionId}
+                                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <p className="font-medium text-slate-900">
+                                      {index + 1}. {item.prompt}
+                                    </p>
+                                    <SimpleBadge
+                                      className={
+                                        item.isCorrect
+                                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                          : "border-rose-200 bg-rose-50 text-rose-700"
+                                      }
+                                    >
+                                      {item.isCorrect ? "Зөв" : "Буруу"}
+                                    </SimpleBadge>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                                    <SimpleBadge className="border-slate-200 bg-white text-slate-600">
+                                      {item.competency || "Сэдэвгүй"}
+                                    </SimpleBadge>
+                                    <SimpleBadge className="border-slate-200 bg-white text-slate-600">
+                                      {formatDwell(item.dwellMs)}
+                                    </SimpleBadge>
+                                    <SimpleBadge className="border-slate-200 bg-white text-slate-600">
+                                      {item.answerChangeCount ?? 0} өөрчлөлт
+                                    </SimpleBadge>
+                                  </div>
+                                  {item.explanation && (
+                                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                                      {item.explanation}
+                                    </p>
+                                  )}
                                 </div>
-                                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                                  <SimpleBadge className="border-slate-200 bg-white text-slate-600">
-                                    {item.competency || "Сэдэвгүй"}
-                                  </SimpleBadge>
-                                  <SimpleBadge className="border-slate-200 bg-white text-slate-600">
-                                    {formatDwell(item.dwellMs)}
-                                  </SimpleBadge>
-                                  <SimpleBadge className="border-slate-200 bg-white text-slate-600">
-                                    {item.answerChangeCount ?? 0} өөрчлөлт
-                                  </SimpleBadge>
-                                </div>
-                                {item.explanation && (
-                                  <p className="mt-3 text-sm leading-6 text-slate-600">
-                                    {item.explanation}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
+                              ),
+                            )}
                           </div>
                         </div>
                       ) : (
                         <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-sm text-slate-500">
-                          Энэ attempt дээр review харагдуулах дата хараахан алга.
+                          Энэ attempt дээр review харагдуулах дата хараахан
+                          алга.
                         </div>
                       )}
                     </div>
