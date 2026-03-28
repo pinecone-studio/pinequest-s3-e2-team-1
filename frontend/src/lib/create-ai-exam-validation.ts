@@ -18,7 +18,6 @@ export const questionSchema = Yup.object().shape({
   difficulty: Yup.mixed<Difficulty>()
     .oneOf(DIFFICULTY_VALUES, "Хүндрэлийг сонгоно уу")
     .required("Түвшин шаардлагатай"),
-  correctAnswer: Yup.string().nullable(),
   optionsJson: Yup.string()
     .nullable()
     .test(
@@ -34,10 +33,36 @@ export const questionSchema = Yup.object().shape({
         }
       },
     ),
+  correctAnswer: Yup.string()
+    .nullable()
+    .test(
+      "mcq-correct-in-options",
+      "MCQ-д зөв хариулт нь дээрх сонголтуудын нэгтэй яг таарах ёстой",
+      function (value) {
+        const parent = this.parent as {
+          type?: string;
+          optionsJson?: string | null;
+        };
+        if (parent.type !== "MCQ") return true;
+        const answer = (value ?? "").trim();
+        if (!answer) return true;
+        const raw = parent.optionsJson?.trim();
+        if (!raw) return true;
+        try {
+          const parsed = JSON.parse(raw) as unknown;
+          if (!Array.isArray(parsed)) return true;
+          const opts = parsed.map((x) => String(x).trim());
+          if (opts.every((o) => o === "")) return true;
+          return opts.includes(answer);
+        } catch {
+          return true;
+        }
+      },
+    ),
   explanation: Yup.string().nullable(),
   tags: Yup.string().nullable(),
-  source: Yup.string().nullable(),
-  skillLevel: Yup.string().nullable(),
+  source: Yup.string().ensure().default(""),
+  skillLevel: Yup.string().ensure().default("Мэдлэг"),
 });
 
 /** Шалгалтын ерөнхий мэдээлэл + асуултууд (`createAiExamTemplate` input). */

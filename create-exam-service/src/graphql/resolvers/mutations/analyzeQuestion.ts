@@ -61,7 +61,8 @@ function parseSuggestedType(v: unknown): QuestionAnalysisSuggestedType {
     .replace(/-/g, "_");
   if (s === "MCQ") return QuestionAnalysisSuggestedType.Mcq;
   if (s === "MATCHING") return QuestionAnalysisSuggestedType.Matching;
-  if (s === "FILL_IN" || s === "FILLIN") return QuestionAnalysisSuggestedType.FillIn;
+  if (s === "FILL_IN" || s === "FILLIN")
+    return QuestionAnalysisSuggestedType.FillIn;
   if (s === "MATH") return QuestionAnalysisSuggestedType.Math;
   if (s === "FREE_TEXT" || s === "FREETEXT")
     return QuestionAnalysisSuggestedType.FreeText;

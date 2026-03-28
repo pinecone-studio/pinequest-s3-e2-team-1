@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import MathPreviewText from "@/components/math-preview-text";
 import { ANALYZE_QUESTION, CREATE_AI_EXAM_TEMPLATE } from "@/gql/create-exam-documents";
 import {
   Difficulty,
@@ -67,6 +68,123 @@ const initialValues: CreateAiExamFormValues = {
 
 type QuestionRow = CreateAiExamFormValues["questions"][number];
 
+function createEmptyQuestionRow(): QuestionRow {
+  return {
+    id: uuidv4(),
+    type: "MCQ",
+    aiSuggestedType: null,
+    prompt: "",
+    points: 1,
+    difficulty: Difficulty.Medium,
+    correctAnswer: "",
+    explanation: "",
+    tags: "",
+    source: "",
+    skillLevel: "Мэдлэг",
+    optionsJson: null,
+  };
+}
+
+function parseMcqFourSlots(
+  optionsJson: string | null | undefined,
+): [string, string, string, string] {
+  const empty: [string, string, string, string] = ["", "", "", ""];
+  const raw = optionsJson?.trim();
+  if (!raw) return empty;
+  try {
+    const p = JSON.parse(raw) as unknown;
+    if (!Array.isArray(p)) return empty;
+    return [
+      String(p[0] ?? ""),
+      String(p[1] ?? ""),
+      String(p[2] ?? ""),
+      String(p[3] ?? ""),
+    ];
+  } catch {
+    return empty;
+  }
+}
+
+function McqOptionsFourFields({
+  index,
+  optionsJson,
+  setFieldValue,
+}: {
+  index: number;
+  optionsJson: string | null | undefined;
+  setFieldValue: FormikHelpers<CreateAiExamFormValues>["setFieldValue"];
+}) {
+  const slots = parseMcqFourSlots(optionsJson);
+  const labels = ["А", "Б", "В", "Г"] as const;
+
+  const commit = (next: [string, string, string, string]) => {
+    void setFieldValue(
+      `questions.${index}.optionsJson`,
+      JSON.stringify(next, null, 2),
+    );
+  };
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {labels.map((lbl, i) => (
+        <div key={lbl} className="space-y-2">
+          <Label htmlFor={`mcq-opt-${index}-${lbl}`}>Сонголт {lbl}</Label>
+          <Input
+            id={`mcq-opt-${index}-${lbl}`}
+            value={slots[i]}
+            onChange={(e) => {
+              const next = [...slots] as [string, string, string, string];
+              next[i] = e.target.value;
+              commit(next);
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MathExamFieldsPreview({
+  correctAnswer,
+  explanation,
+}: {
+  correctAnswer: string | null | undefined;
+  explanation: string | null | undefined;
+}) {
+  const parts: string[] = [];
+  if (correctAnswer?.trim()) {
+    parts.push(`Зөв хариулт: ${correctAnswer.trim()}`);
+  }
+  if (explanation?.trim()) {
+    parts.push(explanation.trim());
+  }
+  const content = parts.join("\n\n");
+
+  return (
+    <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/85 p-4 dark:border-emerald-900 dark:bg-emerald-950/35">
+      <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+        Математик — урьдчилан харах (LaTeX)
+      </p>
+      <p className="text-muted-foreground text-xs">
+        Зөв хариултад эцсийн үр дүн (жишээ нь x = 2), тайлбарт бодолтыг $...$
+        эсвэл $$...$$ хэлбэрээр бичнэ.
+      </p>
+      {content ? (
+        <div className="rounded-md border border-emerald-200/80 bg-background/90 p-3 dark:border-emerald-800">
+          <MathPreviewText
+            content={content}
+            className="text-sm leading-relaxed text-foreground"
+          />
+        </div>
+      ) : (
+        <p className="text-muted-foreground text-xs">
+          Зөв хариулт эсвэл тайлбар оруулбал энд харагдана.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function CreateAiExamComponent() {
   const [currentPrompt, setCurrentPrompt] = React.useState("");
 
@@ -85,12 +203,22 @@ export function CreateAiExamComponent() {
       return;
     }
 
+    if (
+      existingQuestions.some(
+        (q) => q.prompt.trim().length > 0 && q.prompt.trim() === prompt,
+      )
+    ) {
+      toast.warning("Энэ асуултын текст аль хэдийн жагсаалтад байна.");
+      return;
+    }
+
     try {
       const { data } = await analyzeQuestion({
         variables: { prompt },
       });
-      const result = (data as { analyzeQuestion?: QuestionAnalysisResult } | null | undefined)
-        ?.analyzeQuestion;
+      const result = (
+        data as { analyzeQuestion?: QuestionAnalysisResult } | null | undefined
+      )?.analyzeQuestion;
 
       if (!result) {
         toast.error("AI хариу ирсэнгүй.");
@@ -98,6 +226,7 @@ export function CreateAiExamComponent() {
       }
 
       const typeStr = suggestedTypeToString(result.suggestedType);
+
       const newQuestion: QuestionRow = {
         id: uuidv4(),
         type: typeStr,
@@ -105,11 +234,11 @@ export function CreateAiExamComponent() {
         prompt,
         points: result.points,
         difficulty: result.difficulty,
-        correctAnswer: result.correctAnswer ?? null,
-        explanation: result.explanation ?? null,
+        correctAnswer: result.correctAnswer ?? "",
+        explanation: result.explanation ?? "",
         tags: (result.tags ?? []).join(", "),
-        source: result.source ?? null,
-        skillLevel: result.skillLevel ?? null,
+        source: result.source ?? "",
+        skillLevel: result.skillLevel ?? "Мэдлэг",
         optionsJson:
           result.options?.length ? JSON.stringify(result.options, null, 2) : null,
       };
@@ -320,8 +449,17 @@ export function CreateAiExamComponent() {
               </Card>
 
               <FieldArray name="questions">
-                {({ remove }) => (
+                {({ remove, push }) => (
                   <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => push(createEmptyQuestionRow())}
+                      >
+                        Гараар асуулт нэмэх
+                      </Button>
+                    </div>
                     {values.questions.map((question, index) => (
                       <Card
                         key={question.id ?? `${index}-${question.prompt}`}
@@ -411,20 +549,19 @@ export function CreateAiExamComponent() {
                           </div>
 
                           {question.type === "MCQ" ? (
-                            <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50/90 p-4 dark:border-blue-900 dark:bg-blue-950/40">
-                              <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                                AI-ийн санал болгосон сонголтууд
-                              </p>
-                              <p className="text-muted-foreground text-xs">
-                                JSON массив — яг 4 сонголт. Жишээ: [&quot;А&quot;,
-                                &quot;Б&quot;, &quot;В&quot;, &quot;Г&quot;]
-                              </p>
-                              <Field
-                                as={Textarea}
-                                name={`questions.${index}.optionsJson`}
-                                rows={4}
-                                className="font-mono text-sm"
-                                placeholder='["А", "Б", "В", "Г"]'
+                            <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/90 p-4 dark:border-blue-900 dark:bg-blue-950/40">
+                              <div>
+                                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                                  Дөрвөн сонголт (А–Г)
+                                </p>
+                                <p className="text-muted-foreground text-xs">
+                                  Оруулсан утгууд автоматаар JSON болж хадгалагдана.
+                                </p>
+                              </div>
+                              <McqOptionsFourFields
+                                index={index}
+                                optionsJson={question.optionsJson}
+                                setFieldValue={setFieldValue}
                               />
                               <ErrorMessage
                                 name={`questions.${index}.optionsJson`}
@@ -488,6 +625,11 @@ export function CreateAiExamComponent() {
                               as={Input}
                               name={`questions.${index}.correctAnswer`}
                             />
+                            <ErrorMessage
+                              name={`questions.${index}.correctAnswer`}
+                              component="p"
+                              className="text-xs text-destructive"
+                            />
                           </div>
                           <div className="space-y-2">
                             <Label>Тайлбар (бодолт)</Label>
@@ -498,6 +640,12 @@ export function CreateAiExamComponent() {
                               className="resize-y"
                             />
                           </div>
+                          {question.type === "MATH" ? (
+                            <MathExamFieldsPreview
+                              correctAnswer={question.correctAnswer}
+                              explanation={question.explanation}
+                            />
+                          ) : null}
                           <div className="space-y-2">
                             <Label>Түлхүүр үг (таслалаар)</Label>
                             <Field as={Input} name={`questions.${index}.tags`} />
@@ -523,7 +671,6 @@ export function CreateAiExamComponent() {
                                 name={`questions.${index}.skillLevel`}
                                 className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
                               >
-                                <option value="">— Сонгох —</option>
                                 {BLOOM_SKILL_LEVELS.map((lvl) => (
                                   <option key={lvl} value={lvl}>
                                     {lvl}

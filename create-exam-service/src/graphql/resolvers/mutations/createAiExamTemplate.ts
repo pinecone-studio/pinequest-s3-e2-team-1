@@ -40,7 +40,8 @@ function resolvePoints(q: AiQuestionTemplateInput): number {
 function resolveDifficultyForDb(
 	d: Difficulty | null | undefined,
 ): string {
-	return d ?? Difficulty.Medium;
+	const v = d ?? Difficulty.Medium;
+	return typeof v === "string" ? v : String(v);
 }
 
 export const createAiExamTemplateMutation = {
@@ -108,23 +109,9 @@ export const createAiExamTemplateMutation = {
 		const templateId = uuidv4();
 		const now = new Date().toISOString();
 
-		try {
-			return await ctx.db.transaction(async (tx) => {
-				await tx.insert(aiExamTemplates).values({
-					id: templateId,
-					title: title.trim(),
-					subject: subject.trim(),
-					grade: gradeInt,
-					teacherId: teacherId.trim(),
-					durationMinutes: duration,
-					difficulty: finalDifficultyStr,
-					totalPoints,
-					createdAt: now,
-					updatedAt: now,
-				});
-
-				if (list.length > 0) {
-					const questionData = list.map((q, index) => {
+		const questionData =
+			list.length > 0
+				? list.map((q, index) => {
 						const pos = index + 1;
 						const qType = String(q.type ?? "").trim().toUpperCase();
 						if (!qType) {
@@ -153,23 +140,43 @@ export const createAiExamTemplateMutation = {
 							createdAt: now,
 							updatedAt: now,
 						};
-					});
+					})
+				: [];
 
-					await tx.insert(aiExamQuestionTemplates).values(questionData);
-				}
-
-				return {
-					templateId,
-					title: title.trim(),
-					totalPoints,
-					difficulty: difficultyStringToEnum(finalDifficultyStr),
-					createdAt: now,
-				};
+		try {
+			// D1 + зарим орчинд drizzle `transaction()` (BEGIN/COMMIT) амжилтгүй байж болно.
+			await ctx.db.insert(aiExamTemplates).values({
+				id: templateId,
+				title: title.trim(),
+				subject: subject.trim(),
+				grade: gradeInt,
+				teacherId: teacherId.trim(),
+				durationMinutes: duration,
+				difficulty: finalDifficultyStr,
+				totalPoints,
+				createdAt: now,
+				updatedAt: now,
 			});
+
+			if (questionData.length > 0) {
+				await ctx.db.insert(aiExamQuestionTemplates).values(questionData);
+			}
+
+			return {
+				templateId,
+				title: title.trim(),
+				totalPoints,
+				difficulty: difficultyStringToEnum(finalDifficultyStr),
+				createdAt: now,
+			};
 		} catch (error) {
 			console.error("createAiExamTemplate Error:", error);
 			if (error instanceof GraphQLError) throw error;
-			throw new GraphQLError("AI Загварыг хадгалахад алдаа гарлаа.");
+			const detail =
+				error instanceof Error ? error.message : String(error);
+			throw new GraphQLError(
+				`AI Загварыг хадгалахад алдаа: ${detail}`,
+			);
 		}
 	},
 };
