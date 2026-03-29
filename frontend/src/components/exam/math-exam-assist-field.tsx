@@ -474,6 +474,7 @@ export function MathAssistField({
             ) : value.trim() ? (
               <MathPreviewText
                 content={value}
+                contentSource="preview"
                 displayMode={previewDisplayMode}
                 forceMath={previewForceMath}
                 className="w-full text-foreground"
@@ -615,6 +616,7 @@ export function MathAssistField({
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
           <MathPreviewText
             content={value}
+            contentSource="preview"
             displayMode={previewDisplayMode}
             forceMath={previewForceMath}
             className="w-full text-foreground"

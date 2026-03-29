@@ -1,3 +1,6 @@
+/**
+ * `ai-exam` — CreateAiExamComponent Formik + Yup (`createAiExamTemplate` input-тай тааруулсан).
+ */
 import * as Yup from "yup";
 
 import { Difficulty } from "@/gql/graphql";

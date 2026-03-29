@@ -81,6 +81,68 @@ export const ANALYZE_QUESTION = AnalyzeQuestionDocument;
 /** Жишээ / баримтын нэрээр ашиглах бол (CreateAiExamTemplateDocument-тай ижил). */
 export const CREATE_AI_EXAM_TEMPLATE = CreateAiExamTemplateDocument;
 
+export const GetAiExamScheduleDocument = gql(`
+	query GetAiExamSchedule($examId: ID!) {
+		getAiExamSchedule(examId: $examId) {
+			id
+			testId
+			classId
+			startTime
+			endTime
+			roomId
+			status
+			aiReasoning
+			aiVariants {
+				id
+				label
+				startTime
+				roomId
+				reason
+			}
+			createdAt
+			updatedAt
+		}
+	}
+`);
+
+export const ApproveAiExamScheduleDocument = gql(`
+	mutation ApproveAiExamSchedule($examId: ID!, $variantId: String!) {
+		approveAiExamSchedule(examId: $examId, variantId: $variantId) {
+			id
+			startTime
+			endTime
+			roomId
+			status
+			aiReasoning
+			aiVariants {
+				id
+				label
+				startTime
+				roomId
+				reason
+			}
+		}
+	}
+`);
+
+export const RequestAiExamScheduleDocument = gql(`
+	mutation RequestAiExamSchedule(
+		$testId: ID!
+		$classId: String!
+		$preferredDate: String!
+	) {
+		requestAiExamSchedule(
+			testId: $testId
+			classId: $classId
+			preferredDate: $preferredDate
+		) {
+			success
+			message
+			examId
+		}
+	}
+`);
+
 export const GetNewMathExamDocument = gql(`
 	query GetNewMathExam($examId: ID!) {
 		getNewMathExam(examId: $examId) {

@@ -220,9 +220,38 @@ export const typeDefs = /* GraphQL */ `
     updatedAt: String!
   }
 
+  type RequestExamSchedulePayload {
+    success: Boolean!
+    message: String!
+    examId: ID
+  }
+
+  type ExamScheduleVariant {
+    id: String!
+    label: String!
+    startTime: String!
+    roomId: String!
+    reason: String
+  }
+
+  type ExamSchedule {
+    id: ID!
+    testId: ID!
+    classId: String!
+    startTime: String!
+    endTime: String
+    roomId: String
+    status: String!
+    aiVariants: [ExamScheduleVariant!]!
+    aiReasoning: String
+    createdAt: String!
+    updatedAt: String!
+  }
+
   type Query {
     listNewMathExams(limit: Int = 50): [NewMathExamSummary!]!
     getNewMathExam(examId: ID!): NewMathExam
+    getAiExamSchedule(examId: ID!): ExamSchedule
   }
 
   type Mutation {
@@ -233,6 +262,13 @@ export const typeDefs = /* GraphQL */ `
     analyzeQuestion(prompt: String!): QuestionAnalysisResult!
     # AI-аар үүсгэсэн загварыг хадгалах
     createAiExamTemplate(input: CreateAiExamTemplateInput!): AiExamTemplatePayload!
+    # Шалгалтын хуваарь: D1-д pending үүсгээд Queue руу — AI consumer дараа нь батална
+    requestAiExamSchedule(
+      testId: ID!
+      classId: String!
+      preferredDate: String!
+    ): RequestExamSchedulePayload!
+    approveAiExamSchedule(examId: ID!, variantId: String!): ExamSchedule!
   }
 
   type NewMathExamSummary {

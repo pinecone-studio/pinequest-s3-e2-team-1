@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   normalizeBackendLatexOnly,
   normalizeBackendMathText,
+  normalizePreviewMathText,
 } from "@/lib/normalize-math-text";
 
 type MathPreviewTextProps = {
@@ -15,6 +16,8 @@ type MathPreviewTextProps = {
   activeTextIndex?: number | null;
   className?: string;
   content: string;
+  /** `backend`: DB/API (зарим `$` цэвэрлэн дахин орооно). `preview`: хэрэглэгчийн оролт — `$...$` хадгална. */
+  contentSource?: "backend" | "preview";
   displayMode?: boolean;
   forceMath?: boolean;
   onMathSegmentClick?: (segment: MathPreviewMathSegment) => void;
@@ -353,6 +356,7 @@ export default function MathPreviewText({
   activeTextIndex = null,
   className,
   content,
+  contentSource = "backend",
   displayMode = false,
   forceMath = false,
   onMathSegmentClick,
@@ -360,16 +364,18 @@ export default function MathPreviewText({
   renderActiveMathSegment,
   renderActiveTextSegment,
 }: MathPreviewTextProps) {
-  const sanitizedContent = useMemo(
+  const sanitizedContent = useMemo(() => {
+    if (contentSource === "preview") {
+      return normalizePreviewMathText(content);
+    }
     // If the caller forces math, treat content as pure LaTeX (ex: answerLatex).
     // In that case we must NOT auto-wrap pieces with $...$, otherwise strings like
     // "x = 3,\\,-1" can be split into "$x = 3,$\\,-1" and render incorrectly.
-    () =>
-      forceMath
-        ? normalizeBackendLatexOnly(content)
-        : normalizeBackendMathText(content),
-    [content, forceMath],
-  );
+    if (forceMath) {
+      return normalizeBackendLatexOnly(content);
+    }
+    return normalizeBackendMathText(content);
+  }, [content, contentSource, forceMath]);
 
   const lines = useMemo(
     () =>
