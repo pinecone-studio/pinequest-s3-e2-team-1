@@ -4,9 +4,14 @@ const nextConfig: NextConfig = {
 	async redirects() {
 		return [
 			{
-				source: "/ai-scheduler",
-				destination: "/ai-scheduler-personal",
-				permanent: true,
+				source: "/ai-scheduler-personal",
+				destination: "/ai-scheduler",
+				permanent: false,
+			},
+			{
+				source: "/ai-scheduler-school-event",
+				destination: "/ai-scheduler?view=school",
+				permanent: false,
 			},
 		];
 	},
