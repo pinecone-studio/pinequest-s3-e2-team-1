@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 import { useMutation, useQuery } from "@apollo/client/react";
 import {
   addDays,
   format,
+  getISODay,
   isSameDay,
   parseISO,
   startOfDay,
@@ -18,6 +20,19 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   ApproveAiExamScheduleDocument,
   GetAiExamScheduleDocument,
@@ -37,8 +52,11 @@ import {
   ChevronRight,
   Loader2,
   Menu,
+  Monitor,
+  Moon,
   PanelRight,
   Play,
+  Sun,
   Target,
   Square,
   Circle,
@@ -52,12 +70,131 @@ const HOUR_COUNT = SCHEDULE_DAY_END - SCHEDULE_DAY_START;
 const HOUR_PX = 40;
 const GRID_BODY_MIN_H = HOUR_COUNT * HOUR_PX;
 
+/** Нэг хичээлийн үргэлжлэх хугацаа + завсарлага (сургуулийн жишээ). */
+const LESSON_MINUTES = 50;
+const BREAK_MINUTES = 10;
+
+/** Жишээ: нийтийн эвентийн эхлэл / дуусах (торын байрлалтай нийцнэ). */
+const SCHOOL_EVENT_DEMO = {
+  startH: 10,
+  startM: 0,
+  endH: 14,
+  endM: 30,
+} as const;
+
+/** Цаг:мин-оос эхлэх цэгийг торын top% болгох (SCHEDULE_DAY_START–END хооронд). */
+function slotTopPercent(hour: number, minute = 0) {
+  const t = hour + minute / 60;
+  const p = ((t - SCHEDULE_DAY_START) / HOUR_COUNT) * 100;
+  return Math.min(Math.max(p, 0), 100);
+}
+
+/** 50 минутын хичээлийн цагийн мөр, жишээ 08:00–08:50. */
+function formatLessonWindow(startHour: number, startMinute: number) {
+  const startTotal = startHour * 60 + startMinute;
+  const endTotal = startTotal + LESSON_MINUTES;
+  const eh = Math.floor(endTotal / 60);
+  const em = endTotal % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(startHour)}:${pad(startMinute)}–${pad(eh)}:${pad(em)}`;
+}
+
+/** Эхлэл–дуусах + нийт минут (нийтийн эвент гэх мэт урт хугацаа). */
+function formatBlockDuration(
+  startHour: number,
+  startMinute: number,
+  endHour: number,
+  endMinute: number,
+) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const s = startHour * 60 + startMinute;
+  const e = endHour * 60 + endMinute;
+  const mins = Math.max(0, e - s);
+  return `${pad(startHour)}:${pad(startMinute)}–${pad(endHour)}:${pad(endMinute)} · ${mins} мин`;
+}
+
+/** Тор дээрх блокын өндөр % (08:00–20:00 хооронд). */
+function blockHeightPercent(
+  startHour: number,
+  startMinute: number,
+  endHour: number,
+  endMinute: number,
+) {
+  const start = startHour + startMinute / 60;
+  const end = endHour + endMinute / 60;
+  const span = Math.max(0, end - start);
+  return Math.min(100, (span / HOUR_COUNT) * 100);
+}
+
+/** getISODay: 1=Даваа … 7=Ням — нэг үсэг (Дав/Мяг гэх мэт биш). */
+const WEEKDAY_LETTER_MN: Record<number, string> = {
+  1: "Д",
+  2: "М",
+  3: "Л",
+  4: "П",
+  5: "Б",
+  6: "Б",
+  7: "Н",
+};
+
 const DEFAULT_TEST_ID = "a1000000-0000-4000-8000-000000000001";
 const DEFAULT_CLASS_ID = "10A";
 
 const panelLight =
-  "rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-200/40";
-const textDim = "text-zinc-500";
+  "rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-200/40 dark:border-zinc-600/80 dark:bg-zinc-900/95 dark:shadow-black/40";
+const textDim = "text-zinc-500 dark:text-zinc-400";
+
+function SchedulerAppearanceMenu() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0 rounded-xl border-zinc-200 bg-white text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          aria-label="Дүрсийн горим: цайвар, харанхуй, систем"
+        >
+          {!mounted ? (
+            <Sun className="size-4 opacity-70" aria-hidden />
+          ) : resolvedTheme === "dark" ? (
+            <Moon className="size-4" aria-hidden />
+          ) : (
+            <Sun className="size-4" aria-hidden />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-44">
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+          {""}
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={theme ?? "system"}
+          onValueChange={setTheme}
+        >
+          <DropdownMenuRadioItem value="light" className="text-sm">
+            <Sun className="size-4" aria-hidden />
+            Цайвар
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark" className="text-sm">
+            <Moon className="size-4" aria-hidden />
+            Харанхуй
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system" className="text-sm">
+            <Monitor className="size-4" aria-hidden />
+            Систем
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 type RequestAiExamScheduleData = {
   requestAiExamSchedule: RequestExamSchedulePayload;
@@ -107,50 +244,71 @@ function parseStart(iso: string | null | undefined) {
 }
 
 /**
- * Дөрвөн давхаргын стратеги (Pro): үндсэн → эвент → хувийн (нууц) → шалгалт (AI).
- * Blocker төрөл + нууцлал AI-ийн scheduling-д ойлголтын загвар болно.
+ * Багшийн хуанли = зөвхөн цаг харах биш, AI-Powered Operations Center.
+ * Cron / Linear / Reclaim-ийн урсгал + ирээдүйн шийдлүүдийг нэг дэлгэцэнд.
  */
-type CalendarLayerId = "primary" | "school" | "personal" | "exam";
+type CalendarLayerId =
+  | "primary"
+  | "confirmed_exam"
+  | "ai_draft"
+  | "school_event"
+  | "personal"
+  | "conflict";
 
 const CALENDAR_LAYERS: {
   id: CalendarLayerId;
   label: string;
   role: string;
   swatch: string;
+  style?: string;
 }[] = [
   {
     id: "primary",
-    label: "Үндсэн хуваарь",
-    role: "Static Blocker — тойрч гарна · бүх хүнд харагдана",
+    label: "Үндсэн хичээл",
+    role: `Хичээлийн хуваарь (10А, 10Б гэх мэт) · ${LESSON_MINUTES} мин хичээл, ${BREAK_MINUTES} мин завсар`,
+    swatch: "bg-sky-400",
+  },
+  {
+    id: "confirmed_exam",
+    label: "Баталгаажсан шалгалт",
+    role: "Цаг товлогдсон, сурагчдад зарлагдсан шалгалтууд",
     swatch: "bg-emerald-500",
   },
   {
-    id: "school",
+    id: "ai_draft",
+    label: "AI-ийн санал (Draft)",
+    role: "Gemini-ийн санал болгож буй хамгийн оновчтой цагууд",
+    swatch: "bg-violet-200",
+    style: "border border-dashed border-violet-400 opacity-90",
+  },
+  {
+    id: "school_event",
     label: "Сургуулийн эвент",
-    role: "Global Blocker — цаг хаана · бүх хүнд харагдана",
-    swatch: "bg-rose-500",
+    role: "Нийтийн хурал, баяр ёслол, заалны засвар",
+    swatch: "bg-amber-100 ring-1 ring-amber-400/30",
   },
   {
     id: "personal",
-    label: "Хувийн хуанли",
-    role: "Invisible Blocker — зөвхөн багш өөрөө харна",
-    swatch: "bg-slate-500",
+    label: "Хувийн (Sync)",
+    role: "Google Calendar-аас синк хийсэн завгүй цаг",
+    swatch: "bg-slate-300",
   },
   {
-    id: "exam",
-    label: "Шалгалтын хуанли",
-    role: "AI идэвхтэй — багш + сурагч харна, засварлана",
-    swatch: "bg-blue-500",
+    id: "conflict",
+    label: "Зөрчилтэй",
+    role: "Давхцал үүссэн эсвэл ачаалал ихтэй үе",
+    swatch: "bg-rose-500",
+    style: "animate-pulse",
   },
 ];
 
 function ReclaimLightBackdrop() {
   return (
     <div
-      className="pointer-events-none fixed inset-0 -z-10 bg-[#f4f5f7]"
+      className="pointer-events-none fixed inset-0 -z-10 bg-[#f4f5f7] dark:bg-zinc-950"
       aria-hidden
     >
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_65%_at_50%_-15%,rgba(59,130,246,0.12),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_65%_at_50%_-15%,rgba(59,130,246,0.12),transparent_50%)] dark:bg-[radial-gradient(ellipse_100%_65%_at_50%_-15%,rgba(59,130,246,0.22),transparent_55%)]" />
     </div>
   );
 }
@@ -172,9 +330,11 @@ export function AiPersonalExamScheduler({
   const [rightTab, setRightTab] = useState<"ai" | "form">("ai");
   const [layerOn, setLayerOn] = useState<Record<CalendarLayerId, boolean>>({
     primary: true,
-    school: true,
+    confirmed_exam: true,
+    ai_draft: true,
+    school_event: true,
     personal: true,
-    exam: true,
+    conflict: true,
   });
   /** Хуанли + давхаргын зүүн панел нээгдсэн эсэх (rail-аас сэлгэнэ). */
   const [calendarSidebarOpen, setCalendarSidebarOpen] = useState(true);
@@ -328,7 +488,7 @@ export function AiPersonalExamScheduler({
   );
 
   const weekEnd = addDays(weekStart, 6);
-  const weekRangeLabel = `${format(weekStart, "MMM d", { locale: mn })} – ${format(weekEnd, "MMM d, yyyy", { locale: mn })}`;
+  const weekRangeLabel = `${format(weekStart, "MMM d", { locale: mn })} – ${format(weekEnd, "MMM d", { locale: mn })}`;
 
   function shiftWeek(deltaWeeks: number) {
     setDate((d) => addDays(d ?? new Date(), deltaWeeks * 7));
@@ -337,21 +497,21 @@ export function AiPersonalExamScheduler({
   return (
     <div
       className={cn(
-        "relative min-h-screen overflow-x-hidden bg-[#f4f5f7] font-sans text-zinc-900 antialiased",
-        "selection:bg-blue-500/20 selection:text-zinc-900",
+        "relative min-h-screen overflow-x-hidden bg-[#f4f5f7] font-sans text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100",
+        "selection:bg-blue-500/20 selection:text-zinc-900 dark:selection:bg-blue-400/25 dark:selection:text-zinc-100",
       )}
     >
       <ReclaimLightBackdrop />
 
       <div className="relative z-10 flex min-h-screen flex-col">
         {/* Дээд мөр */}
-        <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-zinc-200/90 bg-white/80 px-4 py-3 backdrop-blur-sm sm:px-5">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-zinc-200/90 bg-white/80 px-4 py-3 backdrop-blur-sm dark:border-zinc-700/90 dark:bg-zinc-950/90 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             {shellMode ? (
               <>
                 <button
                   type="button"
-                  className="hidden size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 xl:flex"
+                  className="hidden size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-300 dark:hover:bg-zinc-800 xl:flex"
                   aria-expanded={calendarSidebarOpen}
                   aria-controls="scheduler-calendar-sidebar"
                   onClick={() => setCalendarSidebarOpen((o) => !o)}
@@ -373,7 +533,7 @@ export function AiPersonalExamScheduler({
                 </button>
                 <button
                   type="button"
-                  className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 xl:hidden"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-300 dark:hover:bg-zinc-800 xl:hidden"
                   aria-expanded={calendarSidebarOpen}
                   aria-controls="scheduler-calendar-sidebar"
                   onClick={() => setCalendarSidebarOpen((o) => !o)}
@@ -385,7 +545,7 @@ export function AiPersonalExamScheduler({
             ) : (
               <button
                 type="button"
-                className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 xl:hidden"
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-300 dark:hover:bg-zinc-800 xl:hidden"
                 aria-expanded={calendarSidebarOpen}
                 aria-controls="scheduler-calendar-sidebar"
                 onClick={() => setCalendarSidebarOpen((o) => !o)}
@@ -395,23 +555,53 @@ export function AiPersonalExamScheduler({
               </button>
             )}
             <div className="flex min-w-0 items-center gap-2">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200/80">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-800 ring-1 ring-sky-200/80 dark:bg-sky-950/80 dark:text-sky-200 dark:ring-sky-700/60">
                 <CalendarClock className="size-4" strokeWidth={2} aria-hidden />
               </span>
               <div className="min-w-0">
-                <h1 className="truncate text-sm font-semibold tracking-tight text-zinc-900 sm:text-base">
-                  Багшийн хуваарь
+                <h1 className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-base">
+                  Багшийн хуанли
                 </h1>
                 <p className={cn("truncate text-xs", textDim)}>
                   {format(anchor, "yyyy MMMM", { locale: mn })}
                 </p>
+                <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                  AI-Powered Operations Center · Cron · Linear · Reclaim ·
+                  ирээдүйн шийдэл
+                </p>
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <SchedulerAppearanceMenu />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 shrink-0 rounded-xl border-zinc-200 bg-white px-3.5 text-sm font-medium shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                >
+                  Сонгох
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                sideOffset={8}
+                className="w-[min(100vw-2rem,18rem)] border-zinc-200 p-3 shadow-lg dark:border-zinc-600"
+              >
+                <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  Сонголт
+                </p>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  Энд ирээдүйд хуваарь, анги эсвэл бусад тохиргоог сонгох цэс
+                  гарна. Одоогоор зөвхөн загвар — ямар ч үйлдэл хийгдэхгүй.
+                </p>
+              </PopoverContent>
+            </Popover>
             {pollExamId ? (
-              <span className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 shadow-sm">
-                <Loader2 className="size-3.5 animate-spin text-blue-600" />
+              <span className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+                <Loader2 className="size-3.5 animate-spin text-blue-600 dark:text-blue-400" />
                 Синк…
               </span>
             ) : null}
@@ -426,9 +616,9 @@ export function AiPersonalExamScheduler({
             >
               <div className="flex h-[52px] items-center justify-center border-b border-zinc-500/20">
                 <div className="flex items-center gap-0.5" aria-hidden>
-                  <Square className="size-2 fill-rose-400 text-rose-400" />
+                  <Square className="size-2 fill-amber-300/75 text-amber-300/75" />
                   <Circle className="size-2 fill-sky-400 text-sky-400" />
-                  <Triangle className="size-2 fill-amber-400 text-amber-400" />
+                  <Triangle className="size-2 fill-amber-300/75 text-amber-300/75" />
                 </div>
               </div>
               <div className="flex flex-1 flex-col gap-1 px-2 py-3">
@@ -450,9 +640,9 @@ export function AiPersonalExamScheduler({
                 </Link>
                 <button
                   type="button"
-                  title="Багшийн хувийн хуваарь"
+                  title="Багшийн хуанли"
                   aria-current="page"
-                  aria-label="Багшийн хувийн хуваарь"
+                  aria-label="Багшийн хуанли (одоо)"
                   className="flex size-11 items-center justify-center rounded-xl bg-white/14 text-white shadow-sm ring-1 ring-white/12"
                 >
                   <CalendarClock
@@ -488,7 +678,7 @@ export function AiPersonalExamScheduler({
           <aside
             id="scheduler-calendar-sidebar"
             className={cn(
-              "shrink-0 overflow-hidden border-zinc-200/90 bg-white/50 transition-[width] duration-200 ease-out xl:bg-white/40",
+              "shrink-0 overflow-hidden border-zinc-200/90 bg-white/50 transition-[width] duration-200 ease-out xl:bg-white/40 dark:border-zinc-700/90 dark:bg-zinc-950/60 xl:dark:bg-zinc-950/50",
               calendarSidebarOpen
                 ? shellMode
                   ? "w-full max-w-[min(100vw,280px)] border-r sm:max-w-[272px]"
@@ -506,49 +696,30 @@ export function AiPersonalExamScheduler({
             >
               <div className={cn(panelLight, "p-3")}>
                 <div className="mb-2 space-y-0.5 px-1">
-                  <p className="text-xs font-semibold text-zinc-900">
+                  <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                     Календарь
                   </p>
                 </div>
-                <div
-                  className={cn(
-                    "flex justify-center rounded-xl border border-zinc-100 bg-zinc-50/90 p-1",
-                    "[&_button[data-selected-single=true]]:rounded-full! [&_button[data-selected-single=true]]:bg-blue-600! [&_button[data-selected-single=true]]:text-white!",
-                    "[&_button[data-selected-single=true]]:shadow-md [&_button[data-selected-single=true]]:shadow-blue-500/25",
-                  )}
-                >
+                <div className="flex justify-center">
                   <Calendar
                     mode="single"
                     selected={date}
                     onSelect={setDate}
                     locale={mn}
-                    buttonVariant="ghost"
-                    className="text-zinc-800 [--cell-size:2rem] scale-[0.92] origin-top"
-                    classNames={{
-                      caption_label: "text-[13px] font-semibold text-zinc-900",
-                      button_previous:
-                        "rounded-lg border border-zinc-200 bg-white text-zinc-700 size-8 hover:bg-zinc-50",
-                      button_next:
-                        "rounded-lg border border-zinc-200 bg-white text-zinc-700 size-8 hover:bg-zinc-50",
-                      weekday:
-                        "text-[10px] font-medium uppercase text-zinc-500",
-                      day: "text-zinc-700",
-                      today:
-                        "text-blue-700 [&:not([data-selected])_button]:ring-2 [&:not([data-selected])_button]:ring-blue-400/50 [&:not([data-selected])_button]:rounded-full",
-                      outside: "text-zinc-400 opacity-60",
-                      disabled: "opacity-30",
-                    }}
+                    className="w-fit"
                   />
                 </div>
               </div>
 
-              <div className={cn(panelLight, "divide-y divide-zinc-100")}>
+              <div
+                className={cn(
+                  panelLight,
+                  "divide-y divide-zinc-100 dark:divide-zinc-800",
+                )}
+              >
                 <div className="px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                    Давхарга · Pro (4)
-                  </p>
-                  <p className="mt-1 text-[9px] leading-snug text-zinc-400">
-                    Үндсэн, эвент, хувийн (нууц), шалгалт — blocker + нууцлал өөр
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    Давхарга · Ops Center ({CALENDAR_LAYERS.length})
                   </p>
                 </div>
                 {CALENDAR_LAYERS.map((layer) => {
@@ -562,14 +733,15 @@ export function AiPersonalExamScheduler({
                       className={cn(
                         "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors",
                         on
-                          ? "bg-blue-50/80 text-zinc-900"
-                          : "text-zinc-500 hover:bg-zinc-50",
+                          ? "bg-blue-50/80 text-zinc-900 dark:bg-blue-950/50 dark:text-zinc-100"
+                          : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/60",
                       )}
                     >
                       <span
                         className={cn(
                           "size-2.5 shrink-0 rounded-sm",
                           layer.swatch,
+                          layer.style,
                           !on && "opacity-35",
                         )}
                       />
@@ -577,7 +749,7 @@ export function AiPersonalExamScheduler({
                         <span className="block truncate text-sm font-medium">
                           {layer.label}
                         </span>
-                        <span className="line-clamp-2 text-[10px] text-zinc-500">
+                        <span className="line-clamp-2 text-[10px] text-zinc-500 dark:text-zinc-400">
                           {layer.role}
                         </span>
                       </span>
@@ -585,8 +757,8 @@ export function AiPersonalExamScheduler({
                         className={cn(
                           "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
                           on
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-zinc-100 text-zinc-500",
+                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900/70 dark:text-blue-200"
+                            : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
                         )}
                       >
                         {on ? "Идэвхтэй" : "Нуугдсан"}
@@ -600,27 +772,27 @@ export function AiPersonalExamScheduler({
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col xl:flex-row">
             {/* Төв: цагийн багана + 7 хоногийн тор */}
-            <main className="min-h-[480px] min-w-0 flex-1 overflow-auto border-zinc-200/90 p-3 sm:p-4 xl:rounded-l-3xl xl:border-r xl:bg-zinc-50/30">
+            <main className="min-h-[480px] min-w-0 flex-1 overflow-auto border-zinc-200/90 p-3 sm:p-4 xl:rounded-l-3xl xl:border-r xl:bg-zinc-50/30 dark:border-zinc-700/90 dark:xl:bg-zinc-950/40">
               <div
                 className={cn(
                   panelLight,
                   "flex h-full min-h-[440px] flex-col overflow-hidden p-3 xl:rounded-l-3xl xl:shadow-md",
                 )}
               >
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-3 dark:border-zinc-800">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                       Энэ 7 хоног
                     </p>
-                    <p className="truncate text-sm font-semibold tracking-tight text-zinc-900">
+                    <p className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
                       {weekRangeLabel}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-zinc-200 bg-zinc-50/90 p-0.5">
+                  <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-zinc-200 bg-zinc-50/90 p-0.5 dark:border-zinc-600 dark:bg-zinc-900/80">
                     <button
                       type="button"
                       onClick={() => shiftWeek(-1)}
-                      className="rounded-lg p-1.5 text-zinc-600 transition-colors hover:bg-white hover:text-zinc-900"
+                      className="rounded-lg p-1.5 text-zinc-600 transition-colors hover:bg-white hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                       aria-label="Өмнөх долоо хоног"
                     >
                       <ChevronLeft className="size-4" strokeWidth={2} />
@@ -628,14 +800,14 @@ export function AiPersonalExamScheduler({
                     <button
                       type="button"
                       onClick={() => setDate(new Date())}
-                      className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-zinc-600 transition-colors hover:bg-white hover:text-zinc-900"
+                      className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-zinc-600 transition-colors hover:bg-white hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                     >
                       Өнөөдөр
                     </button>
                     <button
                       type="button"
                       onClick={() => shiftWeek(1)}
-                      className="rounded-lg p-1.5 text-zinc-600 transition-colors hover:bg-white hover:text-zinc-900"
+                      className="rounded-lg p-1.5 text-zinc-600 transition-colors hover:bg-white hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                       aria-label="Дараагийн долоо хоног"
                     >
                       <ChevronRight className="size-4" strokeWidth={2} />
@@ -643,41 +815,41 @@ export function AiPersonalExamScheduler({
                   </div>
                 </div>
 
-                <div className="mb-3 rounded-xl border border-emerald-100/90 bg-linear-to-r from-emerald-50/90 to-white px-3 py-2.5">
+                <div className="mb-3 rounded-xl border border-blue-100/90 bg-linear-to-r from-blue-50/90 to-white px-3 py-2.5 dark:border-blue-900/50 dark:from-blue-950/50 dark:to-zinc-900/80">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                         <Target className="size-4" strokeWidth={2} />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold text-zinc-900">
+                        <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                           Фокус цаг (жишээ)
                         </p>
-                        <p className="text-[10px] leading-snug text-zinc-500">
-                          Reclaim-ийн Focus Time шиг долоо хоногийн зорилт —
-                          ирээдүйд бодит өгөгдөл холбоно.
+                        <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                          Reclaim / Linear-тай ижил төстэй: долоо хоногийн чухал
+                          ажилд цаг гаргах — Operations Center-ийн нэг хэсэг.
                         </p>
                       </div>
                     </div>
-                    <span className="shrink-0 tabular-nums text-[10px] font-semibold text-emerald-700">
+                    <span className="shrink-0 tabular-nums text-[10px] font-semibold text-blue-700 dark:text-blue-300">
                       6ц / 10ц
                     </span>
                   </div>
                   <div
-                    className="mt-2 h-1.5 overflow-hidden rounded-full bg-emerald-100/80"
+                    className="mt-2 h-1.5 overflow-hidden rounded-full bg-blue-100/80 dark:bg-blue-950/80"
                     role="progressbar"
                     aria-valuenow={60}
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-label="Фокус цагийн явц (жишээ)"
                   >
-                    <div className="h-full w-[60%] rounded-full bg-emerald-500" />
+                    <div className="h-full w-[60%] rounded-full bg-blue-400 dark:bg-blue-500" />
                   </div>
                 </div>
 
-                <div className="mb-2 grid grid-cols-[2.75rem_repeat(7,minmax(0,1fr))] gap-x-1 gap-y-0 border-b border-zinc-200 pb-2 sm:grid-cols-[3.25rem_repeat(7,minmax(0,1fr))]">
+                <div className="mb-2 grid grid-cols-[2.75rem_repeat(7,minmax(0,1fr))] gap-x-1 gap-y-0 border-b border-zinc-200 pb-2 dark:border-zinc-700 sm:grid-cols-[3.25rem_repeat(7,minmax(0,1fr))]">
                   <div
-                    className="text-[10px] font-medium uppercase tracking-wide text-zinc-400"
+                    className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500"
                     aria-hidden
                   >
                     Цаг
@@ -685,21 +857,22 @@ export function AiPersonalExamScheduler({
                   {weekDays.map((d) => {
                     const isSel = isSameDay(d, anchor);
                     return (
-                      <div key={d.toISOString()} className="text-center">
+                      <div
+                        key={format(d, "yyyy-MM-dd")}
+                        className="text-center"
+                      >
                         <div
                           className={cn(
                             "mx-auto flex size-8 items-center justify-center rounded-full text-[11px] font-medium sm:size-9 sm:text-xs",
                             isSel
-                              ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
-                              : "border border-zinc-200 bg-zinc-100 text-zinc-500",
+                              ? "bg-blue-600 text-white shadow-md shadow-blue-600/25 dark:bg-blue-500 dark:shadow-blue-500/30"
+                              : "border border-zinc-200 bg-zinc-100 text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
                           )}
+                          aria-label={format(d, "EEEE", { locale: mn })}
                         >
-                          {format(d, "EEEEE", { locale: mn })}
+                          {WEEKDAY_LETTER_MN[getISODay(d)] ?? "?"}
                         </div>
-                        <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-zinc-500 sm:mt-1 sm:text-[10px]">
-                          {format(d, "EEE", { locale: mn })}
-                        </p>
-                        <p className="text-xs font-semibold text-zinc-800 sm:text-sm">
+                        <p className="mt-0.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 sm:text-sm">
                           {format(d, "d")}
                         </p>
                       </div>
@@ -716,7 +889,7 @@ export function AiPersonalExamScheduler({
                       {hourRows.map((hour) => (
                         <div
                           key={hour}
-                          className="flex items-start justify-end border-t border-zinc-100 pr-1 pt-0.5 text-[10px] tabular-nums text-zinc-400 first:border-t-0 first:pt-0 sm:pr-1.5 sm:text-[11px]"
+                          className="flex items-start justify-end border-t border-zinc-100 pr-1 pt-0.5 text-[10px] tabular-nums text-zinc-400 first:border-t-0 first:pt-0 dark:border-zinc-800 dark:text-zinc-500 sm:pr-1.5 sm:text-[11px]"
                           style={{ height: HOUR_PX }}
                         >
                           {String(hour).padStart(2, "0")}:00
@@ -734,81 +907,150 @@ export function AiPersonalExamScheduler({
                       return (
                         <div
                           key={`col-${colIdx}`}
-                          className="relative rounded-xl border border-zinc-200/90 bg-zinc-50/80"
+                          className="relative rounded-xl border border-zinc-200/90 bg-zinc-50/80 dark:border-zinc-600/90 dark:bg-zinc-900/50"
                           style={{ minHeight: GRID_BODY_MIN_H }}
                         >
                           <div
-                            className="pointer-events-none absolute inset-0 rounded-[inherit]"
-                            style={{
-                              backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${HOUR_PX - 1}px, rgb(228 228 231 / 0.9) ${HOUR_PX - 1}px, rgb(228 228 231 / 0.9) ${HOUR_PX}px)`,
-                            }}
+                            className="scheduler-hour-grid-bg pointer-events-none absolute inset-0 rounded-[inherit]"
                             aria-hidden
                           />
-                          {layerOn.school && colIdx === 4 ? (
+                          {layerOn.school_event && colIdx === 5 ? (
                             <div
-                              className="absolute left-0.5 right-0.5 top-[8%] z-1 rounded-xl border-2 border-dashed border-rose-300 bg-rose-50 px-2 py-2 text-[10px] font-semibold leading-tight text-rose-900 shadow-sm"
-                              style={{ height: "42%" }}
+                              className="absolute left-1 right-1 z-1 rounded-xl border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-amber-950 shadow-sm dark:border-amber-700 dark:bg-amber-950/45 dark:text-amber-50"
+                              style={{
+                                top: `${slotTopPercent(SCHOOL_EVENT_DEMO.startH, SCHOOL_EVENT_DEMO.startM)}%`,
+                                height: `${blockHeightPercent(SCHOOL_EVENT_DEMO.startH, SCHOOL_EVENT_DEMO.startM, SCHOOL_EVENT_DEMO.endH, SCHOOL_EVENT_DEMO.endM)}%`,
+                                minHeight: "52px",
+                              }}
                             >
-                              Сургуулийн арга хэмжээ
-                              <span className="mt-1 block font-normal text-rose-700">
-                                Global Blocker · бүх анги · цаг хаагч
+                              Сургуулийн эвент
+                              <span className="mt-0.5 block font-normal text-amber-700 dark:text-amber-300">
+                                {formatBlockDuration(
+                                  SCHOOL_EVENT_DEMO.startH,
+                                  SCHOOL_EVENT_DEMO.startM,
+                                  SCHOOL_EVENT_DEMO.endH,
+                                  SCHOOL_EVENT_DEMO.endM,
+                                )}
                               </span>
                             </div>
                           ) : null}
 
                           {layerOn.primary && colIdx === 0 ? (
                             <div
-                              className="absolute left-1 right-1 top-[8%] rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-emerald-900 shadow-sm"
-                              style={{ height: "52px" }}
+                              className="absolute left-1 right-1 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
+                              style={{
+                                top: `${slotTopPercent(8, 0)}%`,
+                                minHeight: "52px",
+                              }}
                             >
-                              Математик · 10А
-                              <span className="mt-0.5 block font-normal text-emerald-700">
-                                Static Blocker · үндсэн хичээл
+                              10А · Математик
+                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
+                                {formatLessonWindow(8, 0)} · {LESSON_MINUTES}{" "}
+                                мин
                               </span>
                             </div>
                           ) : null}
                           {layerOn.primary && colIdx === 1 ? (
                             <div
-                              className="absolute left-1 right-1 top-[22%] rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-emerald-900 shadow-sm"
-                              style={{ height: "48px" }}
+                              className="absolute left-1 right-1 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
+                              style={{
+                                top: `${slotTopPercent(10, 0)}%`,
+                                minHeight: "52px",
+                              }}
                             >
-                              Физик · 10А
+                              10А · Геометр
+                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
+                                {formatLessonWindow(10, 0)} · {LESSON_MINUTES}{" "}
+                                мин
+                              </span>
                             </div>
                           ) : null}
-                          {layerOn.primary && colIdx === 5 ? (
+                          {layerOn.primary && colIdx === 2 ? (
                             <div
-                              className="absolute left-1 right-1 top-[18%] rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-emerald-900 shadow-sm"
-                              style={{ height: "48px" }}
+                              className="absolute left-1 right-1 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
+                              style={{
+                                top: `${slotTopPercent(13, 0)}%`,
+                                minHeight: "52px",
+                              }}
                             >
-                              Түүх · 10А
+                              10А · Математик
+                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
+                                {formatLessonWindow(13, 0)} · {LESSON_MINUTES}{" "}
+                                мин
+                              </span>
                             </div>
                           ) : null}
-                          {layerOn.personal && colIdx === 6 ? (
+                          {layerOn.primary && colIdx === 3 ? (
                             <div
-                              className="absolute left-1 right-1 top-[48%] z-[1] rounded-xl border border-slate-300/80 bg-slate-100/95 px-2 py-1.5 text-[10px] text-slate-800 shadow-sm ring-1 ring-slate-200/70"
-                              style={{ minHeight: "40px" }}
-                              title="Зөвхөн багшид харагдана"
+                              className="absolute left-1 right-1 z-[1] rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
+                              style={{
+                                top: `${slotTopPercent(9, 0)}%`,
+                                minHeight: "52px",
+                              }}
                             >
-                              <span className="font-medium">Хувийн · бэлтгэл</span>
-                              <span className="mt-0.5 block text-[9px] font-normal text-slate-500">
-                                Invisible Blocker
+                              10А · Геометр
+                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
+                                {formatLessonWindow(9, 0)} · {LESSON_MINUTES}{" "}
+                                мин
+                              </span>
+                            </div>
+                          ) : null}
+                          {layerOn.primary && colIdx === 4 ? (
+                            <div
+                              className="absolute left-1 right-1 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
+                              style={{
+                                top: `${slotTopPercent(15, 0)}%`,
+                                minHeight: "52px",
+                              }}
+                            >
+                              10А · Математик
+                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
+                                {formatLessonWindow(15, 0)} · {LESSON_MINUTES}{" "}
+                                мин
+                              </span>
+                            </div>
+                          ) : null}
+                          {layerOn.conflict && colIdx === 3 ? (
+                            <div
+                              className="absolute left-1 right-1 top-[32%] z-[2] rounded-xl border border-rose-200 bg-rose-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-rose-950 shadow-sm ring-1 ring-rose-100"
+                              style={{ minHeight: "48px" }}
+                            >
+                              Зөрчилтэй
+                              <span className="mt-0.5 block font-normal text-rose-700">
+                                Conflict · жишээ (хоёр цаг давхцсан)
                               </span>
                             </div>
                           ) : null}
 
-                          {layerOn.exam && suggested && colIdx === 2 ? (
+                          {layerOn.personal && colIdx === 6 ? (
+                            <div
+                              className="absolute left-1 right-1 top-[48%] z-[1] rounded-xl border border-slate-300/80 bg-slate-100/95 px-2 py-1.5 text-[10px] text-slate-800 shadow-sm ring-1 ring-slate-200/70"
+                              style={{ minHeight: "44px" }}
+                              title="Юу гэдэг нь харагдахгүй — зөвхөн Завгүй"
+                            >
+                              <span className="font-medium">Завгүй</span>
+                              <span className="mt-0.5 block text-[9px] font-normal text-slate-500">
+                                Busy · Google Calendar (дэлгэрүүлэхгүй)
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {layerOn.ai_draft && suggested && colIdx === 2 ? (
                             <>
                               <div
-                                className="absolute left-0.5 right-0.5 z-10 w-[calc(100%-4px)] -rotate-2 rounded-xl border-2 border-blue-400/60 bg-blue-600 px-2 py-2 text-[10px] font-semibold leading-tight text-white shadow-xl shadow-blue-600/40"
-                                style={{ top: "18%", minHeight: "56px" }}
+                                className="absolute left-0.5 right-0.5 z-10 w-[calc(100%-4px)] -rotate-2 rounded-xl border-2 border-dashed border-violet-400 bg-violet-50 px-2 py-2 text-[10px] font-semibold leading-tight text-violet-950 shadow-md shadow-violet-200/60 ring-1 ring-violet-200/80"
+                                style={{ top: "18%", minHeight: "72px" }}
                               >
-                                AI санал
-                                <span className="mt-0.5 block font-normal opacity-90">
-                                  Шалгалт · идэвхтэй засвар
+                                AI Draft Slots
+                                <span className="mt-0.5 block font-normal text-violet-700">
+                                  AI-ийн оновчтой цаг · тасархай хүрээ
+                                </span>
+                                <span className="mt-1 block text-[9px] font-normal text-violet-600/90">
+                                  Confirm дарвал ногоон (Confirmed) болно
                                 </span>
                               </div>
                               <svg
-                                className="pointer-events-none absolute left-[40%] top-[32%] z-5 h-16 w-24 text-amber-600"
+                                className="pointer-events-none absolute left-[40%] top-[32%] z-5 h-16 w-24 text-violet-500"
                                 viewBox="0 0 96 64"
                                 fill="none"
                                 aria-hidden
@@ -828,7 +1070,7 @@ export function AiPersonalExamScheduler({
                                 />
                               </svg>
                               <div
-                                className="absolute left-1 right-1 top-[58%] rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/90 px-2 py-1.5 text-center text-[9px] font-medium text-amber-900"
+                                className="absolute left-1 right-1 top-[58%] rounded-xl border-2 border-dashed border-violet-300/90 bg-violet-50/70 px-2 py-1.5 text-center text-[9px] font-medium text-violet-900"
                                 style={{ height: "44px" }}
                               >
                                 Сул цонх
@@ -836,31 +1078,50 @@ export function AiPersonalExamScheduler({
                             </>
                           ) : null}
 
-                          {layerOn.exam &&
+                          {layerOn.confirmed_exam &&
                           showJob &&
                           sameDay &&
                           !suggested &&
-                          showJob.status !== "pending" ? (
+                          showJob.status === "confirmed" ? (
                             <div
                               className={cn(
                                 "absolute left-1 right-1 rounded-xl border px-2 py-1.5 text-[10px] font-medium leading-tight shadow-sm",
-                                showJob.status === "confirmed" &&
-                                  "border-emerald-200 bg-emerald-50 text-emerald-900",
-                                showJob.status === "failed" &&
-                                  "border-red-200 bg-red-50 text-red-900",
+                                "border-emerald-200 bg-emerald-50 text-emerald-950",
                               )}
                               style={{
                                 top: `${Math.min(top, 78)}%`,
-                                minHeight: "48px",
+                                minHeight: "56px",
                               }}
                             >
-                              {showJob.status === "confirmed"
-                                ? "Баталсан шалгалт"
-                                : "Алдаа"}
+                              Баталгаажсан шалгалт
+                              <span className="mt-0.5 block font-normal text-emerald-700">
+                                Confirmed Exams · AI эсвэл гараар
+                              </span>
                             </div>
                           ) : null}
 
-                          {layerOn.exam &&
+                          {(layerOn.conflict ||
+                            layerOn.ai_draft ||
+                            layerOn.confirmed_exam) &&
+                          showJob &&
+                          sameDay &&
+                          !suggested &&
+                          showJob.status === "failed" ? (
+                            <div
+                              className="absolute left-1 right-1 rounded-xl border border-rose-200 bg-rose-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-rose-950 shadow-sm ring-1 ring-rose-100"
+                              style={{
+                                top: `${Math.min(top, 78)}%`,
+                                minHeight: "56px",
+                              }}
+                            >
+                              Зөрчилтэй
+                              <span className="mt-0.5 block font-normal text-rose-700">
+                                Conflict
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {layerOn.ai_draft &&
                           showJob &&
                           sameDay &&
                           showJob.status === "pending" ? (
@@ -886,27 +1147,31 @@ export function AiPersonalExamScheduler({
                     textDim,
                   )}
                 >
-                  Цаг {SCHEDULE_DAY_START}:00–{SCHEDULE_DAY_END}:00. Дөрвөн давхарга:
-                  ногоон үндсэн (static), улаан эвент (global), саарал хувийн
-                  (invisible), цэнхэр шалгалт (AI). Жишээ + job; бүрэн sync биш.
+                  AI-Powered Operations Center: усан цэнхэр үндсэн хичээл
+                  (жишээ {LESSON_MINUTES} мин, завсар {BREAK_MINUTES} мин),
+                  Дав–Баас өөр өөр цагийн эхлэл, ногоон баталгаажсан шалгалт,
+                  нил ягаан тасархай AI Draft (Confirm дарвал ногоон давхарганд
+                  шилжинэ), саарал хувийн синк (Завгүй / Google Calendar),
+                  цайвар шар сургуулийн эвент (цаг + мин), улаан зөрчил
+                  (давхцал). Жишээ + job; бүрэн sync биш.
                 </p>
               </div>
             </main>
 
-            {/* Баруун: AI панел (light) */}
-            <aside className="flex w-full shrink-0 flex-col border-zinc-200/90 bg-white shadow-[inset_1px_0_0_0_rgba(228,228,231,0.6)] xl:w-[320px] xl:border-l">
-              <div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50/90 px-4 py-3">
-                <div className="flex items-center gap-1 text-blue-600">
+            {/* Баруун: AI панел */}
+            <aside className="flex w-full shrink-0 flex-col border-zinc-200/90 bg-white shadow-[inset_1px_0_0_0_rgba(228,228,231,0.6)] dark:border-zinc-700/90 dark:bg-zinc-950 dark:shadow-[inset_1px_0_0_0_rgba(39,39,42,0.8)] xl:w-[320px] xl:border-l">
+              <div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50/90 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/90">
+                <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
                   <Square className="size-2.5 fill-current" />
                   <Circle className="size-2 fill-current" />
                   <Triangle className="size-2.5 fill-current" />
                 </div>
-                <span className="text-sm font-semibold tracking-tight text-zinc-900">
+                <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                   PineQuest AI
                 </span>
               </div>
 
-              <div className="flex gap-1 border-b border-zinc-200 bg-white px-3 py-2">
+              <div className="flex gap-1 border-b border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
                 <button
                   type="button"
                   onClick={() => setRightTab("ai")}
@@ -933,13 +1198,13 @@ export function AiPersonalExamScheduler({
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto bg-zinc-50/40 p-4">
+              <div className="flex-1 overflow-y-auto bg-zinc-50/40 p-4 dark:bg-zinc-950/80">
                 {rightTab === "form" ? (
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label
                         htmlFor="scheduler-test-id"
-                        className="text-xs text-zinc-600"
+                        className="text-xs text-zinc-600 dark:text-zinc-400"
                       >
                         testId
                       </Label>
@@ -947,14 +1212,14 @@ export function AiPersonalExamScheduler({
                         id="scheduler-test-id"
                         value={testId}
                         onChange={(e) => setTestId(e.target.value)}
-                        className="rounded-xl border-zinc-200 bg-white font-mono text-xs text-zinc-900 shadow-sm"
+                        className="rounded-xl border-zinc-200 bg-white font-mono text-xs text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
                         autoComplete="off"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label
                         htmlFor="scheduler-class-id"
-                        className="text-xs text-zinc-600"
+                        className="text-xs text-zinc-600 dark:text-zinc-400"
                       >
                         classId
                       </Label>
@@ -963,7 +1228,7 @@ export function AiPersonalExamScheduler({
                         value={classId}
                         onChange={(e) => setClassId(e.target.value)}
                         placeholder="10A"
-                        className="rounded-xl border-zinc-200 bg-white font-mono text-sm text-zinc-900 shadow-sm"
+                        className="rounded-xl border-zinc-200 bg-white font-mono text-sm text-zinc-900 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
                         autoComplete="off"
                       />
                     </div>
@@ -971,7 +1236,7 @@ export function AiPersonalExamScheduler({
                       type="button"
                       disabled={queueLoading}
                       onClick={() => void handleQueueSchedule()}
-                      className="h-11 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                      className="h-11 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-500 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
                     >
                       {queueLoading ? (
                         <Loader2 className="size-4 animate-spin" />
@@ -983,7 +1248,7 @@ export function AiPersonalExamScheduler({
                       )}
                     </Button>
                     {lastQueuedExamId ? (
-                      <p className="break-all font-mono text-[10px] text-zinc-500">
+                      <p className="break-all font-mono text-[10px] text-zinc-500 dark:text-zinc-400">
                         {lastQueuedExamId}
                       </p>
                     ) : null}
@@ -991,35 +1256,37 @@ export function AiPersonalExamScheduler({
                 ) : (
                   <div className="space-y-3">
                     {pollExamId ? (
-                      <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm">
-                        <Loader2 className="size-3.5 animate-spin text-blue-600" />
+                      <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+                        <Loader2 className="size-3.5 animate-spin text-blue-600 dark:text-blue-400" />
                         getAiExamSchedule…
                       </div>
                     ) : null}
 
                     {showJob ? (
-                      <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
+                      <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-600 dark:bg-zinc-900">
                         <div className="mb-2 flex items-center justify-between">
-                          <span className="text-xs text-zinc-500">Төлөв</span>
+                          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                            Төлөв
+                          </span>
                           <Badge
                             variant="outline"
-                            className="border-zinc-300 font-mono text-[10px] text-zinc-700"
+                            className="border-zinc-300 font-mono text-[10px] text-zinc-700 dark:border-zinc-600 dark:text-zinc-300"
                           >
                             {showJob.status}
                           </Badge>
                         </div>
-                        <p className="font-mono text-[11px] text-zinc-600">
+                        <p className="font-mono text-[11px] text-zinc-600 dark:text-zinc-400">
                           {showJob.startTime}
                         </p>
                         {showJob.aiReasoning ? (
-                          <p className="mt-2 text-xs leading-relaxed text-zinc-600">
+                          <p className="mt-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
                             {showJob.aiReasoning}
                           </p>
                         ) : null}
                       </div>
                     ) : (
-                      <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-3 py-8 text-center text-xs text-zinc-500 shadow-sm">
-                        <PanelRight className="mx-auto mb-2 size-8 text-zinc-300" />
+                      <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-3 py-8 text-center text-xs text-zinc-500 shadow-sm dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-400">
+                        <PanelRight className="mx-auto mb-2 size-8 text-zinc-300 dark:text-zinc-600" />
                         Эхлээд «Тохиргоо»-оос тооцоолох товч дарна уу.
                       </div>
                     )}
@@ -1027,19 +1294,19 @@ export function AiPersonalExamScheduler({
                     {showJob?.status === "suggested" &&
                     showJob.aiVariants?.length ? (
                       <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                           Сонгох
                         </p>
                         {showJob.aiVariants.map((v) => (
                           <div
                             key={v.id}
-                            className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white py-2 pl-3 pr-2 shadow-sm"
+                            className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white py-2 pl-3 pr-2 shadow-sm dark:border-zinc-600 dark:bg-zinc-900"
                           >
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-zinc-900">
+                              <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
                                 {v.label}
                               </p>
-                              <p className="font-mono text-[10px] text-zinc-500">
+                              <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400">
                                 {formatVariantWhen(v.startTime)}
                               </p>
                             </div>
@@ -1047,7 +1314,7 @@ export function AiPersonalExamScheduler({
                               type="button"
                               disabled={approveLoading}
                               onClick={() => void handleApproveVariant(v)}
-                              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-md shadow-blue-600/30 hover:bg-blue-500 disabled:opacity-50"
+                              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-md shadow-blue-600/30 hover:bg-blue-500 disabled:opacity-50 dark:bg-blue-500 dark:shadow-blue-500/25 dark:hover:bg-blue-400"
                               aria-label="Батлах"
                             >
                               {approveLoading ? (
@@ -1064,13 +1331,13 @@ export function AiPersonalExamScheduler({
                 )}
               </div>
 
-              <div className="border-t border-zinc-200 bg-white p-3">
+              <div className="border-t border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
                 <button
                   type="button"
                   onClick={() =>
                     setRightTab((t) => (t === "form" ? "ai" : "form"))
                   }
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:bg-white hover:text-zinc-900"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:bg-white hover:text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                 >
                   <ChevronRight
                     className={cn(

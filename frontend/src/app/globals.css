@@ -83,6 +83,14 @@
 	--sidebar-ring: oklch(0.708 0 0);
 }
 
+@media (prefers-contrast: more) {
+	.dark {
+		--border: oklch(0.72 0 0 / 45%);
+		--ring: oklch(0.78 0 0);
+		--muted-foreground: oklch(0.82 0 0);
+	}
+}
+
 .dark {
 	--background: oklch(0.145 0 0);
 	--foreground: oklch(0.985 0 0);
@@ -173,5 +181,25 @@
 		animation: none;
 		transform: none;
 		opacity: 0.35;
+	}
+}
+
+/* AiPersonalExamScheduler: цагийн торын хэвтээ шугам (light / dark) */
+.scheduler-hour-grid-bg {
+	--sched-grid-line: rgb(228 228 231 / 0.9);
+	background-image: repeating-linear-gradient(
+		to bottom,
+		transparent 0,
+		transparent 39px,
+		var(--sched-grid-line) 39px,
+		var(--sched-grid-line) 40px
+	);
+}
+.dark .scheduler-hour-grid-bg {
+	--sched-grid-line: rgb(63 63 70 / 0.88);
+}
+@media (prefers-contrast: more) {
+	.dark .scheduler-hour-grid-bg {
+		--sched-grid-line: rgb(82 82 91 / 0.95);
 	}
 }

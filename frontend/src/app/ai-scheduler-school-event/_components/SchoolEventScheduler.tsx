@@ -96,7 +96,14 @@ const SCHOOL_LAYERS: {
   },
 ];
 
-export function SchoolEventScheduler() {
+export type SchoolEventSchedulerProps = {
+  /** Үнэн бол гаднах hub-ын зүүн навигаци нуугдана (/ai-scheduler). */
+  shellMode?: boolean;
+};
+
+export function SchoolEventScheduler({
+  shellMode = false,
+}: SchoolEventSchedulerProps) {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [calendarSidebarOpen, setCalendarSidebarOpen] = useState(true);
   const [layerOn, setLayerOn] = useState<Record<SchoolLayerId, boolean>>({
@@ -264,16 +271,45 @@ export function SchoolEventScheduler() {
       <div className="relative z-10 flex min-h-screen flex-col">
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-zinc-200/90 bg-white/80 px-4 py-3 backdrop-blur-sm sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 xl:hidden"
-              aria-expanded={calendarSidebarOpen}
-              aria-controls="school-scheduler-sidebar"
-              onClick={() => setCalendarSidebarOpen((o) => !o)}
-            >
-              <span className="sr-only">Хуанлын панел нээх, хаах</span>
-              <Menu className="size-5" strokeWidth={1.5} aria-hidden />
-            </button>
+            {shellMode ? (
+              <>
+                <button
+                  type="button"
+                  className="hidden size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 xl:flex"
+                  aria-expanded={calendarSidebarOpen}
+                  aria-controls="school-scheduler-sidebar"
+                  onClick={() => setCalendarSidebarOpen((o) => !o)}
+                >
+                  <span className="sr-only">Хуанлын панел нээх, хаах</span>
+                  {calendarSidebarOpen ? (
+                    <ChevronLeft className="size-5" strokeWidth={1.5} aria-hidden />
+                  ) : (
+                    <ChevronRight className="size-5" strokeWidth={1.5} aria-hidden />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 xl:hidden"
+                  aria-expanded={calendarSidebarOpen}
+                  aria-controls="school-scheduler-sidebar"
+                  onClick={() => setCalendarSidebarOpen((o) => !o)}
+                >
+                  <span className="sr-only">Хуанлын панел нээх, хаах</span>
+                  <Menu className="size-5" strokeWidth={1.5} aria-hidden />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 shadow-sm transition-colors hover:bg-zinc-100 xl:hidden"
+                aria-expanded={calendarSidebarOpen}
+                aria-controls="school-scheduler-sidebar"
+                onClick={() => setCalendarSidebarOpen((o) => !o)}
+              >
+                <span className="sr-only">Хуанлын панел нээх, хаах</span>
+                <Menu className="size-5" strokeWidth={1.5} aria-hidden />
+              </button>
+            )}
             <div className="min-w-0">
               <div className="mb-0.5 flex flex-wrap items-center gap-2">
                 <Badge className="rounded-md border-0 bg-blue-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
@@ -300,7 +336,7 @@ export function SchoolEventScheduler() {
             </div>
           </div>
           <Link
-            href="/ai-scheduler-personal"
+            href={shellMode ? "/ai-scheduler" : "/ai-scheduler-personal"}
             className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900"
           >
             Багшийн хуваарь
@@ -308,6 +344,7 @@ export function SchoolEventScheduler() {
         </header>
 
         <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
+          {!shellMode ? (
           <nav
             className="flex w-[68px] shrink-0 flex-col border-r border-zinc-600/25 bg-[#3a3a42] text-zinc-200"
             aria-label="Үндсэн навигаци"
@@ -353,18 +390,28 @@ export function SchoolEventScheduler() {
               </button>
             </div>
           </nav>
+          ) : null}
 
           <aside
             id="school-scheduler-sidebar"
             className={cn(
               "shrink-0 overflow-hidden border-zinc-200/90 bg-white/50 transition-[width] duration-200 ease-out xl:bg-white/40",
               calendarSidebarOpen
-                ? "w-full max-w-[min(100vw-68px,280px)] border-r sm:max-w-[272px]"
+                ? shellMode
+                  ? "w-full max-w-[min(100vw,280px)] border-r sm:max-w-[272px]"
+                  : "w-full max-w-[min(100vw-68px,280px)] border-r sm:max-w-[272px]"
                 : "w-14 border-r",
             )}
           >
             {calendarSidebarOpen ? (
-              <div className="flex h-full w-full min-w-[min(100vw-68px,272px)] max-w-[272px] flex-col gap-4 overflow-y-auto p-4">
+              <div
+                className={cn(
+                  "flex h-full w-full max-w-[272px] flex-col gap-4 overflow-y-auto p-4",
+                  shellMode
+                    ? "min-w-[min(100vw,272px)]"
+                    : "min-w-[min(100vw-68px,272px)]",
+                )}
+              >
                 <div className={cn(panelLight, "p-3")}>
                   <div className="mb-2 space-y-0.5 px-1">
                     <p className="text-xs font-semibold text-zinc-900">
