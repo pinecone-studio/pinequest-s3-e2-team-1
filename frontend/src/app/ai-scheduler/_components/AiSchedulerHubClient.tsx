@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { CalendarClock, CalendarDays, FileQuestion } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AiPersonalExamScheduler } from "@/app/ai-scheduler-personal/_components/AiPersonalExamScheduler";
+import { AiTeacherPersonalScheduler } from "@/app/ai-scheduler-teacher/_components/AiTeacherPersonalScheduler";
 import { SchoolEventScheduler } from "@/app/ai-scheduler-school-event/_components/SchoolEventScheduler";
 
 export function AiSchedulerHubClient() {
@@ -83,7 +83,7 @@ export function AiSchedulerHubClient() {
 				{view === "school" ? (
 					<SchoolEventScheduler shellMode />
 				) : (
-					<AiPersonalExamScheduler shellMode />
+					<AiTeacherPersonalScheduler shellMode />
 				)}
 			</div>
 		</div>

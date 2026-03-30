@@ -8,3 +8,8 @@ export * from "./tables/masterTimetable";
 export * from "./tables/newExams";
 export * from "./tables/newExamQuestions";
 export * from "./tables/schoolCalendarEvents";
+export * from "./tables/users";
+export * from "./tables/groups";
+export * from "./tables/periods";
+export * from "./tables/subjects";
+export * from "./tables/curriculum";

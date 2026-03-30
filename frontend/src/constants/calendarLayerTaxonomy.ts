@@ -106,6 +106,7 @@ export const ANCILLARY_ACTIVITY_REGISTRY: readonly AncillaryActivityProfile[] =
 /** `CALENDAR_LAYERS` дээрх давхарга бүрт: шалгалт төлөвлөлтийн үндсэн ангилал. */
 export const CALENDAR_LAYER_CONSTRAINT: Record<
   | "primary"
+  | "ancillary_confirmed"
   | "confirmed_exam"
   | "ai_draft"
   | "school_event"
@@ -114,6 +115,7 @@ export const CALENDAR_LAYER_CONSTRAINT: Record<
   ConstraintKind
 > = {
   primary: "hard",
+  ancillary_confirmed: "hard",
   confirmed_exam: "hard",
   ai_draft: "soft",
   school_event: "hard",

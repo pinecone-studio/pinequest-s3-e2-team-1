@@ -352,7 +352,7 @@ export function SchoolEventScheduler({
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <SchedulerAppearanceMenu />
             <Link
-              href={shellMode ? "/ai-scheduler" : "/ai-scheduler-personal"}
+              href={shellMode ? "/ai-scheduler" : "/ai-scheduler-teacher"}
               className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
               Багшийн хуваарь
@@ -728,7 +728,7 @@ export function SchoolEventScheduler({
                       {SHIFT_MARKER_LAYOUTS.map((mk) => (
                         <div
                           key={mk.at}
-                          className="pointer-events-none absolute right-0 z-[2] max-w-[2.85rem] -translate-y-1/2 text-right sm:max-w-[3.25rem]"
+                          className="pointer-events-none absolute right-0 z-2 max-w-[2.85rem] -translate-y-1/2 text-right sm:max-w-13"
                           style={{ top: `${mk.topPct}%` }}
                         >
                           <span className="inline-block rounded border border-indigo-200 bg-indigo-50/95 px-0.5 py-px text-[7px] font-bold leading-tight text-indigo-700 shadow-sm dark:border-indigo-500/50 dark:bg-indigo-950/80 dark:text-indigo-200 sm:text-[8px]">
@@ -762,7 +762,7 @@ export function SchoolEventScheduler({
                           {CALENDAR_OVERLAY_LAYOUTS.map((z) => (
                             <div
                               key={z.id}
-                              className="calendar-red-zone-stripes pointer-events-auto absolute inset-x-0 z-[1] cursor-help border-y border-rose-300/35 dark:border-rose-800/45"
+                              className="calendar-red-zone-stripes pointer-events-auto absolute inset-x-0 z-1 cursor-help border-y border-rose-300/35 dark:border-rose-800/45"
                               style={{
                                 top: `${z.topPct}%`,
                                 height: `${z.heightPct}%`,
@@ -790,7 +790,7 @@ export function SchoolEventScheduler({
                                 key={`${seg.eventId}-${colIdx}-${seg.topPct}`}
                                 data-school-skip-drag
                                 className={cn(
-                                  "pointer-events-none absolute left-1 right-1 z-[5] overflow-hidden rounded-xl border px-2 py-1.5 text-[10px] font-semibold leading-tight shadow-sm",
+                                  "pointer-events-none absolute left-1 right-1 z-5 overflow-hidden rounded-xl border px-2 py-1.5 text-[10px] font-semibold leading-tight shadow-sm",
                                   meta.cardClass,
                                 )}
                                 style={{
@@ -822,7 +822,7 @@ export function SchoolEventScheduler({
                           })}
                         {layerOn.teacherExams ? (
                           <div
-                            className="pointer-events-none absolute bottom-2 left-1 right-1 z-[4] rounded-lg border border-dashed border-violet-400/60 bg-violet-500/10 px-2 py-1 text-center text-[9px] font-medium text-violet-900/80 dark:border-violet-500/50 dark:bg-violet-950/30 dark:text-violet-200"
+                            className="pointer-events-none absolute bottom-2 left-1 right-1 z-4 rounded-lg border border-dashed border-violet-400/60 bg-violet-500/10 px-2 py-1 text-center text-[9px] font-medium text-violet-900/80 dark:border-violet-500/50 dark:bg-violet-950/30 dark:text-violet-200"
                             data-school-skip-drag
                           >
                             Багшийн шалгалт — ирээдүйд GraphQL
@@ -979,7 +979,7 @@ export function SchoolEventScheduler({
                       </strong>{" "}
                       тусдаа давхаргаар сонгогдоно. Багшийн хуанли —{" "}
                       <Link
-                        href="/ai-scheduler-personal"
+                        href="/ai-scheduler-teacher"
                         className="font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Багшийн хуваарь
