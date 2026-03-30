@@ -1,5 +1,6 @@
 {
     "$schema": "node_modules/wrangler/config-schema.json",
+    "account_id": "25ff2a265521aa8843147a4d3fec0eb6",
     "name": "master-scheduler-service",
     "main": "src/index.ts",
     "compatibility_date": "2026-03-17",
@@ -16,6 +17,6 @@
       }
     ],
     "vars": {
-      "GEMINI_MODEL": "gemini-1.5-flash"
+      "GEMINI_MODEL":"gemini-2.5-flash"
     }
   }

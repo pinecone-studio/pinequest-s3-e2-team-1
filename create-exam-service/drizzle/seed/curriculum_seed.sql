@@ -1,4 +1,5 @@
--- Curriculum seed (2026-SPRING). Эхлээд: subjects, users, groups seed ажилласан байх.
+-- Curriculum seed (2026-SPRING) — бүх анги (groups_seed-д байгаа 48) хамруулсан.
+-- Эхлээд: subjects, users, groups seed ажилласан байх.
 -- Энэ хичээлийн ID-ууд стандарт subjects_seed-д байхгүй тул энд нэмнэ.
 PRAGMA foreign_keys = OFF;
 
@@ -51,16 +52,45 @@ INSERT INTO curriculum (id, group_id, subject_id, teacher_id, weekly_hours, hour
 ('c-6c-mat', '6C', 'MATH_HS', 'MATH_07', 5, 1, '2026-SPRING'), ('c-6c-mgl', '6C', 'MON_LANG', 'MGL_03', 4, 1, '2026-SPRING'), ('c-6c-eng', '6C', 'ENG_LIT', 'LANG_02', 4, 1, '2026-SPRING'),
 ('c-6d-mat', '6D', 'MATH_HS', 'MATH_08', 5, 1, '2026-SPRING'), ('c-6d-mgl', '6D', 'MON_LANG', 'MGL_04', 4, 1, '2026-SPRING'), ('c-6d-eng', '6D', 'ENG_LIT', 'LANG_03', 4, 1, '2026-SPRING');
 
+-- 7–8-р анги (Дунд: ээлж 2) — 6-р ангитай ижил бүтэц
+INSERT INTO curriculum (id, group_id, subject_id, teacher_id, weekly_hours, hours_per_session, semester_id) VALUES
+('c-7a-mat', '7A', 'MATH_HS', 'MATH_05', 5, 1, '2026-SPRING'), ('c-7a-mgl', '7A', 'MON_LANG', 'MGL_01', 4, 1, '2026-SPRING'), ('c-7a-eng', '7A', 'ENG_LIT', 'LANG_09', 4, 1, '2026-SPRING'),
+('c-7b-mat', '7B', 'MATH_HS', 'MATH_06', 5, 1, '2026-SPRING'), ('c-7b-mgl', '7B', 'MON_LANG', 'MGL_02', 4, 1, '2026-SPRING'), ('c-7b-eng', '7B', 'ENG_LIT', 'LANG_01', 4, 1, '2026-SPRING'),
+('c-7c-mat', '7C', 'MATH_HS', 'MATH_07', 5, 1, '2026-SPRING'), ('c-7c-mgl', '7C', 'MON_LANG', 'MGL_03', 4, 1, '2026-SPRING'), ('c-7c-eng', '7C', 'ENG_LIT', 'LANG_02', 4, 1, '2026-SPRING'),
+('c-7d-mat', '7D', 'MATH_HS', 'MATH_08', 5, 1, '2026-SPRING'), ('c-7d-mgl', '7D', 'MON_LANG', 'MGL_04', 4, 1, '2026-SPRING'), ('c-7d-eng', '7D', 'ENG_LIT', 'LANG_03', 4, 1, '2026-SPRING');
+
+INSERT INTO curriculum (id, group_id, subject_id, teacher_id, weekly_hours, hours_per_session, semester_id) VALUES
+('c-8a-mat', '8A', 'MATH_HS', 'MATH_05', 5, 1, '2026-SPRING'), ('c-8a-mgl', '8A', 'MON_LANG', 'MGL_01', 4, 1, '2026-SPRING'), ('c-8a-eng', '8A', 'ENG_LIT', 'LANG_09', 4, 1, '2026-SPRING'),
+('c-8b-mat', '8B', 'MATH_HS', 'MATH_06', 5, 1, '2026-SPRING'), ('c-8b-mgl', '8B', 'MON_LANG', 'MGL_02', 4, 1, '2026-SPRING'), ('c-8b-eng', '8B', 'ENG_LIT', 'LANG_01', 4, 1, '2026-SPRING'),
+('c-8c-mat', '8C', 'MATH_HS', 'MATH_07', 5, 1, '2026-SPRING'), ('c-8c-mgl', '8C', 'MON_LANG', 'MGL_03', 4, 1, '2026-SPRING'), ('c-8c-eng', '8C', 'ENG_LIT', 'LANG_02', 4, 1, '2026-SPRING'),
+('c-8d-mat', '8D', 'MATH_HS', 'MATH_08', 5, 1, '2026-SPRING'), ('c-8d-mgl', '8D', 'MON_LANG', 'MGL_04', 4, 1, '2026-SPRING'), ('c-8d-eng', '8D', 'ENG_LIT', 'LANG_03', 4, 1, '2026-SPRING');
+
 INSERT INTO curriculum (id, group_id, subject_id, teacher_id, weekly_hours, hours_per_session, semester_id) VALUES
 ('c-9a-phy', '9A', 'PHYS_LAB', 'SCI_01', 4, 2, '2026-SPRING'), ('c-9a-ict', '9A', 'ICT_BASIC', 'SCI_02', 2, 2, '2026-SPRING'), ('c-9a-mat', '9A', 'MATH_HS', 'MATH_09', 6, 1, '2026-SPRING'),
-('c-9b-phy', '9B', 'PHYS_LAB', 'SCI_03', 4, 2, '2026-SPRING'), ('c-9b-ict', '9B', 'ICT_BASIC', 'SCI_04', 2, 2, '2026-SPRING'), ('c-9b-mat', '9B', 'MATH_HS', 'MATH_10', 6, 1, '2026-SPRING');
+('c-9b-phy', '9B', 'PHYS_LAB', 'SCI_03', 4, 2, '2026-SPRING'), ('c-9b-ict', '9B', 'ICT_BASIC', 'SCI_04', 2, 2, '2026-SPRING'), ('c-9b-mat', '9B', 'MATH_HS', 'MATH_10', 6, 1, '2026-SPRING'),
+('c-9c-phy', '9C', 'PHYS_LAB', 'SCI_01', 4, 2, '2026-SPRING'), ('c-9c-ict', '9C', 'ICT_BASIC', 'SCI_02', 2, 2, '2026-SPRING'), ('c-9c-mat', '9C', 'MATH_HS', 'MATH_09', 6, 1, '2026-SPRING'),
+('c-9d-phy', '9D', 'PHYS_LAB', 'SCI_03', 4, 2, '2026-SPRING'), ('c-9d-ict', '9D', 'ICT_BASIC', 'SCI_04', 2, 2, '2026-SPRING'), ('c-9d-mat', '9D', 'MATH_HS', 'MATH_10', 6, 1, '2026-SPRING');
 
 -- ==========================================================
--- 10–12-р анги (Ахлах: ээлж 1) — зөвхөн 12A, 12B (өгөгдөл)
+-- 10–12-р анги (Ахлах: ээлж 1) — мат + физик + мэдээлэл зүй (суурь)
 -- ==========================================================
+
+INSERT INTO curriculum (id, group_id, subject_id, teacher_id, weekly_hours, hours_per_session, semester_id) VALUES
+('c-10a-mat', '10A', 'MATH_HS', 'MATH_11', 8, 1, '2026-SPRING'), ('c-10a-phy', '10A', 'PHYS_LAB', 'SCI_05', 6, 2, '2026-SPRING'), ('c-10a-ict', '10A', 'ICT_BASIC', 'SCI_06', 2, 2, '2026-SPRING'),
+('c-10b-mat', '10B', 'MATH_HS', 'MATH_01', 8, 1, '2026-SPRING'), ('c-10b-phy', '10B', 'PHYS_LAB', 'SCI_07', 6, 2, '2026-SPRING'), ('c-10b-ict', '10B', 'ICT_BASIC', 'SCI_08', 2, 2, '2026-SPRING'),
+('c-10c-mat', '10C', 'MATH_HS', 'MATH_02', 8, 1, '2026-SPRING'), ('c-10c-phy', '10C', 'PHYS_LAB', 'SCI_05', 6, 2, '2026-SPRING'), ('c-10c-ict', '10C', 'ICT_BASIC', 'SCI_06', 2, 2, '2026-SPRING'),
+('c-10d-mat', '10D', 'MATH_HS', 'MATH_03', 8, 1, '2026-SPRING'), ('c-10d-phy', '10D', 'PHYS_LAB', 'SCI_07', 6, 2, '2026-SPRING'), ('c-10d-ict', '10D', 'ICT_BASIC', 'SCI_08', 2, 2, '2026-SPRING');
+
+INSERT INTO curriculum (id, group_id, subject_id, teacher_id, weekly_hours, hours_per_session, semester_id) VALUES
+('c-11a-mat', '11A', 'MATH_HS', 'MATH_04', 8, 1, '2026-SPRING'), ('c-11a-phy', '11A', 'PHYS_LAB', 'SCI_05', 6, 2, '2026-SPRING'), ('c-11a-ict', '11A', 'ICT_BASIC', 'SCI_06', 2, 2, '2026-SPRING'),
+('c-11b-mat', '11B', 'MATH_HS', 'MATH_11', 8, 1, '2026-SPRING'), ('c-11b-phy', '11B', 'PHYS_LAB', 'SCI_07', 6, 2, '2026-SPRING'), ('c-11b-ict', '11B', 'ICT_BASIC', 'SCI_08', 2, 2, '2026-SPRING'),
+('c-11c-mat', '11C', 'MATH_HS', 'MATH_01', 8, 1, '2026-SPRING'), ('c-11c-phy', '11C', 'PHYS_LAB', 'SCI_05', 6, 2, '2026-SPRING'), ('c-11c-ict', '11C', 'ICT_BASIC', 'SCI_06', 2, 2, '2026-SPRING'),
+('c-11d-mat', '11D', 'MATH_HS', 'MATH_02', 8, 1, '2026-SPRING'), ('c-11d-phy', '11D', 'PHYS_LAB', 'SCI_07', 6, 2, '2026-SPRING'), ('c-11d-ict', '11D', 'ICT_BASIC', 'SCI_08', 2, 2, '2026-SPRING');
 
 INSERT INTO curriculum (id, group_id, subject_id, teacher_id, weekly_hours, hours_per_session, semester_id) VALUES
 ('c-12a-mat', '12A', 'MATH_HS', 'MATH_11', 8, 1, '2026-SPRING'), ('c-12a-phy', '12A', 'PHYS_LAB', 'SCI_05', 6, 2, '2026-SPRING'), ('c-12a-ict', '12A', 'ICT_BASIC', 'SCI_06', 2, 2, '2026-SPRING'),
-('c-12b-mat', '12B', 'MATH_HS', 'MATH_01', 8, 1, '2026-SPRING'), ('c-12b-phy', '12B', 'PHYS_LAB', 'SCI_07', 6, 2, '2026-SPRING'), ('c-12b-ict', '12B', 'ICT_BASIC', 'SCI_08', 2, 2, '2026-SPRING');
+('c-12b-mat', '12B', 'MATH_HS', 'MATH_01', 8, 1, '2026-SPRING'), ('c-12b-phy', '12B', 'PHYS_LAB', 'SCI_07', 6, 2, '2026-SPRING'), ('c-12b-ict', '12B', 'ICT_BASIC', 'SCI_08', 2, 2, '2026-SPRING'),
+('c-12c-mat', '12C', 'MATH_HS', 'MATH_03', 8, 1, '2026-SPRING'), ('c-12c-phy', '12C', 'PHYS_LAB', 'SCI_05', 6, 2, '2026-SPRING'), ('c-12c-ict', '12C', 'ICT_BASIC', 'SCI_06', 2, 2, '2026-SPRING'),
+('c-12d-mat', '12D', 'MATH_HS', 'MATH_04', 8, 1, '2026-SPRING'), ('c-12d-phy', '12D', 'PHYS_LAB', 'SCI_07', 6, 2, '2026-SPRING'), ('c-12d-ict', '12D', 'ICT_BASIC', 'SCI_08', 2, 2, '2026-SPRING');
 
 PRAGMA foreign_keys = ON;
