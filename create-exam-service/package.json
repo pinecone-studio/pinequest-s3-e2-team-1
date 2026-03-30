@@ -23,7 +23,9 @@
 		"db:seed:ai-exam-mock:local": "wrangler d1 execute create-exams --local --file=./drizzle/seed/ai_exam_mock_seed.sql",
 		"db:seed:ai-exam-mock:remote": "wrangler d1 execute create-exams --remote --file=./drizzle/seed/ai_exam_mock_seed.sql",
 		"db:seed:scheduler-twin:local": "wrangler d1 execute create-exams --local --file=./drizzle/seed/scheduler_digital_twin_seed.sql",
-		"db:seed:scheduler-twin:remote": "wrangler d1 execute create-exams --remote --file=./drizzle/seed/scheduler_digital_twin_seed.sql"
+		"db:seed:scheduler-twin:remote": "wrangler d1 execute create-exams --remote --file=./drizzle/seed/scheduler_digital_twin_seed.sql",
+		"db:seed:periods:local": "wrangler d1 execute create-exams --local --file=./drizzle/seed/periods_seed.sql",
+		"db:seed:periods:remote": "wrangler d1 execute create-exams --remote --file=./drizzle/seed/periods_seed.sql"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.1017.0",
