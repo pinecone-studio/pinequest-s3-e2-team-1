@@ -357,8 +357,7 @@ const CALENDAR_LAYERS: {
   {
     id: "school_event",
     label: "Сургуулийн эвент",
-    role:
-      "Дэвсгэр давхарга (read-only) — нийтийн хуанлиас; зөөх боломжгүй. Sky = таны хичээл",
+    role: "Дэвсгэр давхарга (read-only) — нийтийн хуанлиас; зөөх боломжгүй. Sky = таны хичээл",
     swatch: "bg-amber-100 ring-1 ring-amber-400/30",
   },
   {
@@ -432,9 +431,7 @@ export function AiPersonalExamScheduler({
   }, [defaultTeacherShift]);
 
   const selectedTeacher = useMemo(() => {
-    return (
-      getMockTeacherById(selectedTeacherId) ?? MOCK_I_SHIFT_TEACHERS[0]
-    );
+    return getMockTeacherById(selectedTeacherId) ?? MOCK_I_SHIFT_TEACHERS[0];
   }, [selectedTeacherId]);
 
   const activePrimaryLessons = selectedTeacher.lessons;
@@ -725,7 +722,10 @@ export function AiPersonalExamScheduler({
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <SchedulerAppearanceMenu />
-            <Popover open={teacherPickerOpen} onOpenChange={setTeacherPickerOpen}>
+            <Popover
+              open={teacherPickerOpen}
+              onOpenChange={setTeacherPickerOpen}
+            >
               <PopoverTrigger asChild>
                 <Button
                   type="button"
@@ -738,7 +738,10 @@ export function AiPersonalExamScheduler({
                   <span className="truncate">
                     {selectedTeacher.displayName}
                   </span>
-                  <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden />
+                  <ChevronDown
+                    className="size-4 shrink-0 opacity-60"
+                    aria-hidden
+                  />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -750,7 +753,8 @@ export function AiPersonalExamScheduler({
                   Багш сонгох (I / II ээлж · mock)
                 </p>
                 <p className="mb-2 px-2 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-                  Дараа нь DB-аас ачаална. Одоо mock: I ээлж 5 + II ээлж 5 (нийт 10).
+                  Дараа нь DB-аас ачаална. Одоо mock: I ээлж 5 + II ээлж 5 (нийт
+                  10).
                 </p>
                 <ul className="max-h-[min(60vh,16rem)] space-y-0.5 overflow-y-auto">
                   {MOCK_I_SHIFT_TEACHERS.map((t) => {
@@ -1561,11 +1565,11 @@ export function AiPersonalExamScheduler({
                   {CALENDAR_VIEW_CONFIG.dayVisible.end}, critical{" "}
                   {CALENDAR_VIEW_CONFIG.criticalFocus.start}–
                   {CALENDAR_VIEW_CONFIG.criticalFocus.end}, улаан түгжрэлийн
-                  overlay constants/calendar.ts-аас.                   Усан цэнхэр үндсэн хичээл
+                  overlay constants/calendar.ts-аас. Усан цэнхэр үндсэн хичээл
                   (I/II ээлж · {LESSON_MINUTES} мин/цаг, завсар 5–15 мин),
-                  баталгаажсан шалгалт, AI Draft, хувийн синк. Сургуулийн эвент —
-                  amber дэвсгэр (mock жилийн хуанли), read-only; хичээлтэй давхцвал
-                  зөрчил. Жишээ + job; бүрэн sync биш.
+                  баталгаажсан шалгалт, AI Draft, хувийн синк. Сургуулийн эвент
+                  — amber дэвсгэр (mock жилийн хуанли), read-only; хичээлтэй
+                  давхцвал зөрчил. Жишээ + job; бүрэн sync биш.
                 </p>
               </div>
             </main>
