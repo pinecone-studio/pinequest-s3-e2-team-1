@@ -25,7 +25,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SchoolEventLayerKind } from "@/gql/graphql";
+import type { SchoolEventLayerKind } from "@/types/schoolCalendar";
 import { cn } from "@/lib/utils";
 import {
   SCHOOL_EVENT_LAYER_ORDER,
@@ -144,10 +144,10 @@ type SchoolSidebarLayerKey = SchoolEventLayerKind | "teacherExams";
 
 function defaultSchoolLayerVisibility(): Record<SchoolSidebarLayerKey, boolean> {
   return {
-    [SchoolEventLayerKind.Holiday]: true,
-    [SchoolEventLayerKind.AdminFixed]: true,
-    [SchoolEventLayerKind.ResourceLock]: true,
-    [SchoolEventLayerKind.AcademicMilestone]: true,
+    HOLIDAY: true,
+    ADMIN_FIXED: true,
+    RESOURCE_LOCK: true,
+    ACADEMIC_MILESTONE: true,
     teacherExams: true,
   };
 }

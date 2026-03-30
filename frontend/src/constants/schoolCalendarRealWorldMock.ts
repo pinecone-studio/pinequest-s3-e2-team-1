@@ -3,12 +3,12 @@
  * DB/API-аас ирэхээс өмнө UX / демо — `SchoolEventScheduler`-д нэгтгэгдэнэ.
  */
 
-import type { SchoolCalendarEvent } from "@/gql/graphql";
-import {
+import type {
+  SchoolCalendarEvent,
   SchoolCalendarEventCategory,
   SchoolCalendarEventVisibility,
   SchoolEventLayerKind,
-} from "@/gql/graphql";
+} from "@/types/schoolCalendar";
 
 function dayRangeUtc(
   y: number,
@@ -40,12 +40,12 @@ export const REAL_WORLD_SCHOOL_CALENDAR_MOCK: SchoolCalendarEvent[] = [
     title: "Хичээлийн шинэ жил — Эхний хонх",
     description:
       "09.01: бүх ангийн хичээл 0-цаг. Зөвхөн нээлтийн / эхний хонхны арга хэмжээ (баримжаа).",
-    category: SchoolCalendarEventCategory.CampusLife,
-    layerKind: SchoolEventLayerKind.Holiday,
+    category: "CAMPUS_LIFE" satisfies SchoolCalendarEventCategory,
+    layerKind: "HOLIDAY" satisfies SchoolEventLayerKind,
     subcategory: "SCHOOL_START",
     ...singleDayUtc(2026, 9, 1),
     allDay: true,
-    visibility: SchoolCalendarEventVisibility.SchoolWide,
+    visibility: "SCHOOL_WIDE" satisfies SchoolCalendarEventVisibility,
     metadataJson: JSON.stringify({
       aiConstraint: "FIRST_BELL_ONLY",
       lessons: "none",
@@ -56,12 +56,12 @@ export const REAL_WORLD_SCHOOL_CALENDAR_MOCK: SchoolCalendarEvent[] = [
     title: "Багш нарын баяр (10-р сарын эхний 7 хоног)",
     description:
       "10-р сарын эхний 7 хоног — баасан гарагийн хичээлүүд богиноссон цагаар (жишээ 30 мин) баримжаа.",
-    category: SchoolCalendarEventCategory.Admin,
-    layerKind: SchoolEventLayerKind.AdminFixed,
+    category: "ADMIN" satisfies SchoolCalendarEventCategory,
+    layerKind: "ADMIN_FIXED" satisfies SchoolEventLayerKind,
     subcategory: "TEACHERS_DAY_WEEK",
     ...dayRangeUtc(2026, 10, 1, 7),
     allDay: true,
-    visibility: SchoolCalendarEventVisibility.SchoolWide,
+    visibility: "SCHOOL_WIDE" satisfies SchoolCalendarEventVisibility,
     metadataJson: JSON.stringify({
       aiConstraint: "FRIDAY_SHORT_PERIODS",
       fridayPeriodDeltaMinutes: -30,
@@ -72,13 +72,13 @@ export const REAL_WORLD_SCHOOL_CALENDAR_MOCK: SchoolCalendarEvent[] = [
     title: "Баасан — хичээлийн цаг богиноссон (жишээ)",
     description:
       "Эхний 7 хоногийн баасан: хичээлүүд 30 мин-аар богиноссон гэж үзнэ (08:00–13:00 жишээ цонх).",
-    category: SchoolCalendarEventCategory.Admin,
-    layerKind: SchoolEventLayerKind.AdminFixed,
+    category: "ADMIN" satisfies SchoolCalendarEventCategory,
+    layerKind: "ADMIN_FIXED" satisfies SchoolEventLayerKind,
     subcategory: "SHORT_FRIDAY",
     startAt: "2026-10-02T00:00:00.000Z",
     endAt: "2026-10-02T05:00:00.000Z",
     allDay: false,
-    visibility: SchoolCalendarEventVisibility.SchoolWide,
+    visibility: "SCHOOL_WIDE" satisfies SchoolCalendarEventVisibility,
     metadataJson: JSON.stringify({ periodDeltaMinutes: -30 }),
   },
   {
@@ -86,12 +86,12 @@ export const REAL_WORLD_SCHOOL_CALENDAR_MOCK: SchoolCalendarEvent[] = [
     title: "Сургуулийн олимпиад",
     description:
       "11.15 – 11.20: High alert — бүх математикийн багш нар «засалтын ажил»-тай; бусад ажил 0 (системд өгөх жин 0) гэж тооцох баримжаа.",
-    category: SchoolCalendarEventCategory.Academic,
-    layerKind: SchoolEventLayerKind.AcademicMilestone,
+    category: "ACADEMIC" satisfies SchoolCalendarEventCategory,
+    layerKind: "ACADEMIC_MILESTONE" satisfies SchoolEventLayerKind,
     subcategory: "OLYMPIAD",
     ...dayRangeUtc(2026, 11, 15, 20),
     allDay: true,
-    visibility: SchoolCalendarEventVisibility.SchoolWide,
+    visibility: "SCHOOL_WIDE" satisfies SchoolCalendarEventVisibility,
     metadataJson: JSON.stringify({
       aiConstraint: "HIGH_ALERT",
       mathTeachersDuty: "repair_block",
@@ -103,12 +103,12 @@ export const REAL_WORLD_SCHOOL_CALENDAR_MOCK: SchoolCalendarEvent[] = [
     title: "Шинэ жилийн арга хэмжээ",
     description:
       "12.20 – 12.30: спорт заал (Gym) blocked; урлагийн үзлэг — заал + тайз (баримжаа). Нэг эвентэд constraint нэгтгэсэн.",
-    category: SchoolCalendarEventCategory.CampusLife,
-    layerKind: SchoolEventLayerKind.Holiday,
+    category: "CAMPUS_LIFE" satisfies SchoolCalendarEventCategory,
+    layerKind: "HOLIDAY" satisfies SchoolEventLayerKind,
     subcategory: "NEW_YEAR_PROGRAM",
     ...dayRangeUtc(2026, 12, 20, 30),
     allDay: true,
-    visibility: SchoolCalendarEventVisibility.SchoolWide,
+    visibility: "SCHOOL_WIDE" satisfies SchoolCalendarEventVisibility,
     metadataJson: JSON.stringify({
       aiConstraint: "GYM_BLOCKED_ARTS",
       blockedResources: ["gym", "stage"],
@@ -120,12 +120,12 @@ export const REAL_WORLD_SCHOOL_CALENDAR_MOCK: SchoolCalendarEvent[] = [
     title: "Цагаан сарын золголт",
     description:
       "Билгийн тооллоор 1–2 өдөр: багш, ажилчдын нэгдсэн золголт — сургууль сул (баримжаа; 2026 оны жишээ огноо).",
-    category: SchoolCalendarEventCategory.CampusLife,
-    layerKind: SchoolEventLayerKind.Holiday,
+    category: "CAMPUS_LIFE" satisfies SchoolCalendarEventCategory,
+    layerKind: "HOLIDAY" satisfies SchoolEventLayerKind,
     subcategory: "TSAGAAN_SAR",
     ...dayRangeUtc(2026, 2, 17, 18),
     allDay: true,
-    visibility: SchoolCalendarEventVisibility.SchoolWide,
+    visibility: "SCHOOL_WIDE" satisfies SchoolCalendarEventVisibility,
     metadataJson: JSON.stringify({
       aiConstraint: "SCHOOL_CLOSED",
       daysApprox: 2,
@@ -136,12 +136,12 @@ export const REAL_WORLD_SCHOOL_CALENDAR_MOCK: SchoolCalendarEvent[] = [
     title: "Спортын наадам / «Алтан хонх»",
     description:
       "03.15 – 03.25: заал болон актовын заал (Hall) бүрэн locked — шалгалтын цаг төлөвлөхгүй.",
-    category: SchoolCalendarEventCategory.ResourceConstraint,
-    layerKind: SchoolEventLayerKind.ResourceLock,
+    category: "RESOURCE_CONSTRAINT" satisfies SchoolCalendarEventCategory,
+    layerKind: "RESOURCE_LOCK" satisfies SchoolEventLayerKind,
     subcategory: "HALL_GYM_LOCK",
     ...dayRangeUtc(2026, 3, 15, 25),
     allDay: true,
-    visibility: SchoolCalendarEventVisibility.SchoolWide,
+    visibility: "SCHOOL_WIDE" satisfies SchoolCalendarEventVisibility,
     metadataJson: JSON.stringify({
       aiConstraint: "FULL_LOCK",
       resources: ["gym", "assembly_hall"],
@@ -152,12 +152,12 @@ export const REAL_WORLD_SCHOOL_CALENDAR_MOCK: SchoolCalendarEvent[] = [
     title: "Эрдмийн баяр / Хонхны баяр",
     description:
       "05.20 – 05.31: 12-р ангиуд «Exam only» горимд шилжинэ (баримжаа — AI-д өгөх constraint).",
-    category: SchoolCalendarEventCategory.Academic,
-    layerKind: SchoolEventLayerKind.AcademicMilestone,
+    category: "ACADEMIC" satisfies SchoolCalendarEventCategory,
+    layerKind: "ACADEMIC_MILESTONE" satisfies SchoolEventLayerKind,
     subcategory: "GRADE_12_EXAM_MODE",
     ...dayRangeUtc(2026, 5, 20, 31),
     allDay: true,
-    visibility: SchoolCalendarEventVisibility.SchoolWide,
+    visibility: "SCHOOL_WIDE" satisfies SchoolCalendarEventVisibility,
     metadataJson: JSON.stringify({
       aiConstraint: "GRADE_12_EXAM_ONLY",
       grades: [12],

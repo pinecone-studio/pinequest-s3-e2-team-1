@@ -3,7 +3,7 @@
  * DB / GraphQL / AI draft урсгалд нэг эх үүсвэр болно.
  */
 
-import { SchoolEventLayerKind } from "@/gql/graphql";
+import type { SchoolEventLayerKind } from "@/types/schoolCalendar";
 
 /** Хуанлийн блокыг шалгалт төлөвлөхөд: хөдөлгөхгүй vs уян хатан. */
 export type ConstraintKind = "hard" | "soft";
@@ -134,10 +134,10 @@ export function constraintLabelMn(kind: ConstraintKind): string {
  * Нэг өнгөөр бүгдийг харуулахгүй: амралт vs заавал хурал vs нөөц түгжээ vs deadline ялгагдана.
  */
 export const SCHOOL_EVENT_LAYER_ORDER: readonly SchoolEventLayerKind[] = [
-  SchoolEventLayerKind.Holiday,
-  SchoolEventLayerKind.AdminFixed,
-  SchoolEventLayerKind.ResourceLock,
-  SchoolEventLayerKind.AcademicMilestone,
+  "HOLIDAY",
+  "ADMIN_FIXED",
+  "RESOURCE_LOCK",
+  "ACADEMIC_MILESTONE",
 ];
 
 export const SCHOOL_EVENT_LAYER_UI: Record<
@@ -153,7 +153,7 @@ export const SCHOOL_EVENT_LAYER_UI: Record<
     impactMn: string;
   }
 > = {
-  [SchoolEventLayerKind.Holiday]: {
+  HOLIDAY: {
     labelMn: "Амралт / баяр",
     examplesMn: "Улирлын амралт, Цагаан сар, Эрдмийн баяр",
     swatch: "bg-pink-100 ring-1 ring-pink-300/50 dark:bg-pink-950/60 dark:ring-pink-700/50",
@@ -162,7 +162,7 @@ export const SCHOOL_EVENT_LAYER_UI: Record<
     constraint: "hard",
     impactMn: "Хичээл орохгүй",
   },
-  [SchoolEventLayerKind.AdminFixed]: {
+  ADMIN_FIXED: {
     labelMn: "Захиргаа / хурал",
     examplesMn: "Багш нарын зөвлөгөөн, ЗАН-ийн хурал",
     swatch: "bg-amber-200 ring-1 ring-amber-400/45 dark:bg-amber-950/55 dark:ring-amber-700/45",
@@ -171,7 +171,7 @@ export const SCHOOL_EVENT_LAYER_UI: Record<
     constraint: "hard",
     impactMn: "Заавал оролцоно",
   },
-  [SchoolEventLayerKind.ResourceLock]: {
+  RESOURCE_LOCK: {
     labelMn: "Нөөцийн хязгаар",
     examplesMn: "Заалны засвар, лабораторийн ариутгал",
     swatch: "bg-slate-200 ring-1 ring-slate-400/45 dark:bg-slate-700/80 dark:ring-slate-500/50",
@@ -180,7 +180,7 @@ export const SCHOOL_EVENT_LAYER_UI: Record<
     constraint: "hard",
     impactMn: "Өрөө ашиглахгүй",
   },
-  [SchoolEventLayerKind.AcademicMilestone]: {
+  ACADEMIC_MILESTONE: {
     labelMn: "Deadline / академик",
     examplesMn: "Дүн гаргах эцсийн хугацаа, ЕШ сорил",
     swatch: "bg-orange-100 ring-1 ring-orange-300/50 dark:bg-orange-950/55 dark:ring-orange-700/45",
@@ -196,8 +196,8 @@ export const SCHOOL_EVENT_LAYER_CONSTRAINT: Record<
   SchoolEventLayerKind,
   ConstraintKind
 > = {
-  [SchoolEventLayerKind.Holiday]: "hard",
-  [SchoolEventLayerKind.AdminFixed]: "hard",
-  [SchoolEventLayerKind.ResourceLock]: "hard",
-  [SchoolEventLayerKind.AcademicMilestone]: "hard",
+  HOLIDAY: "hard",
+  ADMIN_FIXED: "hard",
+  RESOURCE_LOCK: "hard",
+  ACADEMIC_MILESTONE: "hard",
 };
