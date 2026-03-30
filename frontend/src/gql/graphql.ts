@@ -319,6 +319,8 @@ export type Query = {
   getAiExamSchedule?: Maybe<ExamSchedule>;
   getNewMathExam?: Maybe<NewMathExam>;
   listNewMathExams: Array<NewMathExamSummary>;
+  /** Сургуулийн нэгдсэн календарь: rangeStart/rangeEnd нь ISO 8601 (жишээ нь долоо хоногийн эхний өдрийн 00:00 ба сүүлийн өдрийн 23:59:59.999 — `startOfDay`/`endOfDay`-ийн `toISOString()`). */
+  schoolCalendarEvents: Array<SchoolCalendarEvent>;
 };
 
 
@@ -334,6 +336,12 @@ export type QueryGetNewMathExamArgs = {
 
 export type QueryListNewMathExamsArgs = {
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QuerySchoolCalendarEventsArgs = {
+  rangeEnd: Scalars['String']['input'];
+  rangeStart: Scalars['String']['input'];
 };
 
 export type QuestionAnalysisResult = {
@@ -409,3 +417,40 @@ export type SaveNewMathExamPayload = {
   title: Scalars['String']['output'];
   updatedAt: Scalars['String']['output'];
 };
+
+export type SchoolCalendarEvent = {
+  __typename?: 'SchoolCalendarEvent';
+  allDay: Scalars['Boolean']['output'];
+  category: SchoolCalendarEventCategory;
+  description?: Maybe<Scalars['String']['output']>;
+  endAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  /** Дэд давхарга (тор, легенд) — category-аас илүү нарийвчилсан. */
+  layerKind: SchoolEventLayerKind;
+  metadataJson?: Maybe<Scalars['String']['output']>;
+  startAt: Scalars['String']['output'];
+  subcategory?: Maybe<Scalars['String']['output']>;
+  title: Scalars['String']['output'];
+  visibility: SchoolCalendarEventVisibility;
+};
+
+export enum SchoolCalendarEventCategory {
+  Academic = 'ACADEMIC',
+  Admin = 'ADMIN',
+  CampusLife = 'CAMPUS_LIFE',
+  ResourceConstraint = 'RESOURCE_CONSTRAINT'
+}
+
+export enum SchoolCalendarEventVisibility {
+  Public = 'PUBLIC',
+  SchoolWide = 'SCHOOL_WIDE',
+  Teachers = 'TEACHERS'
+}
+
+/** Сургуулийн эвентийн дэд давхарга — UI өнгө, ачааллын эрэмбийг ялгана. */
+export enum SchoolEventLayerKind {
+  AcademicMilestone = 'ACADEMIC_MILESTONE',
+  AdminFixed = 'ADMIN_FIXED',
+  Holiday = 'HOLIDAY',
+  ResourceLock = 'RESOURCE_LOCK'
+}

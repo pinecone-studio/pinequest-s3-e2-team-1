@@ -244,11 +244,51 @@ type ExamSchedule {
   updatedAt: String!
 }
 
+enum SchoolCalendarEventCategory {
+  ACADEMIC
+  ADMIN
+  CAMPUS_LIFE
+  RESOURCE_CONSTRAINT
+}
+
+enum SchoolCalendarEventVisibility {
+  SCHOOL_WIDE
+  TEACHERS
+  PUBLIC
+}
+
+"""Сургуулийн эвентийн дэд давхарга — UI өнгө, ачааллын эрэмбийг ялгана."""
+enum SchoolEventLayerKind {
+  HOLIDAY
+  ADMIN_FIXED
+  RESOURCE_LOCK
+  ACADEMIC_MILESTONE
+}
+
+type SchoolCalendarEvent {
+  id: ID!
+  title: String!
+  description: String
+  category: SchoolCalendarEventCategory!
+  """Дэд давхарга (тор, легенд) — category-аас илүү нарийвчилсан."""
+  layerKind: SchoolEventLayerKind!
+  subcategory: String
+  startAt: String!
+  endAt: String!
+  allDay: Boolean!
+  visibility: SchoolCalendarEventVisibility!
+  metadataJson: String
+}
+
 type Query {
   listNewMathExams(limit: Int = 50): [NewMathExamSummary!]!
   getNewMathExam(examId: ID!): NewMathExam
   """AI scheduler: нэг мөрийн төлөв (polling-д ашиглана)"""
   getAiExamSchedule(examId: ID!): ExamSchedule
+  """
+  Сургуулийн нэгдсэн календарь: rangeStart/rangeEnd нь ISO 8601 (жишээ нь долоо хоногийн эхний өдрийн 00:00 ба сүүлийн өдрийн 23:59:59.999 — `startOfDay`/`endOfDay`-ийн `toISOString()`).
+  """
+  schoolCalendarEvents(rangeStart: String!, rangeEnd: String!): [SchoolCalendarEvent!]!
 }
 
 type RequestExamSchedulePayload {

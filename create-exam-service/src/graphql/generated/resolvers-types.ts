@@ -321,6 +321,8 @@ export type Query = {
   getAiExamSchedule?: Maybe<ExamSchedule>;
   getNewMathExam?: Maybe<NewMathExam>;
   listNewMathExams: Array<NewMathExamSummary>;
+  /** Сургуулийн нэгдсэн календарь: rangeStart/rangeEnd нь ISO 8601 (жишээ нь долоо хоногийн эхний өдрийн 00:00 ба сүүлийн өдрийн 23:59:59.999 — `startOfDay`/`endOfDay`-ийн `toISOString()`). */
+  schoolCalendarEvents: Array<SchoolCalendarEvent>;
 };
 
 
@@ -336,6 +338,12 @@ export type QueryGetNewMathExamArgs = {
 
 export type QueryListNewMathExamsArgs = {
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QuerySchoolCalendarEventsArgs = {
+  rangeEnd: Scalars['String']['input'];
+  rangeStart: Scalars['String']['input'];
 };
 
 export type QuestionAnalysisResult = {
@@ -411,6 +419,43 @@ export type SaveNewMathExamPayload = {
   title: Scalars['String']['output'];
   updatedAt: Scalars['String']['output'];
 };
+
+export type SchoolCalendarEvent = {
+  __typename?: 'SchoolCalendarEvent';
+  allDay: Scalars['Boolean']['output'];
+  category: SchoolCalendarEventCategory;
+  description?: Maybe<Scalars['String']['output']>;
+  endAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  /** Дэд давхарга (тор, легенд) — category-аас илүү нарийвчилсан. */
+  layerKind: SchoolEventLayerKind;
+  metadataJson?: Maybe<Scalars['String']['output']>;
+  startAt: Scalars['String']['output'];
+  subcategory?: Maybe<Scalars['String']['output']>;
+  title: Scalars['String']['output'];
+  visibility: SchoolCalendarEventVisibility;
+};
+
+export enum SchoolCalendarEventCategory {
+  Academic = 'ACADEMIC',
+  Admin = 'ADMIN',
+  CampusLife = 'CAMPUS_LIFE',
+  ResourceConstraint = 'RESOURCE_CONSTRAINT'
+}
+
+export enum SchoolCalendarEventVisibility {
+  Public = 'PUBLIC',
+  SchoolWide = 'SCHOOL_WIDE',
+  Teachers = 'TEACHERS'
+}
+
+/** Сургуулийн эвентийн дэд давхарга — UI өнгө, ачааллын эрэмбийг ялгана. */
+export enum SchoolEventLayerKind {
+  AcademicMilestone = 'ACADEMIC_MILESTONE',
+  AdminFixed = 'ADMIN_FIXED',
+  Holiday = 'HOLIDAY',
+  ResourceLock = 'RESOURCE_LOCK'
+}
 
 export type WithIndex<TObject> = TObject & Record<string, any>;
 export type ResolversObject<TObject> = WithIndex<TObject>;
@@ -523,6 +568,10 @@ export type ResolversTypes = ResolversObject<{
   SaveExamPayload: ResolverTypeWrapper<SaveExamPayload>;
   SaveNewMathExamInput: SaveNewMathExamInput;
   SaveNewMathExamPayload: ResolverTypeWrapper<SaveNewMathExamPayload>;
+  SchoolCalendarEvent: ResolverTypeWrapper<SchoolCalendarEvent>;
+  SchoolCalendarEventCategory: SchoolCalendarEventCategory;
+  SchoolCalendarEventVisibility: SchoolCalendarEventVisibility;
+  SchoolEventLayerKind: SchoolEventLayerKind;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
 }>;
 
@@ -559,6 +608,7 @@ export type ResolversParentTypes = ResolversObject<{
   SaveExamPayload: SaveExamPayload;
   SaveNewMathExamInput: SaveNewMathExamInput;
   SaveNewMathExamPayload: SaveNewMathExamPayload;
+  SchoolCalendarEvent: SchoolCalendarEvent;
   String: Scalars['String']['output'];
 }>;
 
@@ -681,6 +731,7 @@ export type QueryResolvers<ContextType = GraphQLContext, ParentType extends Reso
   getAiExamSchedule?: Resolver<Maybe<ResolversTypes['ExamSchedule']>, ParentType, ContextType, RequireFields<QueryGetAiExamScheduleArgs, 'examId'>>;
   getNewMathExam?: Resolver<Maybe<ResolversTypes['NewMathExam']>, ParentType, ContextType, RequireFields<QueryGetNewMathExamArgs, 'examId'>>;
   listNewMathExams?: Resolver<Array<ResolversTypes['NewMathExamSummary']>, ParentType, ContextType, RequireFields<QueryListNewMathExamsArgs, 'limit'>>;
+  schoolCalendarEvents?: Resolver<Array<ResolversTypes['SchoolCalendarEvent']>, ParentType, ContextType, RequireFields<QuerySchoolCalendarEventsArgs, 'rangeEnd' | 'rangeStart'>>;
 }>;
 
 export type QuestionAnalysisResultResolvers<ContextType = GraphQLContext, ParentType extends ResolversParentTypes['QuestionAnalysisResult'] = ResolversParentTypes['QuestionAnalysisResult']> = ResolversObject<{
@@ -716,6 +767,20 @@ export type SaveNewMathExamPayloadResolvers<ContextType = GraphQLContext, Parent
   updatedAt?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 }>;
 
+export type SchoolCalendarEventResolvers<ContextType = GraphQLContext, ParentType extends ResolversParentTypes['SchoolCalendarEvent'] = ResolversParentTypes['SchoolCalendarEvent']> = ResolversObject<{
+  allDay?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  category?: Resolver<ResolversTypes['SchoolCalendarEventCategory'], ParentType, ContextType>;
+  description?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  endAt?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  layerKind?: Resolver<ResolversTypes['SchoolEventLayerKind'], ParentType, ContextType>;
+  metadataJson?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  startAt?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  subcategory?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  visibility?: Resolver<ResolversTypes['SchoolCalendarEventVisibility'], ParentType, ContextType>;
+}>;
+
 export type Resolvers<ContextType = GraphQLContext> = ResolversObject<{
   AiExamTemplatePayload?: AiExamTemplatePayloadResolvers<ContextType>;
   ExamGenerationResult?: ExamGenerationResultResolvers<ContextType>;
@@ -733,5 +798,6 @@ export type Resolvers<ContextType = GraphQLContext> = ResolversObject<{
   RequestExamSchedulePayload?: RequestExamSchedulePayloadResolvers<ContextType>;
   SaveExamPayload?: SaveExamPayloadResolvers<ContextType>;
   SaveNewMathExamPayload?: SaveNewMathExamPayloadResolvers<ContextType>;
+  SchoolCalendarEvent?: SchoolCalendarEventResolvers<ContextType>;
 }>;
 

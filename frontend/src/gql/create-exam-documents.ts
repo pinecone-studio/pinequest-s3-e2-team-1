@@ -190,3 +190,21 @@ export const GetNewMathExamDocument = gql(`
 		}
 	}
 `);
+
+export const SchoolCalendarEventsDocument = gql(`
+	query SchoolCalendarEvents($rangeStart: String!, $rangeEnd: String!) {
+		schoolCalendarEvents(rangeStart: $rangeStart, rangeEnd: $rangeEnd) {
+			id
+			title
+			description
+			category
+			layerKind
+			subcategory
+			startAt
+			endAt
+			allDay
+			visibility
+			metadataJson
+		}
+	}
+`);

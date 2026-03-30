@@ -203,3 +203,81 @@
 		--sched-grid-line: rgb(82 82 91 / 0.95);
 	}
 }
+
+/* Ирээдүй: Intelligent Buffer — сул цагт давтлага тааруулах урьдчилсан hint (dashed) */
+.calendar-smart-slot-hint {
+	border: 1px dashed rgb(59 130 246 / 0.35);
+	border-radius: 0.75rem;
+	background: rgb(239 246 255 / 0.35);
+	pointer-events: none;
+}
+.dark .calendar-smart-slot-hint {
+	border-color: rgb(96 165 250 / 0.28);
+	background: rgb(30 58 138 / 0.12);
+}
+
+/* AiPersonalExamScheduler: 30 минутын слот — өндөр = constants/calendar.ts HOUR_PX */
+.scheduler-slot-grid-bg {
+	--sched-grid-line: rgb(228 228 231 / 0.88);
+	--sched-slot-px: 32px;
+	--sched-slot-inner: calc(var(--sched-slot-px) - 1px);
+	background-image: repeating-linear-gradient(
+		to bottom,
+		transparent 0,
+		transparent var(--sched-slot-inner),
+		var(--sched-grid-line) var(--sched-slot-inner),
+		var(--sched-grid-line) var(--sched-slot-px)
+	);
+}
+.dark .scheduler-slot-grid-bg {
+	--sched-grid-line: rgb(63 63 70 / 0.78);
+}
+@media (prefers-contrast: more) {
+	.dark .scheduler-slot-grid-bg {
+		--sched-grid-line: rgb(82 82 91 / 0.92);
+	}
+}
+
+/* Ээлж солих түгжрэл — ташуу зураас (blocked) */
+.calendar-red-zone-stripes {
+	background-color: rgb(254 242 242 / 0.55);
+	background-image: repeating-linear-gradient(
+		-45deg,
+		transparent,
+		transparent 5px,
+		rgb(248 113 113 / 0.18) 5px,
+		rgb(248 113 113 / 0.18) 7px
+	);
+}
+.dark .calendar-red-zone-stripes {
+	background-color: rgb(127 29 29 / 0.22);
+	background-image: repeating-linear-gradient(
+		-45deg,
+		transparent,
+		transparent 5px,
+		rgb(252 165 165 / 0.12) 5px,
+		rgb(252 165 165 / 0.12) 7px
+	);
+}
+
+/* I / II ээлж эхлэх тэмдэг — ташуу зураас, түгжрэлийн бүснээс бүдүүн улаан */
+.calendar-shift-marker-stripes {
+	background-color: rgb(255 241 242 / 0.65);
+	background-image: repeating-linear-gradient(
+		-45deg,
+		transparent,
+		transparent 6px,
+		rgb(251 113 133 / 0.11) 6px,
+		rgb(251 113 133 / 0.11) 8px
+	);
+}
+.dark .calendar-shift-marker-stripes {
+	background-color: rgb(76 5 25 / 0.2);
+	background-image: repeating-linear-gradient(
+		-45deg,
+		transparent,
+		transparent 6px,
+		rgb(254 205 211 / 0.09) 6px,
+		rgb(254 205 211 / 0.09) 8px
+	);
+}

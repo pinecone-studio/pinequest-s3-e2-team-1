@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { useMutation, useQuery } from "@apollo/client/react";
 import {
@@ -45,9 +45,38 @@ import type {
 } from "@/gql/graphql";
 import { cn } from "@/lib/utils";
 import {
+  CALENDAR_BUFFER_BANDS,
+  CALENDAR_OVERLAY_LAYOUTS,
+  CALENDAR_VIEW_CONFIG,
+  DAY_VISIBLE_SPAN_MIN,
+  DAY_VISIBLE_START_MIN,
+  GRID_BODY_MIN_H,
+  HOUR_PX,
+  SHIFT_MARKER_LAYOUTS,
+  TEACHER_SHIFT_INITIAL_FOCUS,
+  TIME_SLOT_LABELS,
+  blockHeightPercent,
+  slotTopPercent,
+  type TeacherShiftId,
+} from "@/constants/calendar";
+import {
+  CALENDAR_LAYER_CONSTRAINT,
+  constraintLabelMn,
+} from "@/constants/calendarLayerTaxonomy";
+import { INTELLIGENT_BUFFER_ROADMAP_MN } from "@/constants/intelligentBufferStrategy";
+import type { MockPrimaryLesson } from "@/constants/teacherScheduleMock";
+import {
+  DEFAULT_MOCK_TEACHER_ID,
+  MOCK_I_SHIFT_TEACHERS,
+  getMockTeacherById,
+  roomBadgeForPrimaryLesson,
+} from "@/constants/teacherScheduleMock";
+import {
   ArrowRight,
   CalendarClock,
   CalendarDays,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -63,15 +92,8 @@ import {
   Triangle,
 } from "lucide-react";
 
-/** Тор дээрх цагийн хүрээ (08:00–20:00). */
-const SCHEDULE_DAY_START = 8;
-const SCHEDULE_DAY_END = 20;
-const HOUR_COUNT = SCHEDULE_DAY_END - SCHEDULE_DAY_START;
-const HOUR_PX = 40;
-const GRID_BODY_MIN_H = HOUR_COUNT * HOUR_PX;
-
-/** Нэг хичээлийн үргэлжлэх хугацаа + завсарлага (сургуулийн жишээ). */
-const LESSON_MINUTES = 50;
+/** I/II ээлж: хичээл 40 мин, завсар 5–15 мин (давхаргын тайлбарт дундаж). */
+const LESSON_MINUTES = 40;
 const BREAK_MINUTES = 10;
 
 /** Жишээ: нийтийн эвентийн эхлэл / дуусах (торын байрлалтай нийцнэ). */
@@ -82,21 +104,88 @@ const SCHOOL_EVENT_DEMO = {
   endM: 30,
 } as const;
 
-/** Цаг:мин-оос эхлэх цэгийг торын top% болгох (SCHEDULE_DAY_START–END хооронд). */
-function slotTopPercent(hour: number, minute = 0) {
-  const t = hour + minute / 60;
-  const p = ((t - SCHEDULE_DAY_START) / HOUR_COUNT) * 100;
-  return Math.min(Math.max(p, 0), 100);
+/** Жишээ: баталгаажсан шалгалт (Пүрэв — багана 3, I ээлжийн 7-р цагийн цонх). */
+const CONFIRMED_EXAM_DEMO = {
+  startH: 12,
+  startM: 35,
+  endH: 13,
+  endM: 15,
+} as const;
+
+/** Жишээ: AI draft (Лхагва — багана 2, II ээлжийн 6-р цаг). */
+const AI_DRAFT_DEMO = {
+  startH: 17,
+  startM: 25,
+  endH: 18,
+  endM: 5,
+} as const;
+
+function formatPeriodClockRange(
+  startHour: number,
+  startMinute: number,
+  endHour: number,
+  endMinute: number,
+) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(startHour)}:${pad(startMinute)}–${pad(endHour)}:${pad(endMinute)}`;
 }
 
-/** 50 минутын хичээлийн цагийн мөр, жишээ 08:00–08:50. */
-function formatLessonWindow(startHour: number, startMinute: number) {
-  const startTotal = startHour * 60 + startMinute;
-  const endTotal = startTotal + LESSON_MINUTES;
-  const eh = Math.floor(endTotal / 60);
-  const em = endTotal % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(startHour)}:${pad(startMinute)}–${pad(eh)}:${pad(em)}`;
+function periodLengthMinutes(
+  startHour: number,
+  startMinute: number,
+  endHour: number,
+  endMinute: number,
+) {
+  return endHour * 60 + endMinute - (startHour * 60 + startMinute);
+}
+
+/**
+ * Хичээлийн карт: анги + цаг (+ өрөө badge). Багш өөрийн хуваарийг л хардаг тул
+ * хичээл/багшийн нэрийг карт дээр давтахгүй.
+ */
+function primaryLessonCardModel(
+  lesson: MockPrimaryLesson,
+  opts?: { cabinetRoom?: string },
+) {
+  const v = lesson.slotVariant ?? "default";
+  const mins = periodLengthMinutes(
+    lesson.startH,
+    lesson.startM,
+    lesson.endH,
+    lesson.endM,
+  );
+  const clock = formatPeriodClockRange(
+    lesson.startH,
+    lesson.startM,
+    lesson.endH,
+    lesson.endM,
+  );
+  /** Карт дээр зөвхөн цагийн муж; минутыг tooltip-д үлдээнэ. */
+  const timeLine = clock;
+  const durationPart = `${mins} мин`;
+
+  if (v === "duty") {
+    return {
+      variant: v,
+      headline: lesson.title,
+      subline: undefined as string | undefined,
+      room: null as string | null,
+      timeLine,
+      tooltip: `${lesson.title} · ${lesson.periodLabel} · ${clock} · ${durationPart}`,
+    };
+  }
+
+  const room = roomBadgeForPrimaryLesson(lesson.title, opts?.cabinetRoom);
+  return {
+    variant: v,
+    headline: lesson.title,
+    subline: undefined as string | undefined,
+    room,
+    timeLine,
+    tooltip: `${lesson.title} · ${lesson.periodLabel} · ${clock} · ${durationPart}${
+      room ? ` · Өрөө ${room}` : ""
+    }`,
+  };
 }
 
 /** Эхлэл–дуусах + нийт минут (нийтийн эвент гэх мэт урт хугацаа). */
@@ -111,19 +200,6 @@ function formatBlockDuration(
   const e = endHour * 60 + endMinute;
   const mins = Math.max(0, e - s);
   return `${pad(startHour)}:${pad(startMinute)}–${pad(endHour)}:${pad(endMinute)} · ${mins} мин`;
-}
-
-/** Тор дээрх блокын өндөр % (08:00–20:00 хооронд). */
-function blockHeightPercent(
-  startHour: number,
-  startMinute: number,
-  endHour: number,
-  endMinute: number,
-) {
-  const start = startHour + startMinute / 60;
-  const end = endHour + endMinute / 60;
-  const span = Math.max(0, end - start);
-  return Math.min(100, (span / HOUR_COUNT) * 100);
 }
 
 /** getISODay: 1=Даваа … 7=Ням — нэг үсэг (Дав/Мяг гэх мэт биш). */
@@ -265,7 +341,7 @@ const CALENDAR_LAYERS: {
   {
     id: "primary",
     label: "Үндсэн хичээл",
-    role: `Хичээлийн хуваарь (10А, 10Б гэх мэт) · ${LESSON_MINUTES} мин хичээл, ${BREAK_MINUTES} мин завсар`,
+    role: `I/II ээлж · ${LESSON_MINUTES} мин цаг · завсар 5–15 мин (жишээ)`,
     swatch: "bg-sky-400",
   },
   {
@@ -279,7 +355,7 @@ const CALENDAR_LAYERS: {
     label: "AI-ийн санал (Draft)",
     role: "Gemini-ийн санал болгож буй хамгийн оновчтой цагууд",
     swatch: "bg-violet-200",
-    style: "border border-dashed border-violet-400 opacity-90",
+    style: "border-2 border-dashed border-violet-400 opacity-80",
   },
   {
     id: "school_event",
@@ -291,7 +367,8 @@ const CALENDAR_LAYERS: {
     id: "personal",
     label: "Хувийн (Sync)",
     role: "Google Calendar-аас синк хийсэн завгүй цаг",
-    swatch: "bg-slate-300",
+    swatch: "bg-slate-100",
+    style: "ring-1 ring-slate-300/80 dark:bg-slate-800 dark:ring-slate-600/80",
   },
   {
     id: "conflict",
@@ -316,10 +393,13 @@ function ReclaimLightBackdrop() {
 export type AiPersonalExamSchedulerProps = {
   /** Үнэн бол гаднах hub rail нуугдана (зөвхөн /ai-scheduler дээр). */
   shellMode?: boolean;
+  /** Хуанлийн анхны scroll: I → 07:00, II → 12:00 (профайлаас дамжуулж болно). */
+  defaultTeacherShift?: TeacherShiftId;
 };
 
 export function AiPersonalExamScheduler({
   shellMode = false,
+  defaultTeacherShift = "I",
 }: AiPersonalExamSchedulerProps) {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [testId, setTestId] = useState(DEFAULT_TEST_ID);
@@ -338,7 +418,39 @@ export function AiPersonalExamScheduler({
   });
   /** Хуанли + давхаргын зүүн панел нээгдсэн эсэх (rail-аас сэлгэнэ). */
   const [calendarSidebarOpen, setCalendarSidebarOpen] = useState(true);
+  /** I = өглөөний ээлж (ахлах), II = өдрийн ээлж (бага анги) — анхны scroll төвлөрөлт. */
+  const [teacherShift, setTeacherShift] =
+    useState<TeacherShiftId>(defaultTeacherShift);
+  const [selectedTeacherId, setSelectedTeacherId] = useState(
+    DEFAULT_MOCK_TEACHER_ID,
+  );
+  const [teacherPickerOpen, setTeacherPickerOpen] = useState(false);
+  const calendarMainRef = useRef<HTMLElement>(null);
+  const calendarFocusAnchorRef = useRef<HTMLDivElement>(null);
   const toastKeyRef = useRef<string>("");
+
+  useEffect(() => {
+    setTeacherShift(defaultTeacherShift);
+  }, [defaultTeacherShift]);
+
+  const selectedTeacher = useMemo(() => {
+    return (
+      getMockTeacherById(selectedTeacherId) ?? MOCK_I_SHIFT_TEACHERS[0]
+    );
+  }, [selectedTeacherId]);
+
+  const activePrimaryLessons = selectedTeacher.lessons;
+
+  useLayoutEffect(() => {
+    const main = calendarMainRef.current;
+    const anchor = calendarFocusAnchorRef.current;
+    if (!main || !anchor) return;
+    const st =
+      anchor.getBoundingClientRect().top -
+      main.getBoundingClientRect().top +
+      main.scrollTop;
+    main.scrollTo({ top: Math.max(0, st - 12), behavior: "auto" });
+  }, [teacherShift]);
 
   function toggleLayer(id: CalendarLayerId) {
     setLayerOn((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -475,17 +587,15 @@ export function AiPersonalExamScheduler({
   const showJob =
     liveSchedule && liveSchedule.id === lastQueuedExamId ? liveSchedule : null;
 
-  /** 08:00–20:00 хүрээнд блокын байрлал (%) */
+  /** `CALENDAR_VIEW_CONFIG.dayVisible` хүрээнд блокын байрлал (%) */
   function blockTopPercent(d: Date) {
-    const h = d.getHours() + d.getMinutes() / 60;
-    const t = Math.min(Math.max((h - SCHEDULE_DAY_START) / HOUR_COUNT, 0), 1);
+    const mins = d.getHours() * 60 + d.getMinutes();
+    const t = Math.min(
+      Math.max((mins - DAY_VISIBLE_START_MIN) / DAY_VISIBLE_SPAN_MIN, 0),
+      1,
+    );
     return t * 100;
   }
-
-  const hourRows = Array.from(
-    { length: HOUR_COUNT },
-    (_, i) => SCHEDULE_DAY_START + i,
-  );
 
   const weekEnd = addDays(weekStart, 6);
   const weekRangeLabel = `${format(weekStart, "MMM d", { locale: mn })} – ${format(weekEnd, "MMM d", { locale: mn })}`;
@@ -563,6 +673,10 @@ export function AiPersonalExamScheduler({
                   Багшийн хуанли
                 </h1>
                 <p className={cn("truncate text-xs", textDim)}>
+                  {selectedTeacher.displayName} · {selectedTeacher.roleNote} · I
+                  ээлж
+                </p>
+                <p className={cn("truncate text-[11px]", textDim)}>
                   {format(anchor, "yyyy MMMM", { locale: mn })}
                 </p>
                 <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
@@ -574,29 +688,78 @@ export function AiPersonalExamScheduler({
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <SchedulerAppearanceMenu />
-            <Popover>
+            <Popover open={teacherPickerOpen} onOpenChange={setTeacherPickerOpen}>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-9 shrink-0 rounded-xl border-zinc-200 bg-white px-3.5 text-sm font-medium shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                  className="h-9 max-w-[min(100%,14rem)] shrink-0 gap-1.5 rounded-xl border-zinc-200 bg-white px-3 text-sm font-medium shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                  aria-expanded={teacherPickerOpen}
+                  aria-haspopup="dialog"
                 >
-                  Сонгох
+                  <span className="truncate">
+                    {selectedTeacher.displayName}
+                  </span>
+                  <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
                 align="end"
                 sideOffset={8}
-                className="w-[min(100vw-2rem,18rem)] border-zinc-200 p-3 shadow-lg dark:border-zinc-600"
+                className="w-[min(100vw-2rem,20rem)] border-zinc-200 p-2 shadow-lg dark:border-zinc-600"
               >
-                <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                  Сонголт
+                <p className="px-2 pb-2 text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  Багш сонгох (I / II ээлж · mock)
                 </p>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-                  Энд ирээдүйд хуваарь, анги эсвэл бусад тохиргоог сонгох цэс
-                  гарна. Одоогоор зөвхөн загвар — ямар ч үйлдэл хийгдэхгүй.
+                <p className="mb-2 px-2 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                  Дараа нь DB-аас ачаална. Одоо mock: I ээлж 5 + II ээлж 5 (нийт 10).
                 </p>
+                <ul className="max-h-[min(60vh,16rem)] space-y-0.5 overflow-y-auto">
+                  {MOCK_I_SHIFT_TEACHERS.map((t) => {
+                    const on = t.id === selectedTeacherId;
+                    return (
+                      <li key={t.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTeacherId(t.id);
+                            setTeacherShift(t.shift);
+                            setTeacherPickerOpen(false);
+                          }}
+                          className={cn(
+                            "flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors",
+                            on
+                              ? "bg-sky-50 text-sky-950 dark:bg-sky-950/50 dark:text-sky-50"
+                              : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/80",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
+                              on
+                                ? "border-sky-600 bg-sky-600 text-white dark:border-sky-500 dark:bg-sky-500"
+                                : "border-zinc-300 dark:border-zinc-600",
+                            )}
+                            aria-hidden
+                          >
+                            {on ? (
+                              <Check className="size-2.5" strokeWidth={3} />
+                            ) : null}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-medium">
+                              {t.displayName}
+                            </span>
+                            <span className="mt-0.5 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
+                              {t.roleNote}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </PopoverContent>
             </Popover>
             {pollExamId ? (
@@ -724,6 +887,7 @@ export function AiPersonalExamScheduler({
                 </div>
                 {CALENDAR_LAYERS.map((layer) => {
                   const on = layerOn[layer.id];
+                  const constraintKind = CALENDAR_LAYER_CONSTRAINT[layer.id];
                   return (
                     <button
                       key={layer.id}
@@ -752,6 +916,12 @@ export function AiPersonalExamScheduler({
                         <span className="line-clamp-2 text-[10px] text-zinc-500 dark:text-zinc-400">
                           {layer.role}
                         </span>
+                        <span
+                          className="mt-0.5 line-clamp-1 text-[9px] text-zinc-400 dark:text-zinc-500"
+                          title={constraintLabelMn(constraintKind)}
+                        >
+                          {constraintLabelMn(constraintKind)}
+                        </span>
                       </span>
                       <span
                         className={cn(
@@ -772,7 +942,10 @@ export function AiPersonalExamScheduler({
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col xl:flex-row">
             {/* Төв: цагийн багана + 7 хоногийн тор */}
-            <main className="min-h-[480px] min-w-0 flex-1 overflow-auto border-zinc-200/90 p-3 sm:p-4 xl:rounded-l-3xl xl:border-r xl:bg-zinc-50/30 dark:border-zinc-700/90 dark:xl:bg-zinc-950/40">
+            <main
+              ref={calendarMainRef}
+              className="min-h-[480px] min-w-0 flex-1 overflow-auto border-zinc-200/90 p-3 sm:p-4 xl:rounded-l-3xl xl:border-r xl:bg-zinc-50/30 dark:border-zinc-700/90 dark:xl:bg-zinc-950/40"
+            >
               <div
                 className={cn(
                   panelLight,
@@ -847,6 +1020,75 @@ export function AiPersonalExamScheduler({
                   </div>
                 </div>
 
+                <div
+                  className={cn(
+                    "mb-2 rounded-lg border border-zinc-200/80 bg-zinc-50/80 px-2.5 py-2 text-[10px] leading-snug text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-400",
+                  )}
+                >
+                  <p className="font-semibold text-zinc-800 dark:text-zinc-200">
+                    Цагийн муж (`constants/calendar.ts`)
+                  </p>
+                  <p className="mt-1">
+                    <span className="text-zinc-500 dark:text-zinc-500">
+                      Тор:
+                    </span>{" "}
+                    {CALENDAR_VIEW_CONFIG.dayVisible.start}–
+                    {CALENDAR_VIEW_CONFIG.dayVisible.end} ·{" "}
+                    <span className="text-zinc-500 dark:text-zinc-500">
+                      Critical:
+                    </span>{" "}
+                    {CALENDAR_VIEW_CONFIG.criticalFocus.start}–
+                    {CALENDAR_VIEW_CONFIG.criticalFocus.end}.{" "}
+                    <span className="text-rose-600/90 dark:text-rose-400/90">
+                      Улаан 07:30–07:50
+                    </span>{" "}
+                    (өглөөний бэлтгэл),{" "}
+                    <span className="text-rose-600/90 dark:text-rose-400/90">
+                      13:05–13:25
+                    </span>{" "}
+                    (ээлж солих).
+                  </p>
+                  <div className="mt-2 flex flex-col gap-1.5 border-t border-zinc-200/80 pt-2 dark:border-zinc-700/80 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-[9px] text-zinc-500 dark:text-zinc-500">
+                      I ээлж: ихэвчлэн 10–12 (өглөө). II ээлж: ихэвчлэн 1–5
+                      (~13:15-аас). Сонголтоор хуанли 07:45 эсвэл 12:00 руу
+                      scroll хийнэ.
+                    </p>
+                    <div
+                      className="flex shrink-0 rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-600 dark:bg-zinc-900"
+                      role="group"
+                      aria-label="Багшийн ээлж — хуанлийн анхны төвлөрөл"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={teacherShift === "I"}
+                        onClick={() => setTeacherShift("I")}
+                        className={cn(
+                          "rounded-md px-2 py-1 text-[9px] font-semibold transition-colors",
+                          teacherShift === "I"
+                            ? "bg-sky-600 text-white shadow-sm dark:bg-sky-500"
+                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800",
+                        )}
+                      >
+                        I · Өглөө
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={teacherShift === "II"}
+                        onClick={() => setTeacherShift("II")}
+                        className={cn(
+                          "rounded-md px-2 py-1 text-[9px] font-semibold transition-colors",
+                          teacherShift === "II"
+                            ? "bg-amber-600 text-white shadow-sm dark:bg-amber-600"
+                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800",
+                        )}
+                      >
+                        II · Өдөр
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="mb-2 grid grid-cols-[2.75rem_repeat(7,minmax(0,1fr))] gap-x-1 gap-y-0 border-b border-zinc-200 pb-2 dark:border-zinc-700 sm:grid-cols-[3.25rem_repeat(7,minmax(0,1fr))]">
                   <div
                     className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500"
@@ -886,13 +1128,40 @@ export function AiPersonalExamScheduler({
                       className="relative shrink-0 text-right"
                       style={{ minHeight: GRID_BODY_MIN_H }}
                     >
-                      {hourRows.map((hour) => (
+                      <div
+                        ref={calendarFocusAnchorRef}
+                        className="pointer-events-none absolute left-0 right-0 h-px opacity-0"
+                        style={{
+                          top: `${slotTopPercent(
+                            TEACHER_SHIFT_INITIAL_FOCUS[teacherShift].hour,
+                            TEACHER_SHIFT_INITIAL_FOCUS[teacherShift].minute,
+                          )}%`,
+                        }}
+                        aria-hidden
+                      />
+                      {TIME_SLOT_LABELS.map((row) => (
                         <div
-                          key={hour}
-                          className="flex items-start justify-end border-t border-zinc-100 pr-1 pt-0.5 text-[10px] tabular-nums text-zinc-400 first:border-t-0 first:pt-0 dark:border-zinc-800 dark:text-zinc-500 sm:pr-1.5 sm:text-[11px]"
+                          key={row.key}
+                          className={cn(
+                            "flex items-start justify-end border-t pr-1 pt-0.5 text-[10px] tabular-nums first:border-t-0 first:pt-0 sm:pr-1.5",
+                            row.isHourMark
+                              ? "border-zinc-200 font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-400 sm:text-[11px]"
+                              : "border-zinc-100 text-[9px] text-zinc-400/85 dark:border-zinc-800 dark:text-zinc-500/90",
+                          )}
                           style={{ height: HOUR_PX }}
                         >
-                          {String(hour).padStart(2, "0")}:00
+                          {row.label}
+                        </div>
+                      ))}
+                      {SHIFT_MARKER_LAYOUTS.map((mk) => (
+                        <div
+                          key={mk.at}
+                          className="pointer-events-none absolute right-0 z-[2] max-w-[2.85rem] -translate-y-1/2 text-right sm:max-w-[3.25rem]"
+                          style={{ top: `${mk.topPct}%` }}
+                        >
+                          <span className="inline-block rounded border border-indigo-200 bg-indigo-50/95 px-0.5 py-px text-[7px] font-bold leading-tight text-indigo-700 shadow-sm dark:border-indigo-500/50 dark:bg-indigo-950/80 dark:text-indigo-200 sm:text-[8px]">
+                            {mk.label}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -910,8 +1179,37 @@ export function AiPersonalExamScheduler({
                           className="relative rounded-xl border border-zinc-200/90 bg-zinc-50/80 dark:border-zinc-600/90 dark:bg-zinc-900/50"
                           style={{ minHeight: GRID_BODY_MIN_H }}
                         >
+                          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-[inherit]">
+                            <div
+                              className="absolute inset-x-0 bg-zinc-400/11 dark:bg-zinc-500/20"
+                              style={{
+                                top: `${CALENDAR_BUFFER_BANDS.beforeTopPct}%`,
+                                height: `${CALENDAR_BUFFER_BANDS.beforeHeightPct}%`,
+                              }}
+                            />
+                            <div
+                              className="absolute inset-x-0 bg-zinc-400/11 dark:bg-zinc-500/20"
+                              style={{
+                                top: `${CALENDAR_BUFFER_BANDS.afterTopPct}%`,
+                                height: `${CALENDAR_BUFFER_BANDS.afterHeightPct}%`,
+                              }}
+                            />
+                            {CALENDAR_OVERLAY_LAYOUTS.map((z) => (
+                              <div
+                                key={z.id}
+                                className="calendar-red-zone-stripes pointer-events-auto absolute inset-x-0 z-[1] cursor-help border-y border-rose-300/35 dark:border-rose-800/45"
+                                style={{
+                                  top: `${z.topPct}%`,
+                                  height: `${z.heightPct}%`,
+                                }}
+                                title={z.tooltip ?? z.label}
+                                aria-label={z.tooltip}
+                                role="img"
+                              />
+                            ))}
+                          </div>
                           <div
-                            className="scheduler-hour-grid-bg pointer-events-none absolute inset-0 rounded-[inherit]"
+                            className="scheduler-slot-grid-bg pointer-events-none absolute inset-0 z-0 rounded-[inherit]"
                             aria-hidden
                           />
                           {layerOn.school_event && colIdx === 5 ? (
@@ -935,81 +1233,127 @@ export function AiPersonalExamScheduler({
                             </div>
                           ) : null}
 
-                          {layerOn.primary && colIdx === 0 ? (
+                          {activePrimaryLessons
+                            .filter(
+                              (lesson) =>
+                                layerOn.primary &&
+                                lesson.colIdx === colIdx &&
+                                lesson.slotVariant !== "free",
+                            )
+                            .map((lesson) => {
+                              const v = lesson.slotVariant ?? "default";
+                              const card = primaryLessonCardModel(lesson, {
+                                cabinetRoom: selectedTeacher.cabinetRoom,
+                              });
+                              return (
+                                <div
+                                  key={`${selectedTeacherId}-${lesson.colIdx}-${lesson.periodLabel}-${lesson.startH}-${lesson.startM}`}
+                                  title={card.tooltip}
+                                  className={cn(
+                                    "absolute left-1 right-1 overflow-hidden rounded-xl border shadow-sm",
+                                    v === "default" &&
+                                      "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50",
+                                    v === "free" &&
+                                      "border-dashed border-slate-300/80 bg-slate-50/90 text-slate-700 dark:border-slate-600 dark:bg-slate-900/35 dark:text-slate-200",
+                                    v === "duty" &&
+                                      "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-50",
+                                    lesson.colIdx === 3 && "z-[1]",
+                                    "px-2 py-1.5",
+                                  )}
+                                  style={{
+                                    top: `${slotTopPercent(lesson.startH, lesson.startM)}%`,
+                                    height: `${blockHeightPercent(lesson.startH, lesson.startM, lesson.endH, lesson.endM)}%`,
+                                    /* minHeight бүү тавь: % өндөрөөс их болж цагийн цонхоос зөрөхөөс сэргийлнэ */
+                                    minHeight: 0,
+                                  }}
+                                >
+                                  <div className="relative flex min-h-full flex-col">
+                                    {card.room ? (
+                                      <span
+                                        className={cn(
+                                          "pointer-events-none absolute right-0 top-0 z-[1] max-w-[46%] truncate rounded-bl-md rounded-tr-[10px] border px-1 py-px text-[7px] font-bold tabular-nums leading-none tracking-wide",
+                                          v === "default" &&
+                                            "border-sky-400/55 bg-white/95 text-sky-950 dark:border-sky-500/50 dark:bg-sky-950/90 dark:text-sky-50",
+                                        )}
+                                        title={`Өрөө ${card.room}`}
+                                      >
+                                        {card.room}
+                                      </span>
+                                    ) : null}
+                                    <div
+                                      className={cn(
+                                        "flex shrink-0 flex-col gap-1",
+                                        card.room ? "pr-9" : "",
+                                      )}
+                                    >
+                                      <div
+                                        className={cn(
+                                          "shrink-0 truncate text-[13px] font-bold leading-tight tracking-tight",
+                                          v === "duty" &&
+                                            "text-[12px] leading-snug",
+                                        )}
+                                      >
+                                        {card.headline}
+                                      </div>
+                                      {card.subline ? (
+                                        <div
+                                          className={cn(
+                                            "shrink-0 truncate text-[10px] font-medium leading-normal",
+                                            v === "default" &&
+                                              "text-sky-800/95 dark:text-sky-100/90",
+                                          )}
+                                        >
+                                          {card.subline}
+                                        </div>
+                                      ) : null}
+                                      <div
+                                        className={cn(
+                                          "shrink-0 text-[10px] font-normal tabular-nums leading-4",
+                                          v === "default" &&
+                                            "text-sky-700/90 dark:text-sky-300/95",
+                                          v === "duty" &&
+                                            "text-amber-900/85 dark:text-amber-200/90",
+                                        )}
+                                      >
+                                        {card.timeLine}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                          {layerOn.confirmed_exam &&
+                          colIdx === 3 &&
+                          !(
+                            showJob &&
+                            sameDay &&
+                            !suggested &&
+                            showJob.status === "confirmed"
+                          ) ? (
                             <div
-                              className="absolute left-1 right-1 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
+                              className="absolute left-1 right-1 z-[1] rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-emerald-950 shadow-sm dark:border-emerald-700 dark:bg-emerald-950/45 dark:text-emerald-50"
                               style={{
-                                top: `${slotTopPercent(8, 0)}%`,
-                                minHeight: "52px",
+                                top: `${slotTopPercent(CONFIRMED_EXAM_DEMO.startH, CONFIRMED_EXAM_DEMO.startM)}%`,
+                                height: `${blockHeightPercent(CONFIRMED_EXAM_DEMO.startH, CONFIRMED_EXAM_DEMO.startM, CONFIRMED_EXAM_DEMO.endH, CONFIRMED_EXAM_DEMO.endM)}%`,
+                                minHeight: "48px",
                               }}
                             >
-                              10А · Математик
-                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
-                                {formatLessonWindow(8, 0)} · {LESSON_MINUTES}{" "}
-                                мин
+                              Баталгаажсан шалгалт
+                              <span className="mt-0.5 block font-normal text-emerald-700 dark:text-emerald-300">
+                                {formatBlockDuration(
+                                  CONFIRMED_EXAM_DEMO.startH,
+                                  CONFIRMED_EXAM_DEMO.startM,
+                                  CONFIRMED_EXAM_DEMO.endH,
+                                  CONFIRMED_EXAM_DEMO.endM,
+                                )}
+                              </span>
+                              <span className="mt-0.5 block text-[9px] font-normal text-emerald-600/90 dark:text-emerald-400/90">
+                                Сурагчдад зарлагдсан · 10А · Алгебр
                               </span>
                             </div>
                           ) : null}
-                          {layerOn.primary && colIdx === 1 ? (
-                            <div
-                              className="absolute left-1 right-1 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
-                              style={{
-                                top: `${slotTopPercent(10, 0)}%`,
-                                minHeight: "52px",
-                              }}
-                            >
-                              10А · Геометр
-                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
-                                {formatLessonWindow(10, 0)} · {LESSON_MINUTES}{" "}
-                                мин
-                              </span>
-                            </div>
-                          ) : null}
-                          {layerOn.primary && colIdx === 2 ? (
-                            <div
-                              className="absolute left-1 right-1 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
-                              style={{
-                                top: `${slotTopPercent(13, 0)}%`,
-                                minHeight: "52px",
-                              }}
-                            >
-                              10А · Математик
-                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
-                                {formatLessonWindow(13, 0)} · {LESSON_MINUTES}{" "}
-                                мин
-                              </span>
-                            </div>
-                          ) : null}
-                          {layerOn.primary && colIdx === 3 ? (
-                            <div
-                              className="absolute left-1 right-1 z-[1] rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
-                              style={{
-                                top: `${slotTopPercent(9, 0)}%`,
-                                minHeight: "52px",
-                              }}
-                            >
-                              10А · Геометр
-                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
-                                {formatLessonWindow(9, 0)} · {LESSON_MINUTES}{" "}
-                                мин
-                              </span>
-                            </div>
-                          ) : null}
-                          {layerOn.primary && colIdx === 4 ? (
-                            <div
-                              className="absolute left-1 right-1 rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-sky-950 shadow-sm dark:border-sky-700 dark:bg-sky-950/45 dark:text-sky-50"
-                              style={{
-                                top: `${slotTopPercent(15, 0)}%`,
-                                minHeight: "52px",
-                              }}
-                            >
-                              10А · Математик
-                              <span className="mt-0.5 block font-normal text-sky-700 dark:text-sky-300">
-                                {formatLessonWindow(15, 0)} · {LESSON_MINUTES}{" "}
-                                мин
-                              </span>
-                            </div>
-                          ) : null}
+
                           {layerOn.conflict && colIdx === 3 ? (
                             <div
                               className="absolute left-1 right-1 top-[32%] z-[2] rounded-xl border border-rose-200 bg-rose-50 px-2 py-1.5 text-[10px] font-medium leading-tight text-rose-950 shadow-sm ring-1 ring-rose-100"
@@ -1024,13 +1368,37 @@ export function AiPersonalExamScheduler({
 
                           {layerOn.personal && colIdx === 6 ? (
                             <div
-                              className="absolute left-1 right-1 top-[48%] z-[1] rounded-xl border border-slate-300/80 bg-slate-100/95 px-2 py-1.5 text-[10px] text-slate-800 shadow-sm ring-1 ring-slate-200/70"
+                              className="absolute left-1 right-1 top-[48%] z-[1] rounded-xl border border-slate-300/80 bg-slate-100/95 px-2 py-1.5 text-[10px] text-slate-800 shadow-sm ring-1 ring-slate-300/50 dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-100 dark:ring-slate-600/60"
                               style={{ minHeight: "44px" }}
                               title="Юу гэдэг нь харагдахгүй — зөвхөн Завгүй"
                             >
-                              <span className="font-medium">Завгүй</span>
-                              <span className="mt-0.5 block text-[9px] font-normal text-slate-500">
+                              <span className="font-medium">Хувийн</span>
+                              <span className="mt-0.5 block text-[9px] font-normal text-slate-500 dark:text-slate-400">
                                 Busy · Google Calendar (дэлгэрүүлэхгүй)
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {layerOn.ai_draft && colIdx === 2 && !suggested ? (
+                            <div
+                              className="absolute left-1 right-1 z-[1] rounded-xl border-2 border-dashed border-violet-400/90 bg-violet-50/95 px-2 py-1.5 text-[10px] font-semibold leading-tight text-violet-950 opacity-90 shadow-sm ring-1 ring-violet-200/70 dark:border-violet-500 dark:bg-violet-950/40 dark:text-violet-100 dark:ring-violet-800/50"
+                              style={{
+                                top: `${slotTopPercent(AI_DRAFT_DEMO.startH, AI_DRAFT_DEMO.startM)}%`,
+                                height: `${blockHeightPercent(AI_DRAFT_DEMO.startH, AI_DRAFT_DEMO.startM, AI_DRAFT_DEMO.endH, AI_DRAFT_DEMO.endM)}%`,
+                                minHeight: "52px",
+                              }}
+                            >
+                              AI-ийн санал
+                              <span className="mt-0.5 block font-normal text-violet-700 dark:text-violet-300">
+                                {formatBlockDuration(
+                                  AI_DRAFT_DEMO.startH,
+                                  AI_DRAFT_DEMO.startM,
+                                  AI_DRAFT_DEMO.endH,
+                                  AI_DRAFT_DEMO.endM,
+                                )}
+                              </span>
+                              <span className="mt-0.5 block text-[9px] font-normal text-violet-600/90 dark:text-violet-400/90">
+                                Draft — Confirm дарвал баталгаажна
                               </span>
                             </div>
                           ) : null}
@@ -1038,19 +1406,19 @@ export function AiPersonalExamScheduler({
                           {layerOn.ai_draft && suggested && colIdx === 2 ? (
                             <>
                               <div
-                                className="absolute left-0.5 right-0.5 z-10 w-[calc(100%-4px)] -rotate-2 rounded-xl border-2 border-dashed border-violet-400 bg-violet-50 px-2 py-2 text-[10px] font-semibold leading-tight text-violet-950 shadow-md shadow-violet-200/60 ring-1 ring-violet-200/80"
+                                className="absolute left-0.5 right-0.5 z-10 w-[calc(100%-4px)] -rotate-2 rounded-xl border-2 border-dashed border-violet-400 bg-violet-50 px-2 py-2 text-[10px] font-semibold leading-tight text-violet-950 shadow-md shadow-violet-200/60 ring-1 ring-violet-200/80 dark:border-violet-500 dark:bg-violet-950/50 dark:text-violet-100 dark:shadow-violet-900/40 dark:ring-violet-800/60"
                                 style={{ top: "18%", minHeight: "72px" }}
                               >
                                 AI Draft Slots
-                                <span className="mt-0.5 block font-normal text-violet-700">
+                                <span className="mt-0.5 block font-normal text-violet-700 dark:text-violet-300">
                                   AI-ийн оновчтой цаг · тасархай хүрээ
                                 </span>
-                                <span className="mt-1 block text-[9px] font-normal text-violet-600/90">
+                                <span className="mt-1 block text-[9px] font-normal text-violet-600/90 dark:text-violet-400/90">
                                   Confirm дарвал ногоон (Confirmed) болно
                                 </span>
                               </div>
                               <svg
-                                className="pointer-events-none absolute left-[40%] top-[32%] z-5 h-16 w-24 text-violet-500"
+                                className="pointer-events-none absolute left-[40%] top-[32%] z-5 h-16 w-24 text-violet-500 dark:text-violet-400"
                                 viewBox="0 0 96 64"
                                 fill="none"
                                 aria-hidden
@@ -1070,7 +1438,7 @@ export function AiPersonalExamScheduler({
                                 />
                               </svg>
                               <div
-                                className="absolute left-1 right-1 top-[58%] rounded-xl border-2 border-dashed border-violet-300/90 bg-violet-50/70 px-2 py-1.5 text-center text-[9px] font-medium text-violet-900"
+                                className="absolute left-1 right-1 top-[58%] rounded-xl border-2 border-dashed border-violet-300/90 bg-violet-50/70 px-2 py-1.5 text-center text-[9px] font-medium text-violet-900 dark:border-violet-600 dark:bg-violet-950/35 dark:text-violet-200"
                                 style={{ height: "44px" }}
                               >
                                 Сул цонх
@@ -1147,13 +1515,15 @@ export function AiPersonalExamScheduler({
                     textDim,
                   )}
                 >
-                  AI-Powered Operations Center: усан цэнхэр үндсэн хичээл
-                  (жишээ {LESSON_MINUTES} мин, завсар {BREAK_MINUTES} мин),
-                  Дав–Баас өөр өөр цагийн эхлэл, ногоон баталгаажсан шалгалт,
-                  нил ягаан тасархай AI Draft (Confirm дарвал ногоон давхарганд
-                  шилжинэ), саарал хувийн синк (Завгүй / Google Calendar),
-                  цайвар шар сургуулийн эвент (цаг + мин), улаан зөрчил
-                  (давхцал). Жишээ + job; бүрэн sync биш.
+                  AI-Powered Operations Center: хуанлийн тор{" "}
+                  {CALENDAR_VIEW_CONFIG.dayVisible.start}–
+                  {CALENDAR_VIEW_CONFIG.dayVisible.end}, critical{" "}
+                  {CALENDAR_VIEW_CONFIG.criticalFocus.start}–
+                  {CALENDAR_VIEW_CONFIG.criticalFocus.end}, улаан түгжрэлийн
+                  overlay constants/calendar.ts-аас. Усан цэнхэр үндсэн хичээл
+                  (I/II ээлж · {LESSON_MINUTES} мин/цаг, завсар 5–15 мин),
+                  баталгаажсан шалгалт, AI Draft, хувийн синк, сургуулийн эвент,
+                  зөрчил. Жишээ + job; бүрэн sync биш.
                 </p>
               </div>
             </main>
@@ -1255,6 +1625,16 @@ export function AiPersonalExamScheduler({
                   </div>
                 ) : (
                   <div className="space-y-3">
+                    <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/50 px-3 py-2.5 dark:border-indigo-500/25 dark:bg-indigo-950/30">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800 dark:text-indigo-200">
+                        Intelligent Buffer · замын зураг
+                      </p>
+                      <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[10px] leading-snug text-indigo-900/90 dark:text-indigo-100/85">
+                        {INTELLIGENT_BUFFER_ROADMAP_MN.map((line, i) => (
+                          <li key={`ib-${i}`}>{line}</li>
+                        ))}
+                      </ul>
+                    </div>
                     {pollExamId ? (
                       <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
                         <Loader2 className="size-3.5 animate-spin text-blue-600 dark:text-blue-400" />

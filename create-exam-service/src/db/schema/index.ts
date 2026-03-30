@@ -7,3 +7,4 @@ export * from "./tables/examQuestions";
 export * from "./tables/masterTimetable";
 export * from "./tables/newExams";
 export * from "./tables/newExamQuestions";
+export * from "./tables/schoolCalendarEvents";
