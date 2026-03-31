@@ -100,6 +100,7 @@ export const typeDefs = /* GraphQL */ `
     summary: String!
     strengths: [String!]!
     improvements: [String!]!
+    source: String
   }
 
   type QuestionResult {
@@ -113,6 +114,7 @@ export const typeDefs = /* GraphQL */ `
     pointsAwarded: Int!
     maxPoints: Int!
     explanation: String
+    explanationSource: String
     dwellMs: Int
     answerChangeCount: Int
   }
@@ -134,6 +136,7 @@ export const typeDefs = /* GraphQL */ `
     questionType: String!
     selectedOptionId: String
     selectedAnswerText: String
+    correctAnswerText: String
     points: Int!
     responseGuide: String
     dwellMs: Int
@@ -218,7 +221,7 @@ export const typeDefs = /* GraphQL */ `
     startExam(testId: String!, studentId: String!, studentName: String!): StartExamPayload!
     resumeExam(attemptId: String!): StartExamPayload!
     submitAnswers(attemptId: String!, answers: [AnswerInput!]!, finalize: Boolean!): SubmitAnswersPayload!
-    approveAttempt(attemptId: String!): Boolean!
+    approveAttempt(attemptId: String!, review: AttemptReviewInput): Boolean!
     logAttemptActivity(attemptId: String!, input: AttemptActivityInput!): Boolean!
     logQuestionMetrics(attemptId: String!, input: [QuestionMetricInput!]!): Boolean!
   }
@@ -240,6 +243,19 @@ export const typeDefs = /* GraphQL */ `
     questionId: ID!
     dwellMs: Int
     answerChangeCount: Int
+  }
+
+  input AttemptQuestionReviewInput {
+    questionId: ID!
+    correctOptionId: String
+    explanation: String
+    isCorrect: Boolean
+    maxPoints: Int
+    pointsAwarded: Int
+  }
+
+  input AttemptReviewInput {
+    questionReviews: [AttemptQuestionReviewInput!]!
   }
 `;
 

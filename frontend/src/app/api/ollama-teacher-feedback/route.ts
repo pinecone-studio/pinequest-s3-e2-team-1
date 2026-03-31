@@ -97,10 +97,41 @@ async function fetchOllamaStatus(baseUrl: string, model: string, apiKey?: string
       headers: buildOllamaHeaders(apiKey),
     });
 
-    const payload = (await response.json()) as {
+    const rawText = await response.text();
+    const trimmedText = rawText.trim();
+    let payload: {
       error?: string;
       models?: Array<{ name?: string | null }>;
-    };
+    } | null = null;
+
+    if (trimmedText) {
+      try {
+        payload = JSON.parse(trimmedText) as {
+          error?: string;
+          models?: Array<{ name?: string | null }>;
+        };
+      } catch {
+        payload = null;
+      }
+    }
+
+    if (!payload) {
+      return {
+        baseUrl,
+        error:
+          response.status === 1016
+            ? "Ollama upstream host олдсонгүй (Cloudflare 1016)."
+            : `Ollama JSON биш хариу буцаалаа (${response.status}).`,
+        hasApiKey: Boolean(apiKey),
+        lastCheckedAt: checkedAt,
+        model,
+        modelAvailable: false,
+        models: [],
+        reachable: false,
+        remote: !baseUrl.includes("127.0.0.1") && !baseUrl.includes("localhost"),
+      };
+    }
+
     const models = (payload.models ?? [])
       .map((item) => item.name?.trim())
       .filter((value): value is string => Boolean(value));

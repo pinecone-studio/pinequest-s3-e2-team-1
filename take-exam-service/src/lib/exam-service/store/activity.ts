@@ -144,7 +144,10 @@ export const listLiveMonitoringFeed = async (
 
 	return rows.flatMap((row) => {
 		const attempt = attemptById.get(row.attemptId);
-		if (!attempt) {
+		if (
+			!attempt ||
+			(attempt.status !== "in_progress" && attempt.status !== "processing")
+		) {
 			return [];
 		}
 

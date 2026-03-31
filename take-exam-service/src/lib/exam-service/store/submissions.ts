@@ -15,8 +15,13 @@ import {
 import { computeProgress, countAnsweredQuestions } from "./common";
 import type { SubmissionQueueMessage } from "./internal-types";
 import { persistAnswerUpdates } from "./persistence";
-import { generateAttemptFeedback, stringifyAttemptFeedback } from "./feedback";
+import {
+	enrichResultWithQuestionFeedback,
+	generateAttemptFeedback,
+	stringifyAttemptFeedback,
+} from "./feedback";
 import { computeResult, getAttemptResults } from "./results";
+import { parseStoredTeacherResult } from "./teacher-sync";
 import { syncAttemptSubmissionToTeacherService } from "./teacher-sync";
 
 type AiBinding = {
@@ -75,7 +80,18 @@ const finalizeLocalAttempt = async (
 		submittedAt,
 	);
 	const resultRows = await getAttemptResults(db, attemptId);
-	const result = computeResult(resultRows);
+	const result = await enrichResultWithQuestionFeedback(
+		resultRows,
+		computeResult(resultRows),
+		{
+			ai: options.ai,
+			geminiApiKey: options.geminiApiKey,
+			geminiModel: options.geminiModel,
+			ollamaApiKey: options.ollamaApiKey,
+			ollamaBaseUrl: options.ollamaBaseUrl,
+			ollamaModel: options.ollamaModel,
+		},
+	);
 
 	await db.update(schema.attempts).set({
 		status: "approved",
@@ -83,6 +99,7 @@ const finalizeLocalAttempt = async (
 		score: result.score,
 		maxScore: result.maxScore,
 		percentage: result.percentage,
+		teacherResultJson: JSON.stringify(result),
 	}).where(eq(schema.attempts.id, attemptId));
 
 	await cacheAttemptState(options.kv, {
@@ -154,10 +171,15 @@ export const submitExamAnswers = async (
 		attemptState.status === "approved" ||
 		attemptState.status === "processing"
 	) {
+		const attempt = await db.query.attempts.findFirst({
+			where: eq(schema.attempts.id, attemptId),
+			columns: { teacherResultJson: true },
+		});
 		const resultRows = await getAttemptResults(db, attemptId);
 		const result =
 			attemptState.status === "approved"
-				? computeResult(resultRows)
+				? parseStoredTeacherResult(attempt?.teacherResultJson) ??
+					computeResult(resultRows)
 				: undefined;
 		const progress = computeProgress(
 			resultRows.filter((row) => row.selectedOptionId).length,

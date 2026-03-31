@@ -5,6 +5,7 @@ fragment FrontendDashboardAttemptFields on AttemptSummary {
   studentId
   studentName
   status
+  answerKeySource
   score
   maxScore
   percentage
@@ -33,19 +34,39 @@ fragment FrontendDashboardAttemptFields on AttemptSummary {
     unansweredCount
     questionResults {
       questionId
+      prompt
+      competency
+      questionType
       selectedOptionId
       correctOptionId
       isCorrect
       pointsAwarded
       maxPoints
       explanation
+      explanationSource
+      dwellMs
+      answerChangeCount
     }
+  }
+  answerReview {
+    questionId
+    prompt
+    competency
+    questionType
+    selectedOptionId
+    selectedAnswerText
+    correctAnswerText
+    points
+    responseGuide
+    dwellMs
+    answerChangeCount
   }
   feedback {
     headline
     summary
     strengths
     improvements
+    source
   }
 }
 
@@ -78,6 +99,7 @@ fragment FrontendDashboardAvailableTestFields on Test {
   id
   title
   description
+  answerKeySource
   updatedAt
   criteria {
     gradeLevel

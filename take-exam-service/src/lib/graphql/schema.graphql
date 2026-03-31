@@ -96,6 +96,7 @@ type AttemptFeedback {
   summary: String!
   strengths: [String!]!
   improvements: [String!]!
+  source: String
 }
 
 type QuestionResult {
@@ -109,6 +110,7 @@ type QuestionResult {
   pointsAwarded: Int!
   maxPoints: Int!
   explanation: String
+  explanationSource: String
   dwellMs: Int
   answerChangeCount: Int
 }
@@ -130,6 +132,7 @@ type AttemptAnswerReviewItem {
   questionType: String!
   selectedOptionId: String
   selectedAnswerText: String
+  correctAnswerText: String
   points: Int!
   responseGuide: String
   dwellMs: Int
@@ -214,7 +217,7 @@ type Mutation {
   startExam(testId: String!, studentId: String!, studentName: String!): StartExamPayload!
   resumeExam(attemptId: String!): StartExamPayload!
   submitAnswers(attemptId: String!, answers: [AnswerInput!]!, finalize: Boolean!): SubmitAnswersPayload!
-  approveAttempt(attemptId: String!): Boolean!
+  approveAttempt(attemptId: String!, review: AttemptReviewInput): Boolean!
   logAttemptActivity(attemptId: String!, input: AttemptActivityInput!): Boolean!
   logQuestionMetrics(attemptId: String!, input: [QuestionMetricInput!]!): Boolean!
 }
@@ -236,4 +239,17 @@ input QuestionMetricInput {
   questionId: ID!
   dwellMs: Int
   answerChangeCount: Int
+}
+
+input AttemptQuestionReviewInput {
+  questionId: ID!
+  correctOptionId: String
+  explanation: String
+  isCorrect: Boolean
+  maxPoints: Int
+  pointsAwarded: Int
+}
+
+input AttemptReviewInput {
+  questionReviews: [AttemptQuestionReviewInput!]!
 }

@@ -7,7 +7,10 @@ import {
 } from "./student-page-api";
 import type { StartExamResponse } from "@/lib/exam-service/types";
 
-export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
+export function useExamMonitoring(
+  activeAttempt: StartExamResponse | null,
+  enabled = true,
+) {
   const [now, setNow] = useState(Date.now());
   const activityCooldownRef = useRef<Record<string, number>>({});
   const activeAttemptRef = useRef<StartExamResponse | null>(null);
@@ -40,7 +43,7 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       title,
     }: AttemptActivityInput & { cooldownMs?: number }) => {
       const attempt = activeAttemptRef.current;
-      if (!attempt) return;
+      if (!attempt || !enabled) return;
 
       const nowTs = Date.now();
       const lastLoggedAt = activityCooldownRef.current[code] ?? 0;
@@ -94,21 +97,10 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       const nextCount = (questionViewCountsRef.current[questionId] ?? 0) + 1;
       questionViewCountsRef.current[questionId] = nextCount;
 
-      if (nextCount === 1) {
-        void recordAttemptActivity({
-          code: "question-view",
-          cooldownMs: 0,
-          detail: `${index}/${totalQuestions} асуултыг нээлээ.`,
-          severity: "info",
-          title: "Question view",
-        });
-        return;
-      }
-
       if (nextCount === 3 || nextCount === 5) {
         void recordAttemptActivity({
           code: "question-revisit",
-          cooldownMs: 0,
+          cooldownMs: 15_000,
           detail: `${index}/${totalQuestions} асуулт руу ${nextCount} дахь удаагаа буцаж орлоо.`,
           severity: nextCount >= 5 ? "warning" : "info",
           title: "Question revisit",
@@ -137,14 +129,14 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
   };
 
   useEffect(() => {
-    if (!activeAttempt) return;
+    if (!activeAttempt || !enabled) return;
 
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [activeAttempt]);
+  }, [activeAttempt, enabled]);
 
   useEffect(() => {
-    if (!activeAttempt) {
+    if (!activeAttempt || !enabled) {
       focusLossStartedAtRef.current = null;
       lastInteractionAtRef.current = Date.now();
       questionViewCountsRef.current = {};
@@ -167,10 +159,10 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       severity: "info",
       title: "Session open",
     });
-  }, [activeAttempt, recordAttemptActivity]);
+  }, [activeAttempt, enabled, recordAttemptActivity]);
 
   useEffect(() => {
-    if (!activeAttempt) {
+    if (!activeAttempt || !enabled) {
       return;
     }
 
@@ -218,7 +210,7 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
 
       void recordAttemptActivity({
         code: "parallel-tab-suspected",
-        cooldownMs: 5_000,
+        cooldownMs: 60_000,
         detail: "Ижил шалгалт өөр tab дээр нээгдсэн байж магадгүй.",
         severity: "danger",
         title: "Another tab",
@@ -246,7 +238,7 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       ) {
         void recordAttemptActivity({
           code: "fullscreen-not-active",
-          cooldownMs: 5_000,
+          cooldownMs: 60_000,
           detail: "Fullscreen идэвхжээгүй байна.",
           severity: "warning",
           title: "Fullscreen",
@@ -256,7 +248,7 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       if (isSplitViewLikely(window.innerWidth, window.innerHeight)) {
         void recordAttemptActivity({
           code: "split-view-suspected",
-          cooldownMs: 5_000,
+          cooldownMs: 60_000,
           detail: "Цонх хувааж нээсэн байж магадгүй.",
           severity: "warning",
           title: "Split view",
@@ -294,11 +286,11 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       if (document.hidden) {
         focusLossStartedAtRef.current = Date.now();
         void recordAttemptActivity({
-          code: "visibility-hidden",
+          code: "tab_hidden",
           cooldownMs: 2_000,
           detail: "Tab солилоо.",
-          severity: "danger",
-          title: "Tab",
+          severity: "warning",
+          title: "Tab hidden",
         });
         return;
       }
@@ -312,21 +304,21 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       const awaySeconds = Math.max(1, Math.round((Date.now() - lostAt) / 1000));
       focusLossStartedAtRef.current = null;
       void recordAttemptActivity({
-        code: "visibility-return",
+        code: "tab_visible",
         cooldownMs: 0,
         detail: `Tab руу ${awaySeconds} сек дараа буцаж орлоо.`,
         severity: awaySeconds >= 15 ? "warning" : "info",
-        title: "Tab return",
+        title: "Tab visible",
       });
     };
 
     const handleBlur = () => {
       focusLossStartedAtRef.current = focusLossStartedAtRef.current ?? Date.now();
       void recordAttemptActivity({
-        code: "window-blur",
+        code: "window_blur",
         cooldownMs: 2_000,
         detail: "Фокус алдагдлаа.",
-        severity: "danger",
+        severity: "warning",
         title: "Window blur",
       });
     };
@@ -341,11 +333,11 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       const awaySeconds = Math.max(1, Math.round((Date.now() - lostAt) / 1000));
       focusLossStartedAtRef.current = null;
       void recordAttemptActivity({
-        code: "window-focus-return",
+        code: "window_focus",
         cooldownMs: 0,
         detail: `Фокус ${awaySeconds} сек алдагдсаны дараа сэргэлээ.`,
         severity: awaySeconds >= 15 ? "warning" : "info",
-        title: "Focus return",
+        title: "Window focus",
       });
     };
 
@@ -353,7 +345,7 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       if (document.fullscreenElement) return;
       void recordAttemptActivity({
         code: "fullscreen-exit",
-        cooldownMs: 2_000,
+        cooldownMs: 60_000,
         detail: "Fullscreen-ээс гарлаа.",
         severity: "danger",
         title: "Fullscreen",
@@ -394,7 +386,7 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       if (widthGap > 160 || heightGap > 160) {
         void recordAttemptActivity({
           code: "devtools-suspected",
-          cooldownMs: 6_000,
+          cooldownMs: 30_000,
           detail: "DevTools нээгдсэн байж магадгүй.",
           severity: "danger",
           title: "DevTools",
@@ -449,7 +441,7 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       if (isSplitViewLikely(nextViewport.width, nextViewport.height)) {
         void recordAttemptActivity({
           code: "split-view-suspected",
-          cooldownMs: 4_000,
+          cooldownMs: 60_000,
           detail: "Цонх хувааж нээсэн байж магадгүй.",
           severity: "warning",
           title: "Split view",
@@ -522,7 +514,7 @@ export function useExamMonitoring(activeAttempt: StartExamResponse | null) {
       broadcastChannelRef.current = null;
       viewportRef.current = null;
     };
-  }, [activeAttempt, recordAttemptActivity]);
+  }, [activeAttempt, enabled, recordAttemptActivity]);
 
   const resetActivityTracking = () => {
     activityCooldownRef.current = {};

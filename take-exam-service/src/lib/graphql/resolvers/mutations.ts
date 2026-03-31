@@ -1,7 +1,9 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createDb } from "@/lib/db";
 import { ensureExamSchema } from "@/lib/db/bootstrap";
+import { publishAttemptRealtimeUpdate } from "@/lib/exam-service/realtime";
 import type {
+	AttemptReviewPayload,
 	AttemptQuestionMetricInput,
 	ExamAnswerInput,
 	ProctoringEventSeverity,
@@ -10,6 +12,7 @@ import type {
 import {
 	approveAttempt,
 	importExternalNewMathExam,
+	invalidateAttemptsSummaryCache,
 	logAttemptActivity,
 	resumeExamAttempt,
 	savePublishedTest,
@@ -29,6 +32,9 @@ type ResolverEnv = {
 	OLLAMA_API_KEY?: string;
 	OLLAMA_BASE_URL?: string;
 	OLLAMA_MODEL?: string;
+	ABLY_API_KEY?: string;
+	ABLY_REST_URL?: string;
+	ABLY_CHANNEL_PREFIX?: string;
 	AI?: {
 		run: (
 			model: string,
@@ -109,9 +115,18 @@ export const mutations = {
 			await importExternalNewMathExam(db, testId, env.EXAM_CACHE);
 		}
 
-		return toGraphqlStartExamPayload(
-			await startExamAttempt(db, testId, studentId, studentName, env.EXAM_CACHE),
+		const payload = await startExamAttempt(
+			db,
+			testId,
+			studentId,
+			studentName,
+			env.EXAM_CACHE,
 		);
+		await invalidateAttemptsSummaryCache(env.EXAM_CACHE);
+		await publishAttemptRealtimeUpdate(db, env, payload.attemptId, "attempt.started", {
+			source: "startExam",
+		});
+		return toGraphqlStartExamPayload(payload);
 	},
 	resumeExam: async (
 		_parent: unknown,
@@ -139,7 +154,7 @@ export const mutations = {
 		const env = getResolverEnv();
 		const db = createDb(env.DB);
 		await ensureExamSchema(env.DB);
-		return submitExamAnswers(
+		const payload = await submitExamAnswers(
 			db,
 			attemptId,
 			answers,
@@ -154,15 +169,43 @@ export const mutations = {
 			getOllamaBaseUrl(env),
 			getOllamaModel(env),
 		);
+		await invalidateAttemptsSummaryCache(env.EXAM_CACHE);
+		await publishAttemptRealtimeUpdate(
+			db,
+			env,
+			attemptId,
+			finalize ? "attempt.submitted" : "attempt.saved",
+			{
+				answerCount: answers.length,
+				finalize,
+			},
+		);
+		return payload;
 	},
 	approveAttempt: async (
 		_parent: unknown,
-		{ attemptId }: { attemptId: string },
+		{
+			attemptId,
+			review,
+		}: { attemptId: string; review?: AttemptReviewPayload },
 	) => {
 		const env = getResolverEnv();
 		const db = createDb(env.DB);
 		await ensureExamSchema(env.DB);
-		await approveAttempt(db, attemptId, env.EXAM_CACHE);
+		await approveAttempt(db, attemptId, {
+			ai: env.AI,
+			geminiApiKey: getGeminiApiKey(env),
+			geminiModel: getGeminiModel(env),
+			kv: env.EXAM_CACHE,
+			ollamaApiKey: getOllamaApiKey(env),
+			ollamaBaseUrl: getOllamaBaseUrl(env),
+			ollamaModel: getOllamaModel(env),
+			review,
+		});
+		await invalidateAttemptsSummaryCache(env.EXAM_CACHE);
+		await publishAttemptRealtimeUpdate(db, env, attemptId, "attempt.approved", {
+			source: "approveAttempt",
+		});
 		return true;
 	},
 	logAttemptActivity: async (
@@ -176,6 +219,12 @@ export const mutations = {
 		const db = createDb(env.DB);
 		await ensureExamSchema(env.DB);
 		await logAttemptActivity(db, attemptId, input);
+		await invalidateAttemptsSummaryCache(env.EXAM_CACHE);
+		await publishAttemptRealtimeUpdate(db, env, attemptId, "monitoring.updated", {
+			code: input.code,
+			severity: input.severity,
+			title: input.title,
+		});
 		return true;
 	},
 	logQuestionMetrics: async (

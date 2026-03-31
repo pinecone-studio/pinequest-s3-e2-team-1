@@ -3,4 +3,5 @@ fragment AttemptFeedbackFields on AttemptFeedback {
   summary
   strengths
   improvements
+  source
 }

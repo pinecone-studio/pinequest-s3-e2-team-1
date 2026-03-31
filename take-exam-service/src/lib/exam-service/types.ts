@@ -84,6 +84,7 @@ export type ExamProgress = {
 export type AttemptStatus = "in_progress" | "processing" | "submitted" | "approved";
 
 export type ProctoringEventSeverity = "info" | "warning" | "danger";
+export type AiContentSource = "ollama" | "gemini" | "cf-ai" | "fallback";
 
 export type AttemptMonitoringEvent = {
 	id: string;
@@ -108,6 +109,20 @@ export type AttemptFeedback = {
 	summary: string;
 	strengths: string[];
 	improvements: string[];
+	source?: AiContentSource;
+};
+
+export type AttemptQuestionReviewInput = {
+	questionId: string;
+	correctOptionId?: string | null;
+	explanation?: string | null;
+	isCorrect?: boolean | null;
+	maxPoints?: number | null;
+	pointsAwarded?: number | null;
+};
+
+export type AttemptReviewPayload = {
+	questionReviews: AttemptQuestionReviewInput[];
 };
 
 export type ExamQuestionResult = {
@@ -121,6 +136,7 @@ export type ExamQuestionResult = {
 	pointsAwarded: number;
 	maxPoints: number;
 	explanation: string;
+	explanationSource?: AiContentSource;
 	dwellMs?: number;
 	answerChangeCount?: number;
 };
@@ -142,6 +158,7 @@ export type AttemptAnswerReviewItem = {
 	questionType: ExamQuestionType;
 	selectedOptionId: string | null;
 	selectedAnswerText?: string | null;
+	correctAnswerText?: string | null;
 	points: number;
 	responseGuide?: string | null;
 	dwellMs?: number;

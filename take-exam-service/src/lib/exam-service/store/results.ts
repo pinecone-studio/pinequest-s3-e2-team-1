@@ -10,6 +10,7 @@ import { getQuestionOptions } from "./common";
 
 export type AttemptResultRow = {
 	answerChangeCount: number | null;
+	answerLatex: string | null;
 	competency: string;
 	dwellMs: number | null;
 	questionId: string;
@@ -29,6 +30,7 @@ export const getAttemptResults = async (
 ): Promise<AttemptResultRow[]> =>
 	db.select({
 		answerChangeCount: schema.attemptQuestionMetrics.answerChangeCount,
+		answerLatex: schema.questions.answerLatex,
 		competency: schema.questions.competency,
 		dwellMs: schema.attemptQuestionMetrics.dwellMs,
 		questionId: schema.questions.id,
@@ -59,6 +61,32 @@ export const getAttemptResults = async (
 		)
 		.where(eq(schema.attempts.id, attemptId));
 
+const getOptionTextById = (
+	options: Array<{ id?: string; text?: string }> | string[],
+	optionId: string | null,
+) => {
+	if (!optionId) {
+		return null;
+	}
+
+	for (const option of options) {
+		if (
+			option &&
+			typeof option === "object" &&
+			"id" in option &&
+			option.id === optionId
+		) {
+			return option.text ?? optionId;
+		}
+
+		if (typeof option === "string" && option === optionId) {
+			return option;
+		}
+	}
+
+	return optionId;
+};
+
 export const getAttemptAnswerReview = async (
 	db: DbClient,
 	attemptId: string,
@@ -73,27 +101,19 @@ export const getAttemptAnswerReview = async (
 			row.questionType === "math"
 				? row.selectedOptionId
 				: Array.isArray(options)
-					? (() => {
-							for (const option of options) {
-								if (
-									option &&
-									typeof option === "object" &&
-									"id" in option &&
-									option.id === row.selectedOptionId
-								) {
-									return option.text ?? row.selectedOptionId;
-								}
-								if (typeof option === "string" && option === row.selectedOptionId) {
-									return option;
-								}
-							}
-							return row.selectedOptionId;
-						})()
+					? getOptionTextById(options, row.selectedOptionId)
 					: row.selectedOptionId;
+		const correctAnswerText =
+			row.questionType === "math"
+				? row.answerLatex ?? row.responseGuide ?? row.correctOptionId ?? null
+				: Array.isArray(options)
+					? getOptionTextById(options, row.correctOptionId)
+					: row.correctOptionId;
 
 		return {
 			answerChangeCount: row.answerChangeCount ?? 0,
 			competency: row.competency,
+			correctAnswerText,
 			dwellMs: row.dwellMs ?? 0,
 			points: row.points,
 			prompt: row.prompt,

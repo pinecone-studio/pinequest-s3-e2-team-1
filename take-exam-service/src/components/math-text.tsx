@@ -51,6 +51,34 @@ const looksLikeMathCandidate = (value: string) => {
   );
 };
 
+const hasCyrillicText = (value: string) => /[А-Яа-яӨөҮүЁё]/u.test(value);
+
+const wrapTrailingLatexRuns = (value: string) =>
+  value.replace(
+    /(\\[A-Za-z][\\A-Za-z0-9\s=+\-*/^_()[\]{}.,|:]+?)(?=(?:\s+[А-Яа-яӨөҮүЁё]|$))/gu,
+    (full) => {
+      const trimmed = full.trim();
+      if (!trimmed || trimmed.includes("$")) {
+        return full;
+      }
+
+      return `$${trimmed}$`;
+    },
+  );
+
+const autoWrapInlineLatex = (value: string) => {
+  if (!value || value.includes("$") || value.includes("\\(") || value.includes("\\[")) {
+    return value;
+  }
+
+  const withWrappedCommands = value.replace(
+    /(\\[A-Za-z]+)(\s*(?:\{[^}]*\}|\[[^\]]*\]))+/g,
+    (full) => `$${full.trim()}$`,
+  );
+
+  return wrapTrailingLatexRuns(withWrappedCommands);
+};
+
 const parseMathSegments = (value: string): MathSegment[] => {
   const segments: MathSegment[] = [];
   let cursor = 0;
@@ -111,7 +139,7 @@ export function MathText({
   text,
 }: MathTextProps) {
   const Component = as;
-  const value = text?.trim();
+  const value = autoWrapInlineLatex(text?.trim() ?? "");
 
   if (!value) {
     return null;
@@ -120,7 +148,9 @@ export function MathText({
   const segments = parseMathSegments(value);
   const hasDelimitedMath = segments.some((segment) => segment.type === "math");
   const wholeMathHtml =
-    !hasDelimitedMath && looksLikeMathCandidate(value)
+    !hasDelimitedMath &&
+    looksLikeMathCandidate(value) &&
+    !hasCyrillicText(value)
       ? renderKatex(value, displayMode)
       : null;
 

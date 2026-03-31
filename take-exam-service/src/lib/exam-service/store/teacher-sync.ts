@@ -4,7 +4,11 @@ import { DbClient } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { cacheAttemptState, resolveAttemptState } from "./cache";
 import { computeProgress, countAnsweredQuestions, createId } from "./common";
-import { generateAttemptFeedback, stringifyAttemptFeedback } from "./feedback";
+import {
+  enrichResultWithQuestionFeedback,
+  generateAttemptFeedback,
+  stringifyAttemptFeedback,
+} from "./feedback";
 import { getAttemptResults } from "./results";
 
 export type TeacherSubmissionPayload = {
@@ -307,7 +311,19 @@ export const importTeacherCheckedAttempt = async (
     throw new Error("externalExamId таарахгүй байна.");
   }
 
-  const result = await buildTeacherCheckedResult(db, payload.attemptId, payload);
+  const resultRows = await getAttemptResults(db, payload.attemptId);
+  const result = await enrichResultWithQuestionFeedback(
+    resultRows,
+    await buildTeacherCheckedResult(db, payload.attemptId, payload),
+    {
+      ai: options.ai,
+      geminiApiKey: options.geminiApiKey,
+      geminiModel: options.geminiModel,
+      ollamaApiKey: options.ollamaApiKey,
+      ollamaBaseUrl: options.ollamaBaseUrl,
+      ollamaModel: options.ollamaModel,
+    },
+  );
   const attemptState = await resolveAttemptState(db, payload.attemptId, options.kv);
   const progress = computeProgress(
     countAnsweredQuestions(attemptState.answers),

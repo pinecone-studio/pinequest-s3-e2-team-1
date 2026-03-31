@@ -19,4 +19,17 @@ fragment AttemptSummaryFields on AttemptSummary {
   feedback {
     ...AttemptFeedbackFields
   }
+  answerReview {
+    questionId
+    prompt
+    competency
+    questionType
+    selectedOptionId
+    selectedAnswerText
+    correctAnswerText
+    points
+    responseGuide
+    dwellMs
+    answerChangeCount
+  }
 }

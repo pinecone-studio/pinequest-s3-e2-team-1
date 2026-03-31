@@ -26,6 +26,7 @@ import {
   getSebFriendlyWarning,
 } from "@/app/_pagecomponents/student-page-utils";
 import { useExamMonitoring } from "@/app/_pagecomponents/use-exam-monitoring";
+import { useExamSessionMonitoring } from "@/app/_pagecomponents/use-exam-session-monitoring";
 import { usePersistedExamAnswers } from "@/app/_pagecomponents/use-persisted-exam-answers";
 import { useSebAccess } from "@/app/_pagecomponents/use-seb-access";
 import { useStudentDashboardData } from "@/app/_pagecomponents/use-student-dashboard-data";
@@ -46,6 +47,7 @@ export default function StudentAppPage() {
     useState<NavigationSection>("dashboard");
   const [error, setError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [isFinalizingAttempt, setIsFinalizingAttempt] = useState(false);
   const autosaveInFlightRef = useRef(false);
   const autoResumeAttemptIdRef = useRef<string | null>(null);
   const mathAnswerCommitTimersRef = useRef<Record<string, number>>({});
@@ -83,11 +85,15 @@ export default function StudentAppPage() {
     resetActivityTracking,
     timeLeftMs,
     trackQuestionView,
-  } = useExamMonitoring(activeAttempt);
+  } = useExamMonitoring(activeAttempt, !isFinalizingAttempt);
   const { answers, clearAnswers, setAnswers } = usePersistedExamAnswers(
     activeAttempt?.attemptId ?? null,
     activeAttempt?.existingAnswers ?? null,
   );
+  const { clearMonitoringState } = useExamSessionMonitoring({
+    attemptId: activeAttempt?.attemptId ?? null,
+    enabled: Boolean(activeAttempt) && !isFinalizingAttempt,
+  });
 
   useAnimatedDocumentTitle("Сурагч Портал");
 
@@ -474,6 +480,10 @@ export default function StudentAppPage() {
         title: finalize ? "Final submit" : "Save progress",
       });
 
+      if (finalize) {
+        setIsFinalizingAttempt(true);
+      }
+
       const submittedProgress = await submitAnswersRequest({
         attemptId: activeAttempt.attemptId,
         answers: payloadAnswers,
@@ -483,6 +493,7 @@ export default function StudentAppPage() {
       setLatestProgress(submittedProgress);
 
       if (finalize) {
+        clearMonitoringState(activeAttempt.attemptId);
         clearAnswers(activeAttempt.attemptId);
         setActiveAttempt(null);
         setFlaggedQuestions({});
@@ -490,13 +501,17 @@ export default function StudentAppPage() {
         resetActivityTracking();
         sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
         setActiveSection("results");
-        await loadDashboardData();
+        await loadDashboardData({ force: true });
       }
     } catch (err) {
+      setIsFinalizingAttempt(false);
       setError(
         err instanceof Error ? err.message : "Хариулт илгээх үед алдаа гарлаа.",
       );
     } finally {
+      if (!finalize) {
+        setIsFinalizingAttempt(false);
+      }
       setIsMutating(false);
     }
   };
@@ -508,6 +523,43 @@ export default function StudentAppPage() {
       : activeSection === "tests"
         ? "Идэвхтэй шалгалтууд"
         : "Шалгалтын дүн";
+
+  useEffect(() => {
+    const shouldPollForDashboard =
+      activeSection === "results" ||
+      latestProgress?.status === "submitted" ||
+      latestProgress?.status === "processing";
+
+    if (
+      activeAttempt ||
+      isInitialLoading ||
+      isMutating ||
+      !selectedStudent ||
+      !shouldPollForDashboard
+    ) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      void loadDashboardData();
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [
+    activeAttempt,
+    activeSection,
+    isInitialLoading,
+    isMutating,
+    latestProgress?.status,
+    loadDashboardData,
+    selectedStudent,
+  ]);
 
   useEffect(() => {
     if (activeAttempt || isInitialLoading || availableStudents.length === 0) {
@@ -707,6 +759,7 @@ export default function StudentAppPage() {
         <StudentPageShell
           activeSection={activeSection}
           activeTestsCount={activeTestsCount}
+          approvedAttempts={approvedAttempts}
           approvedAttemptsCount={approvedAttempts.length}
           averageScore={averageScore}
           availableStudents={availableStudents}

@@ -1,4 +1,8 @@
-export { approveAttempt, listAttempts } from "./admin";
+export {
+	approveAttempt,
+	invalidateAttemptsSummaryCache,
+	listAttempts,
+} from "./admin";
 export { listLiveMonitoringFeed, logAttemptActivity } from "./activity";
 export {
 	importExternalNewMathExam,

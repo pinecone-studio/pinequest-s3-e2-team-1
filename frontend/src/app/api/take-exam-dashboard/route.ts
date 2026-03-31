@@ -21,10 +21,17 @@ const buildProgress = (
   attempt: DashboardQueryData["attempts"][number],
   questionCount: number,
 ) => {
-  const answeredQuestions =
+  const answeredQuestionsFromResult =
     (attempt.result?.correctCount ?? 0) +
     (attempt.result?.incorrectCount ?? 0) +
     (attempt.result?.unansweredCount ?? 0);
+  const answeredQuestionsFromReview = attempt.answerReview?.filter(
+    (item) => item.selectedOptionId || item.selectedAnswerText,
+  ).length ?? 0;
+  const answeredQuestions = Math.max(
+    answeredQuestionsFromResult,
+    answeredQuestionsFromReview,
+  );
   const totalQuestions =
     questionCount > 0
       ? questionCount
@@ -44,14 +51,15 @@ const buildProgress = (
   };
 };
 
-const getDerivedAnswerKeySource = (
-  _testId: string,
-  _attempts: DashboardQueryData["attempts"],
-) => "local";
-
 type GraphQlPayload<T> = {
   data?: T;
   errors?: Array<{ message?: string }>;
+};
+
+type GraphQlFetchResult = {
+  payload: GraphQlPayload<DashboardQueryData> | null;
+  rawText?: string;
+  response: Response;
 };
 
 const hasMissingFieldError = (
@@ -66,7 +74,7 @@ const fetchDashboardPayload = async (
   targetUrl: string,
   query: string,
   variables: Record<string, string | number>,
-) => {
+) : Promise<GraphQlFetchResult> => {
   const response = await fetch(targetUrl, {
     method: "POST",
     headers: {
@@ -79,9 +87,19 @@ const fetchDashboardPayload = async (
     }),
   });
 
-  const payload = (await response.json()) as GraphQlPayload<DashboardQueryData>;
+  const rawText = await response.text();
+  const trimmedText = rawText.trim();
+  let payload: GraphQlPayload<DashboardQueryData> | null = null;
 
-  return { response, payload };
+  if (trimmedText) {
+    try {
+      payload = JSON.parse(trimmedText) as GraphQlPayload<DashboardQueryData>;
+    } catch {
+      payload = null;
+    }
+  }
+
+  return { response, payload, rawText };
 };
 
 export async function GET(request: Request) {
@@ -103,6 +121,7 @@ export async function GET(request: Request) {
     if (
       testId &&
       response.ok &&
+      payload &&
       hasMissingFieldError(payload, "testMaterial")
     ) {
       const fallback = await fetchDashboardPayload(targetUrl, DASHBOARD_QUERY, {
@@ -110,7 +129,7 @@ export async function GET(request: Request) {
       });
 
       response = fallback.response;
-      payload = fallback.payload.data
+      payload = fallback.payload?.data
         ? {
             ...fallback.payload,
             data: {
@@ -119,6 +138,18 @@ export async function GET(request: Request) {
             } as FrontendTakeExamDashboardWithMaterialQuery,
           }
         : fallback.payload;
+    }
+
+    if (!payload) {
+      return NextResponse.json(
+        {
+          message:
+            "Take exam service JSON биш хариу буцаалаа. Deploy URL эсвэл upstream route-аа шалгана уу.",
+          status: response.status,
+          targetUrl,
+        },
+        { status: 502 },
+      );
     }
 
     if (!response.ok || payload.errors?.length || !payload.data) {
@@ -142,7 +173,6 @@ export async function GET(request: Request) {
       ...data,
       availableTests: data.availableTests.map((test) => ({
         ...test,
-        answerKeySource: getDerivedAnswerKeySource(test.id, data.attempts),
       })),
       attempts: data.attempts.map((attempt) => {
         const test = testsById.get(attempt.testId);
@@ -150,7 +180,6 @@ export async function GET(request: Request) {
 
         return {
           ...attempt,
-          answerKeySource: getDerivedAnswerKeySource(attempt.testId, data.attempts),
           criteria: test?.criteria ?? null,
           progress: buildProgress(attempt, totalQuestions),
           monitoring: attempt.monitoring
@@ -165,16 +194,16 @@ export async function GET(request: Request) {
                 ...attempt.result,
                 questionResults: attempt.result.questionResults.map((result) => ({
                   ...result,
-                  prompt: "",
-                  competency: "",
-                  questionType: "unknown",
-                  dwellMs: null,
-                  answerChangeCount: null,
+                  prompt: result.prompt,
+                  competency: result.competency,
+                  questionType: result.questionType,
+                  dwellMs: result.dwellMs ?? null,
+                  answerChangeCount: result.answerChangeCount ?? null,
                 })),
               }
             : null,
           teacherSync: null,
-          answerReview: null,
+          answerReview: attempt.answerReview ?? null,
         };
       }),
       liveMonitoringFeed: data.liveMonitoringFeed.map((item) => ({

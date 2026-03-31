@@ -50,6 +50,7 @@ const MOCK_TESTS: TeacherTestSummary[] = [
 		title: "Явц-1: Физикийн үндэс",
 		description: "Физикийн суурь ойлголтыг шалгана.",
 		criteria: defaultCriteria({
+			className: "12A",
 			subject: "Физик",
 			topic: "Механик",
 			questionCount: 12,
@@ -61,6 +62,7 @@ const MOCK_TESTS: TeacherTestSummary[] = [
 		title: "Бататгах: Past simple tense",
 		description: "Англи хэлний Past Simple дүрмийн шалгалт.",
 		criteria: defaultCriteria({
+			className: "12A",
 			subject: "Англи хэл",
 			topic: "Past Simple",
 			questionCount: 10,
@@ -72,6 +74,7 @@ const MOCK_TESTS: TeacherTestSummary[] = [
 		title: "Хими: Bonding fundamentals",
 		description: "Холбооны үндэс, бодлого шийдэлт.",
 		criteria: defaultCriteria({
+			className: "12B",
 			subject: "Хими",
 			topic: "Bonding",
 			questionCount: 9,
@@ -83,6 +86,7 @@ const MOCK_TESTS: TeacherTestSummary[] = [
 		title: "Математик: Functions",
 		description: "Функцийн үндсэн ойлголт.",
 		criteria: defaultCriteria({
+			className: "12A, 12B",
 			subject: "Математик",
 			topic: "Functions",
 			questionCount: 8,
