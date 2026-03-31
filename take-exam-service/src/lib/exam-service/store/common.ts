@@ -2,7 +2,7 @@ import type { ExamProgress } from "@/lib/exam-service/types";
 
 export const TEST_CACHE_TTL_SECONDS = 60 * 60 * 24;
 export const ATTEMPT_CACHE_TTL_SECONDS = 60 * 60 * 12;
-export const ATTEMPTS_SUMMARY_CACHE_TTL_SECONDS = 8;
+export const ATTEMPTS_SUMMARY_CACHE_TTL_SECONDS = 60;
 export const TEST_CACHE_INDEX_KEY = "tests:index";
 export const ATTEMPTS_SUMMARY_CACHE_KEY = "attempts:summary";
 

@@ -134,6 +134,32 @@ type GetNewMathExamResponse = {
 	getNewMathExam: ExternalNewMathExam | null;
 };
 
+const isLikelyInstructionText = (value: string) => {
+	const normalized = value.trim().toLowerCase();
+	if (!normalized) {
+		return false;
+	}
+
+	return [
+		"бодолтын алхмууд",
+		"алхмуудаа бич",
+		"эцсийн хариуг",
+		"хэлбэрээр өг",
+		"тайлбарла",
+		"write your steps",
+		"show your work",
+	].some((phrase) => normalized.includes(phrase));
+};
+
+const getSanitizedMathAnswerText = (value?: string | null) => {
+	const normalized = value?.trim() || "";
+	if (!normalized || isLikelyInstructionText(normalized)) {
+		return null;
+	}
+
+	return normalized;
+};
+
 export type ImportedExternalExam = {
 	examId: string;
 	importedTestId: string;
@@ -217,7 +243,11 @@ const getExternalCorrectAnswerText = (
 	}
 
 	if (question.type === "MATH") {
-		return question.answerLatex?.trim() || question.responseGuide?.trim() || null;
+		return (
+			getSanitizedMathAnswerText(question.answerLatex) ??
+			getSanitizedMathAnswerText(question.responseGuide) ??
+			null
+		);
 	}
 
 	const correctIndex =
@@ -237,12 +267,12 @@ const getExternalExplanation = (
 	}
 
 	const guide = question.responseGuide?.trim();
-	if (guide) {
+	if (guide && !isLikelyInstructionText(guide)) {
 		return guide;
 	}
 
 	if (question.type === "MATH") {
-		const answer = question.answerLatex?.trim();
+		const answer = getSanitizedMathAnswerText(question.answerLatex);
 		if (answer) {
 			return `Хүлээгдэж буй хариу: ${answer}`;
 		}
@@ -287,7 +317,7 @@ export const hydrateCreateExamServiceAnswerReview = (
 	return (answerReview ?? []).map((item) => {
 		const externalQuestion = questionById.get(item.questionId);
 		const hydratedCorrectAnswerText =
-			item.correctAnswerText?.trim() ||
+			getSanitizedMathAnswerText(item.correctAnswerText) ||
 			getExternalCorrectAnswerText(externalQuestion) ||
 			null;
 		const hydratedResponseGuide =
@@ -481,10 +511,9 @@ export const buildCreateExamServiceResult = async (
 			correctOptionId: "",
 			dwellMs: row.dwellMs ?? 0,
 			explanation:
-				externalQuestion?.responseGuide ??
-				(externalQuestion?.answerLatex
-					? `Хүлээгдэж буй хариу: ${externalQuestion.answerLatex}`
-					: row.responseGuide ?? row.explanation),
+				getExternalExplanation(externalQuestion) ||
+				row.responseGuide ||
+				row.explanation,
 			isCorrect,
 			maxPoints,
 			pointsAwarded: isCorrect ? maxPoints : 0,

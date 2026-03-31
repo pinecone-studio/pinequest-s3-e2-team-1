@@ -8,6 +8,32 @@ import { DbClient } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { getQuestionOptions } from "./common";
 
+const isLikelyInstructionText = (value: string) => {
+	const normalized = value.trim().toLowerCase();
+	if (!normalized) {
+		return false;
+	}
+
+	return [
+		"бодолтын алхмууд",
+		"алхмуудаа бич",
+		"эцсийн хариуг",
+		"хэлбэрээр өг",
+		"тайлбарла",
+		"write your steps",
+		"show your work",
+	].some((phrase) => normalized.includes(phrase));
+};
+
+const getSanitizedMathAnswerText = (value: string | null | undefined) => {
+	const normalized = value?.trim() || "";
+	if (!normalized || isLikelyInstructionText(normalized)) {
+		return null;
+	}
+
+	return normalized;
+};
+
 export type AttemptResultRow = {
 	answerChangeCount: number | null;
 	answerLatex: string | null;
@@ -105,7 +131,10 @@ export const getAttemptAnswerReview = async (
 					: row.selectedOptionId;
 		const correctAnswerText =
 			row.questionType === "math"
-				? row.answerLatex ?? row.responseGuide ?? row.correctOptionId ?? null
+				? getSanitizedMathAnswerText(row.answerLatex) ??
+					getSanitizedMathAnswerText(row.responseGuide) ??
+					getSanitizedMathAnswerText(row.correctOptionId) ??
+					null
 				: Array.isArray(options)
 					? getOptionTextById(options, row.correctOptionId)
 					: row.correctOptionId;
