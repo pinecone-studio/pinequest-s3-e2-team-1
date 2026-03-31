@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLazyQuery, useQuery } from "@apollo/client/react";
 import { useTheme } from "next-themes";
 import {
   addDays,
@@ -11,7 +12,6 @@ import {
   startOfWeek,
 } from "date-fns";
 import { mn } from "date-fns/locale";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -22,6 +22,11 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  GetStudentMainLessonsListDocument,
+  GetStudentsListDocument,
+} from "@/gql/create-exam-documents";
+import type { Student, StudentMainLesson } from "@/gql/graphql";
 import { cn } from "@/lib/utils";
 import {
   CALENDAR_BUFFER_BANDS,
@@ -38,6 +43,7 @@ import {
 import {
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -64,7 +70,11 @@ const WEEKDAY_LETTER_MN: Record<number, string> = {
   7: "Н",
 };
 
-type StudentLayerId = "repetition_confirmed" | "section" | "personal_plan";
+type StudentLayerId =
+  | "class_schedule"
+  | "repetition_confirmed"
+  | "section"
+  | "personal_plan";
 
 type StudentBlock = {
   id: string;
@@ -123,7 +133,10 @@ function SchedulerAppearanceMenu() {
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
           {""}
         </DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={theme ?? "system"} onValueChange={setTheme}>
+        <DropdownMenuRadioGroup
+          value={theme ?? "system"}
+          onValueChange={setTheme}
+        >
           <DropdownMenuRadioItem value="light" className="text-sm">
             <Sun className="size-4" aria-hidden />
             Цайвар
@@ -157,6 +170,13 @@ const LAYER_META: Record<
   StudentLayerId,
   { label: string; swatch: string; cardClass: string; hint: string }
 > = {
+  class_schedule: {
+    label: "Хичээлийн хуваарь",
+    swatch: "bg-blue-500",
+    cardClass:
+      "border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-700 dark:bg-blue-950/45 dark:text-blue-50",
+    hint: "Сонгосон сурагчийн (анги) үндсэн хичээлийн хуваарь",
+  },
   repetition_confirmed: {
     label: "Батлагдсан давтлага",
     swatch: "bg-emerald-500",
@@ -181,7 +201,12 @@ const LAYER_META: Record<
 };
 
 function defaultLayerVisibility(): Record<StudentLayerId, boolean> {
-  return { repetition_confirmed: true, section: true, personal_plan: true };
+  return {
+    class_schedule: true,
+    repetition_confirmed: true,
+    section: true,
+    personal_plan: true,
+  };
 }
 
 function mockStudentBlocks(): StudentBlock[] {
@@ -265,6 +290,12 @@ export function AiStudentPersonalScheduler({
   );
   const [rightTab, setRightTab] = useState<"plan" | "about">("plan");
   const [shift, setShift] = useState<TeacherShiftId>(defaultShift);
+  const [selectedGrade, setSelectedGrade] = useState<"9" | "10" | "11" | "12">(
+    "9",
+  );
+  const [selectedGroup, setSelectedGroup] = useState<"A" | "B" | "C" | "D">("A");
+  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
+  const [studentPickerOpen, setStudentPickerOpen] = useState(false);
 
   const calendarMainRef = useRef<HTMLElement>(null);
   const calendarFocusAnchorRef = useRef<HTMLDivElement>(null);
@@ -298,8 +329,6 @@ export function AiStudentPersonalScheduler({
     { locale: mn },
   )}`;
 
-  const blocks = useMemo(() => mockStudentBlocks(), []);
-
   function toggleLayer(id: StudentLayerId) {
     setLayerOn((p) => ({ ...p, [id]: !p[id] }));
   }
@@ -307,6 +336,112 @@ export function AiStudentPersonalScheduler({
   function shiftWeek(deltaWeeks: number) {
     setDate((d) => addDays(d ?? new Date(), deltaWeeks * 7));
   }
+
+  const selectedLabel = date
+    ? format(date, "EEEE, MMMM d", { locale: mn })
+    : "—";
+
+  type GetStudentsListData = { getStudentsList: Student[] };
+  type GetStudentsListVars = { grade: number; group: string };
+
+  const [loadStudents, { data: studentsData, loading: studentsLoading }] =
+    useLazyQuery<
+      GetStudentsListData,
+      GetStudentsListVars
+    >(GetStudentsListDocument, {
+      fetchPolicy: "cache-first",
+      notifyOnNetworkStatusChange: true,
+    });
+
+  const fetchStudentsForSelectedGroup = useCallback(() => {
+    loadStudents({
+      variables: { grade: Number(selectedGrade), group: selectedGroup },
+    });
+  }, [loadStudents, selectedGrade, selectedGroup]);
+
+  useEffect(() => {
+    // Picker нээлттэй үед анги/бүлэг солигдвол шинэ жагсаалтаа татна.
+    if (!studentPickerOpen) return;
+    fetchStudentsForSelectedGroup();
+  }, [fetchStudentsForSelectedGroup, studentPickerOpen]);
+
+  const studentOptions = useMemo(() => {
+    const rows: Student[] = studentsData?.getStudentsList ?? [];
+    return rows.filter((s) => s.status === "active");
+  }, [studentsData?.getStudentsList]);
+
+  const selectedStudent = useMemo(() => {
+    if (!selectedStudentId) return null;
+    return studentOptions.find((s) => s.id === selectedStudentId) ?? null;
+  }, [selectedStudentId, studentOptions]);
+
+  useEffect(() => {
+    // Анги/бүлэг солигдоход өмнөх сонголт үлдэхээс сэргийлнэ.
+    setSelectedStudentId("");
+  }, [selectedGrade, selectedGroup]);
+
+  type GetStudentMainLessonsListData = {
+    getStudentMainLessonsList: StudentMainLesson[];
+  };
+  type GetStudentMainLessonsListVars = {
+    studentId: string;
+    semesterId?: string;
+    includeDraft?: boolean;
+  };
+
+  const {
+    data: studentScheduleData,
+    loading: studentScheduleLoading,
+  } = useQuery<GetStudentMainLessonsListData, GetStudentMainLessonsListVars>(
+    GetStudentMainLessonsListDocument,
+    {
+      variables: {
+        studentId: selectedStudentId,
+        semesterId: "2026-SPRING",
+        includeDraft: false,
+      },
+      skip: !selectedStudentId,
+      fetchPolicy: "cache-first",
+      notifyOnNetworkStatusChange: true,
+    },
+  );
+
+  function parseHHMM(t: string): { h: number; m: number } {
+    const [hh, mm] = String(t ?? "").split(":");
+    const h = Number(hh);
+    const m = Number(mm);
+    return {
+      h: Number.isFinite(h) ? h : 0,
+      m: Number.isFinite(m) ? m : 0,
+    };
+  }
+
+  const blocks = useMemo((): StudentBlock[] => {
+    if (!selectedStudentId) {
+      return mockStudentBlocks();
+    }
+
+    const rows: StudentMainLesson[] =
+      studentScheduleData?.getStudentMainLessonsList ?? [];
+
+    return rows.map((r) => {
+      const s = parseHHMM(r.startTime);
+      const e = parseHHMM(r.endTime);
+      const teacher = r.teacherShortName ? ` · ${r.teacherShortName}` : "";
+      return {
+        id: r.id,
+        layer: "class_schedule",
+        title: r.subjectName,
+        subtitle: `${r.classroomRoomNumber}${teacher}`,
+        colIdx: Math.max(0, Math.min(6, (r.dayOfWeek ?? 1) - 1)),
+        startH: s.h,
+        startM: s.m,
+        endH: e.h,
+        endM: e.m,
+        confirmed: r.isDraft === false,
+      };
+    });
+  }, [selectedStudentId, studentScheduleData?.getStudentMainLessonsList]);
 
   const visibleBlocks = useMemo(
     () => blocks.filter((b) => layerOn[b.layer]),
@@ -319,10 +454,6 @@ export function AiStudentPersonalScheduler({
     const pln = blocks.filter((b) => b.layer === "personal_plan");
     return { rep, sec, pln };
   }, [blocks]);
-
-  const selectedLabel = date
-    ? format(date, "EEEE, MMMM d", { locale: mn })
-    : "—";
 
   return (
     <div
@@ -365,12 +496,125 @@ export function AiStudentPersonalScheduler({
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <SchedulerAppearanceMenu />
-            <Badge
-              variant="outline"
-              className="rounded-full border-zinc-200 bg-white text-[11px] text-zinc-600 shadow-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300"
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 shrink-0 rounded-xl border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  aria-label="Анги сонгох"
+                >
+                  <span className="max-w-[min(100%,10rem)] truncate">
+                    {selectedGrade}-р анги
+                  </span>
+                  <ChevronDown
+                    className="ml-2 size-4 opacity-70"
+                    aria-hidden
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuLabel>Анги</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={selectedGrade}
+                  onValueChange={(v) =>
+                    setSelectedGrade(v as "9" | "10" | "11" | "12")
+                  }
+                >
+                  <DropdownMenuRadioItem value="9">9-р анги</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="10">
+                    10-р анги
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="11">
+                    11-р анги
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="12">
+                    12-р анги
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 shrink-0 rounded-xl border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  aria-label="Бүлэг сонгох"
+                >
+                  <span className="max-w-[min(100%,8rem)] truncate">
+                    {selectedGroup} бүлэг
+                  </span>
+                  <ChevronDown
+                    className="ml-2 size-4 opacity-70"
+                    aria-hidden
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuLabel>Бүлэг</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={selectedGroup}
+                  onValueChange={(v) => setSelectedGroup(v as "A" | "B" | "C" | "D")}
+                >
+                  <DropdownMenuRadioItem value="A">A бүлэг</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="B">B бүлэг</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="C">C бүлэг</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="D">D бүлэг</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu
+              open={studentPickerOpen}
+              onOpenChange={(open) => {
+                setStudentPickerOpen(open);
+                if (open) fetchStudentsForSelectedGroup();
+              }}
             >
-              {selectedLabel}
-            </Badge>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 shrink-0 rounded-xl border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  aria-label="Сурагч сонгох"
+                >
+                  <span className="max-w-[min(100%,12rem)] truncate">
+                    {selectedStudent
+                      ? `${selectedStudent.lastName} ${selectedStudent.firstName}`
+                      : studentsLoading || studentScheduleLoading
+                        ? "Уншиж байна…"
+                        : "Сурагч сонгох"}
+                  </span>
+                  <ChevronDown className="ml-2 size-4 opacity-70" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel>
+                  {selectedGrade}
+                  {selectedGroup} · Сурагч
+                </DropdownMenuLabel>
+                <div className="max-h-72 overflow-y-auto">
+                  <DropdownMenuRadioGroup
+                    value={selectedStudentId}
+                    onValueChange={(v) => setSelectedStudentId(String(v))}
+                  >
+                    {studentOptions.length === 0 ? (
+                      <div className="px-2 py-2 text-xs text-zinc-500 dark:text-zinc-400">
+                        Сурагч олдсонгүй.
+                      </div>
+                    ) : (
+                      studentOptions.map((s) => (
+                        <DropdownMenuRadioItem key={s.id} value={s.id}>
+                          <span className="truncate">
+                            {s.lastName} {s.firstName}
+                          </span>
+                        </DropdownMenuRadioItem>
+                      ))
+                    )}
+                  </DropdownMenuRadioGroup>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
@@ -389,7 +633,9 @@ export function AiStudentPersonalScheduler({
             <div
               className={cn(
                 "flex h-full w-full max-w-[272px] flex-col gap-4 overflow-y-auto p-4",
-                shellMode ? "min-w-[min(100vw,272px)]" : "min-w-[min(100vw,272px)]",
+                shellMode
+                  ? "min-w-[min(100vw,272px)]"
+                  : "min-w-[min(100vw,272px)]",
               )}
             >
               <div className={cn(panelLight, "p-3")}>
@@ -397,13 +643,8 @@ export function AiStudentPersonalScheduler({
                   <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                     Календарь
                   </p>
-                  <p className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
-                    Өдөр сонгох
-                  </p>
                 </div>
-                <p className="mb-2 px-1 text-[10px] text-zinc-500 dark:text-zinc-400">
-                  {selectedLabel}
-                </p>
+
                 <div className="flex justify-center">
                   <Calendar
                     mode="single"
@@ -532,53 +773,14 @@ export function AiStudentPersonalScheduler({
                           Student view (mock)
                         </p>
                         <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-                          Одоогоор зөвхөн demo өгөгдөл: батлагдсан давтлага + секц
-                          + personal төлөвлөгөө.
+                          Одоогоор зөвхөн demo өгөгдөл: батлагдсан давтлага +
+                          секц + personal төлөвлөгөө.
                         </p>
                       </div>
                     </div>
                     <span className="shrink-0 tabular-nums text-[10px] font-semibold text-blue-700 dark:text-blue-300">
                       {visibleBlocks.length} блок
                     </span>
-                  </div>
-                  <div className="mt-2 flex flex-col gap-1.5 border-t border-zinc-200/80 pt-2 dark:border-zinc-700/80 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-[9px] text-zinc-500 dark:text-zinc-500">
-                      Тор: {CALENDAR_VIEW_CONFIG.dayVisible.start}–
-                      {CALENDAR_VIEW_CONFIG.dayVisible.end}. Улаан бүсүүд нь
-                      “төлөвлөхөд тохиромжгүй” үе (shared constants).
-                    </p>
-                    <div
-                      className="flex shrink-0 rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-600 dark:bg-zinc-900"
-                      role="group"
-                      aria-label="Хуанлийн анхны төвлөрөл"
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={shift === "I"}
-                        onClick={() => setShift("I")}
-                        className={cn(
-                          "rounded-md px-2 py-1 text-[9px] font-semibold transition-colors",
-                          shift === "I"
-                            ? "bg-emerald-600 text-white shadow-sm dark:bg-emerald-500"
-                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800",
-                        )}
-                      >
-                        I · Өглөө
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={shift === "II"}
-                        onClick={() => setShift("II")}
-                        className={cn(
-                          "rounded-md px-2 py-1 text-[9px] font-semibold transition-colors",
-                          shift === "II"
-                            ? "bg-amber-600 text-white shadow-sm dark:bg-amber-600"
-                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800",
-                        )}
-                      >
-                        II · Өдөр
-                      </button>
-                    </div>
                   </div>
                 </div>
 
@@ -592,7 +794,10 @@ export function AiStudentPersonalScheduler({
                   {weekDays.map((d) => {
                     const isSel = isSameDay(d, anchor);
                     return (
-                      <div key={format(d, "yyyy-MM-dd")} className="text-center">
+                      <div
+                        key={format(d, "yyyy-MM-dd")}
+                        className="text-center"
+                      >
                         <div
                           className={cn(
                             "mx-auto flex size-8 items-center justify-center rounded-full text-[11px] font-medium sm:size-9 sm:text-xs",
@@ -746,10 +951,16 @@ export function AiStudentPersonalScheduler({
                   </div>
                 </div>
 
-                <p className={cn("mt-2 text-center text-[10px] leading-relaxed", textDim)}>
+                <p
+                  className={cn(
+                    "mt-2 text-center text-[10px] leading-relaxed",
+                    textDim,
+                  )}
+                >
                   Demo: батлагдсан давтлага/секц/personal төлөвлөгөө давхарга.
-                  Дараа нь student-ийн баталгаажсан давтлага (recurrence), секцийн
-                  бүртгэл, personal төлөвлөгөө DB/GraphQL-оор орж ирэхээр солино.
+                  Дараа нь student-ийн баталгаажсан давтлага (recurrence),
+                  секцийн бүртгэл, personal төлөвлөгөө DB/GraphQL-оор орж
+                  ирэхээр солино.
                 </p>
               </div>
             </main>
@@ -809,7 +1020,10 @@ export function AiStudentPersonalScheduler({
                             ["Personal төлөвлөгөө", planSummary.pln],
                           ] as const
                         ).map(([label, items]) => (
-                          <div key={label} className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                          <div
+                            key={label}
+                            className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900"
+                          >
                             <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                               {label} · {items.length}
                             </p>
@@ -820,7 +1034,10 @@ export function AiStudentPersonalScheduler({
                             ) : (
                               <ul className="mt-2 space-y-2">
                                 {items.map((b) => (
-                                  <li key={b.id} className="flex items-start gap-2">
+                                  <li
+                                    key={b.id}
+                                    className="flex items-start gap-2"
+                                  >
                                     <span
                                       className={cn(
                                         "mt-0.5 inline-flex size-2.5 shrink-0 rounded-sm",
@@ -852,7 +1069,12 @@ export function AiStudentPersonalScheduler({
                     </div>
                   </div>
                 ) : (
-                  <div className={cn(panelLight, "p-4 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300")}>
+                  <div
+                    className={cn(
+                      panelLight,
+                      "p-4 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300",
+                    )}
+                  >
                     <p>
                       Энэ дэлгэц нь багшийн “Operations Center” хэв маягийг
                       сурагчийн хэрэгцээнд тааруулж хувиргасан хувилбар.
@@ -892,4 +1114,3 @@ export function AiStudentPersonalScheduler({
     </div>
   );
 }
-

@@ -244,11 +244,88 @@ type ExamSchedule {
   updatedAt: String!
 }
 
+type Teacher {
+  id: ID!
+  firstName: String!
+  lastName: String!
+  shortName: String
+  email: String
+  department: String!
+  teachingLevel: String!
+  role: String!
+  workLoadLimit: Int!
+}
+
+"""ai-scheduler-student: ангид харьяалагдах сурагч (minimal fields)"""
+type Student {
+  id: ID!
+  firstName: String!
+  lastName: String!
+  studentCode: String!
+  groupId: String!
+  status: String!
+}
+
+"""ai-scheduler-student: сурагчийн үндсэн хичээлийн хуваарь (class timetable)"""
+type StudentMainLesson {
+  id: ID!
+  dayOfWeek: Int!
+  semesterId: String!
+  isDraft: Boolean!
+  groupId: String!
+  gradeLevel: Int!
+  subjectId: String!
+  subjectName: String!
+  teacherId: ID!
+  teacherShortName: String
+  classroomId: String!
+  classroomRoomNumber: String!
+  periodId: Int!
+  periodShift: Int!
+  periodNumber: Int!
+  startTime: String!
+  endTime: String!
+}
+
+type TeacherMainLesson {
+  id: ID!
+  dayOfWeek: Int!
+  semesterId: String!
+  isDraft: Boolean!
+  groupId: String!
+  gradeLevel: Int!
+  subjectId: String!
+  subjectName: String!
+  classroomId: String!
+  classroomRoomNumber: String!
+  periodId: Int!
+  periodShift: Int!
+  periodNumber: Int!
+  startTime: String!
+  endTime: String!
+}
+
 type Query {
   listNewMathExams(limit: Int = 50): [NewMathExamSummary!]!
   getNewMathExam(examId: ID!): NewMathExam
   """AI scheduler: нэг мөрийн төлөв (polling-д ашиглана)"""
   getAiExamSchedule(examId: ID!): ExamSchedule
+  """ai-scheduler-teacher: 9–12-р ангийн Math (MATH_HS) ордог багш нар"""
+  getTeachersList(grades: [Int!] = [9, 10, 11, 12]): [Teacher!]!
+  """ai-scheduler-student: 10A гэх мэт ангид харьяалагдах сурагчдын жагсаалт"""
+  getStudentsList(grade: Int!, group: String!): [Student!]!
+  """ai-scheduler-student: сонгосон сурагчийн үндсэн хуваарь (ангиар нь)"""
+  getStudentMainLessonsList(
+    studentId: ID!
+    semesterId: String = "2026-SPRING"
+    includeDraft: Boolean = false
+  ): [StudentMainLesson!]!
+  """ai-scheduler-teacher: тухайн багшийн үндсэн хичээлийн (primary) хуваарь"""
+  getTeacherMainLessonsList(
+    teacherId: ID!
+    semesterId: String = "2026-SPRING"
+    includeDraft: Boolean = false
+  ): [TeacherMainLesson!]!
 }
 
 type RequestExamSchedulePayload {
