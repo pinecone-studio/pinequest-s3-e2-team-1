@@ -10,7 +10,9 @@ function resolveApiBase() {
 }
 
 function toApiUrl(path, apiBase = "") {
-  const base = String(apiBase || "").trim().replace(/\/+$/, "");
+  const base = String(apiBase || "")
+    .trim()
+    .replace(/\/+$/, "");
   return base ? `${base}${path}` : path;
 }
 
@@ -48,8 +50,14 @@ function candidateBackendBases() {
     out.push(`http://localhost:${port}`);
   }
   return ["", defaultLocalBackendBase(), ...out]
-    .map((item) => String(item || "").trim().replace(/\/+$/, ""))
-    .filter((item, idx, arr) => item !== "" ? arr.indexOf(item) === idx : idx === 0);
+    .map((item) =>
+      String(item || "")
+        .trim()
+        .replace(/\/+$/, ""),
+    )
+    .filter((item, idx, arr) =>
+      item !== "" ? arr.indexOf(item) === idx : idx === 0,
+    );
 }
 
 async function requestJson(path, options = {}) {
@@ -62,7 +70,10 @@ async function requestJson(path, options = {}) {
     response = await fetch(url, fetchOptions);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error || "");
-    throw new Error(`Backend рүү холбогдож чадсангүй. (URL: ${url}) ${detail}`.trim(), { cause: error });
+    throw new Error(
+      `Backend рүү холбогдож чадсангүй. (URL: ${url}) ${detail}`.trim(),
+      { cause: error },
+    );
   }
 
   if (!response.ok) {
@@ -132,7 +143,8 @@ function normalizeMathExpression(value) {
 function normalizeFractions(value) {
   return String(value || "").replace(
     /(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)/g,
-    (_m, a, b) => `\\frac{${String(a).replace(",", ".")}}{${String(b).replace(",", ".")}}`,
+    (_m, a, b) =>
+      `\\frac{${String(a).replace(",", ".")}}{${String(b).replace(",", ".")}}`,
   );
 }
 
@@ -144,7 +156,9 @@ function normalizeSqrt(value) {
 }
 
 function tryRenderKatex(mathText, displayMode = false) {
-  const normalized = normalizeSqrt(normalizeFractions(normalizeMathExpression(mathText)));
+  const normalized = normalizeSqrt(
+    normalizeFractions(normalizeMathExpression(mathText)),
+  );
   if (!normalized) return "";
   try {
     return katex.renderToString(normalized, {
@@ -226,7 +240,9 @@ function superscriptToDigits(value) {
 
 function splitExerciseLabel(value) {
   const raw = String(value || "").trim();
-  const matched = raw.match(/^((?:\d{1,3}|[A-Za-zА-Яа-яЁёӨөҮүҢңӘә]))\)\s*(.+)$/u);
+  const matched = raw.match(
+    /^((?:\d{1,3}|[A-Za-zА-Яа-яЁёӨөҮүҢңӘә]))\)\s*(.+)$/u,
+  );
   if (!matched) {
     return {
       label: "",
@@ -275,7 +291,8 @@ function normalizePlainProblemToLatex(value) {
     .replace(/([0-9])\s*°/g, "$1^{\\circ}")
     .replace(
       /([²³⁴⁵⁶⁷⁸⁹])\s*√\s*([A-Za-z0-9().,+\-]+)/g,
-      (_match, degree, radicand) => `\\sqrt[${superscriptToDigits(degree)}]{${radicand}}`,
+      (_match, degree, radicand) =>
+        `\\sqrt[${superscriptToDigits(degree)}]{${radicand}}`,
     )
     .replace(/√\s*\(\s*([^)]+)\s*\)/g, "\\sqrt{$1}")
     .replace(/√\s*([A-Za-z0-9().,+\-]+)/g, "\\sqrt{$1}")
@@ -285,10 +302,13 @@ function normalizePlainProblemToLatex(value) {
     .replace(/(?<!\\)\blog\b/gi, "\\log")
     .replace(/(?<!\\)\bln\b/gi, "\\ln");
 
-  text = text.replace(/([A-Za-z0-9\])}])([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, (_match, base, exponent) => {
-    const exp = superscriptToDigits(exponent);
-    return exp ? `${base}^{${exp}}` : _match;
-  });
+  text = text.replace(
+    /([A-Za-z0-9\])}])([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g,
+    (_match, base, exponent) => {
+      const exp = superscriptToDigits(exponent);
+      return exp ? `${base}^{${exp}}` : _match;
+    },
+  );
 
   text = convertAbsoluteBars(text);
   return normalizeSqrt(normalizeFractions(text)).replace(/\s+/g, " ").trim();
@@ -299,10 +319,12 @@ function looksMathyProblemText(value) {
   if (!text || text.length > 220) return false;
   if (/[?？]$/.test(text) && text.length > 120) return false;
 
-  const hasStrongMath = /[=+\-*/^|√≤≥≈×÷]|(sin|cos|tan|log|ln)|[²³⁴⁵⁶⁷⁸⁹]/i.test(text);
+  const hasStrongMath =
+    /[=+\-*/^|√≤≥≈×÷]|(sin|cos|tan|log|ln)|[²³⁴⁵⁶⁷⁸⁹]/i.test(text);
   if (!hasStrongMath) return false;
 
-  const hasLongMongolianPhrase = /[А-Яа-яЁёӨөҮүҢңӘә]{3,}\s+[А-Яа-яЁёӨөҮүҢңӘә]{3,}/u.test(text);
+  const hasLongMongolianPhrase =
+    /[А-Яа-яЁёӨөҮүҢңӘә]{3,}\s+[А-Яа-яЁёӨөҮүҢңӘә]{3,}/u.test(text);
   if (hasLongMongolianPhrase && text.length > 60) return false;
 
   const longWordCount = (text.match(/[\p{L}]{2,}/gu) || []).length;
@@ -319,7 +341,11 @@ function tryRenderProblemAsKatex(text) {
   const source = body || raw;
   const latex = normalizePlainProblemToLatex(source);
   if (!latex) return null;
-  if (!/[=+\-*/^]|\\(sqrt|sin|cos|tan|log|ln|left\||frac|times|div|le|ge|ne|approx)/.test(latex)) {
+  if (
+    !/[=+\-*/^]|\\(sqrt|sin|cos|tan|log|ln|left\||frac|times|div|le|ge|ne|approx)/.test(
+      latex,
+    )
+  ) {
     return null;
   }
   const html = renderLatex(latex, false);
@@ -338,7 +364,10 @@ function MathText({ text }) {
       return (
         <span>
           {auto.label ? <span>{auto.label} </span> : null}
-          <span className="math-inline" dangerouslySetInnerHTML={{ __html: auto.html }} />
+          <span
+            className="math-inline"
+            dangerouslySetInnerHTML={{ __html: auto.html }}
+          />
         </span>
       );
     }
@@ -383,7 +412,8 @@ function pickPreferredSectionId(sections) {
   const list = Array.isArray(sections) ? sections : [];
   if (!list.length) return "";
 
-  const keywords = /(дасгал|жишээ|бодлого|модул|тэгшитгэл|тэнцэтгэл|логарифм|функц)/iu;
+  const keywords =
+    /(дасгал|жишээ|бодлого|модул|тэгшитгэл|тэнцэтгэл|логарифм|функц)/iu;
   const candidate = list.find((section) => {
     const title = String(section?.title || "");
     const startPage = Number(section?.startPage || 0);
@@ -398,8 +428,15 @@ function pickPreferredSectionId(sections) {
 }
 
 function makeChapterKey(chapter, chapterIdx) {
-  const title = String(chapter?.title || "").trim() || `Chapter ${chapterIdx + 1}`;
+  const title =
+    String(chapter?.title || "").trim() || `Chapter ${chapterIdx + 1}`;
   return `${chapterIdx}:${title}`;
+}
+
+function resolveChapterKey(chapter, chapterIdx) {
+  const explicit = String(chapter?.id || "").trim();
+  if (explicit) return explicit;
+  return makeChapterKey(chapter, chapterIdx);
 }
 
 function normalizeLineText(value) {
@@ -433,7 +470,9 @@ function cleanTocHeading(raw) {
 
 function extractSectionNumber(rawTitle) {
   const source = normalizeLineText(rawTitle);
-  const matched = source.match(/(\d{1,2})\.(\d{1,2})(?:\.(\d{1,2}))?\s*[).:\-–—]?\s*(.+)?/u);
+  const matched = source.match(
+    /(\d{1,2})\.(\d{1,2})(?:\.(\d{1,2}))?\s*[).:\-–—]?\s*(.+)?/u,
+  );
   if (!matched) return null;
   const major = Math.max(1, Math.trunc(Number(matched[1] || 0)));
   const minor = Math.max(1, Math.trunc(Number(matched[2] || 0)));
@@ -451,7 +490,9 @@ function extractSectionNumber(rawTitle) {
 
 function extractChapterName(rawTitle) {
   const source = normalizeLineText(rawTitle);
-  const matched = source.match(/(?:^|[\s.,;:])(?:[IVXА-ЯЁӨҮҮУШТЛП]{1,4}\s+)?Б[ҮУ]?ЛЭГ[.,]?\s*(.+)$/iu);
+  const matched = source.match(
+    /(?:^|[\s.,;:])(?:[IVXА-ЯЁӨҮҮУШТЛП]{1,4}\s+)?Б[ҮУ]?ЛЭГ[.,]?\s*(.+)$/iu,
+  );
   const suffix = matched ? matched[1] : source;
   const trimmed = suffix
     .replace(/Энэ\s+б[үу]?лэг[\s\S]*$/iu, "")
@@ -510,7 +551,9 @@ function extractTocTitlesFromPages(pages) {
   while (chapterMatch) {
     const chapterName = cleanTocHeading(chapterMatch[2] || "");
     if (chapterName) {
-      const nextSection = sectionEntries.find((entry) => entry.index > chapterMatch.index);
+      const nextSection = sectionEntries.find(
+        (entry) => entry.index > chapterMatch.index,
+      );
       if (nextSection && !chapterByMajor[nextSection.major]) {
         chapterByMajor[nextSection.major] = chapterName;
       }
@@ -539,7 +582,9 @@ function extractTocTitlesFromPages(pages) {
   }
 
   for (const key of Object.keys(sectionTitlesByMajor)) {
-    sectionTitlesByMajor[key].sort((a, b) => Number(a?.minor || 0) - Number(b?.minor || 0));
+    sectionTitlesByMajor[key].sort(
+      (a, b) => Number(a?.minor || 0) - Number(b?.minor || 0),
+    );
   }
 
   return { chapterByMajor, sectionByKey, sectionTitlesByMajor };
@@ -580,7 +625,10 @@ function shortenTitle(value, maxLength = 84) {
 
 function getChapterDisplayTitle(chapter, chapterIdx, tocLabels) {
   const chapterNumber = getChapterNumber(chapter, chapterIdx);
-  const chapterByMajor = tocLabels && typeof tocLabels === "object" ? tocLabels.chapterByMajor || {} : {};
+  const chapterByMajor =
+    tocLabels && typeof tocLabels === "object"
+      ? tocLabels.chapterByMajor || {}
+      : {};
   const tocTitle = chapterByMajor[chapterNumber];
   const rawTitle = extractChapterName(chapter?.title || "");
   const title = shortenTitle(tocTitle || rawTitle || "БҮЛЭГ", 96);
@@ -590,8 +638,13 @@ function getChapterDisplayTitle(chapter, chapterIdx, tocLabels) {
 function getSectionDisplayTitle(section, sectionIdx, chapterNumber, tocLabels) {
   const parsed = extractSectionNumber(section?.title || "");
   const sectionTitlesByMajor =
-    tocLabels && typeof tocLabels === "object" ? tocLabels.sectionTitlesByMajor || {} : {};
-  const sectionByKey = tocLabels && typeof tocLabels === "object" ? tocLabels.sectionByKey || {} : {};
+    tocLabels && typeof tocLabels === "object"
+      ? tocLabels.sectionTitlesByMajor || {}
+      : {};
+  const sectionByKey =
+    tocLabels && typeof tocLabels === "object"
+      ? tocLabels.sectionByKey || {}
+      : {};
   const tocOrdered = Array.isArray(sectionTitlesByMajor[chapterNumber])
     ? sectionTitlesByMajor[chapterNumber]
     : [];
@@ -599,18 +652,224 @@ function getSectionDisplayTitle(section, sectionIdx, chapterNumber, tocLabels) {
 
   const parsedMajor = Number(parsed?.major || 0);
   const parsedMinor = Number(parsed?.minor || 0);
+  const tocByMinor =
+    parsedMajor === chapterNumber && parsedMinor >= 1
+      ? tocOrdered.find((item) => Number(item?.minor || 0) === parsedMinor) ||
+        null
+      : null;
+  const maxAllowedMinor = Math.max(
+    tocOrdered.length,
+    ...tocOrdered.map((item) => Number(item?.minor || 0)),
+    1,
+  );
   const isPlausibleParsed =
-    parsed && parsedMajor === chapterNumber && parsedMinor >= 1 && parsedMinor <= 40;
+    parsed &&
+    parsedMajor === chapterNumber &&
+    parsedMinor >= 1 &&
+    parsedMinor <= Math.max(40, maxAllowedMinor);
 
-  const numberLabel = tocByIndex?.minor
-    ? `${chapterNumber}.${tocByIndex.minor}`
+  const preferredToc = tocByMinor || tocByIndex;
+  const numberLabel = preferredToc?.minor
+    ? `${chapterNumber}.${preferredToc.minor}`
     : isPlausibleParsed
       ? parsed.label
       : `${chapterNumber}.${sectionIdx + 1}`;
-  const tocTitle = tocByIndex?.title || (isPlausibleParsed && parsed?.key ? sectionByKey[parsed.key] : "");
-  const rawTitle = isPlausibleParsed && parsed?.tail ? parsed.tail : cleanTocHeading(section?.title || "");
+  const tocTitle =
+    preferredToc?.title ||
+    (isPlausibleParsed && parsed?.key ? sectionByKey[parsed.key] : "");
+  const rawTitle =
+    isPlausibleParsed && parsed?.tail
+      ? parsed.tail
+      : cleanTocHeading(section?.title || "");
   const title = shortenTitle(tocTitle || rawTitle || "Сэдэв", 98);
   return `${numberLabel} ${title}`.trim();
+}
+
+const CANONICAL_MATH12_TOC = {
+  chapterByMajor: {
+    1: "ТЭГШИТГЭЛ, ТЭНЦЭТГЭЛ БИШ",
+    2: "ОЛОН ГИШҮҮНТ",
+    3: "ФУНКЦ БА ГРАФИК",
+    4: "ФУНКЦИЙН УЛАМЖЛАЛ",
+    5: "ИНТЕГРАЛ",
+    6: "МАГАДЛАЛ БА СТАТИСТИК",
+    7: "КОМПЛЕКС ТОО",
+  },
+  sectionTitlesByMajor: {
+    1: [
+      { minor: 1, title: "Тооны модул" },
+      { minor: 2, title: "Модул агуулсан тэгшитгэл" },
+      { minor: 3, title: "Модул агуулсан тэнцэтгэл биш" },
+    ],
+    2: [
+      { minor: 1, title: "Нэг ба олон гишүүнт" },
+      { minor: 2, title: "Олон гишүүнтийн хуваах үйлдэл" },
+      { minor: 3, title: "Безугийн теорем" },
+      {
+        minor: 4,
+        title:
+          "Рационал илэрхийллийг олон гишүүнт болон алгебрын хялбар бутархайн нийлбэр болгон задлах",
+      },
+    ],
+    3: [
+      { minor: 1, title: "Тооны логарифм" },
+      { minor: 2, title: "Логарифмын чанар" },
+      { minor: 3, title: "Хялбар илтгэгч тэгшитгэл, тэнцэтгэл биш" },
+      { minor: 4, title: "Логарифм функц" },
+      { minor: 5, title: "y = e^x ба y = ln x функц" },
+      { minor: 6, title: "Рационал функц" },
+      { minor: 7, title: "Тоон аргументтай тригонометр функц" },
+    ],
+    4: [
+      { minor: 1, title: "y = e^x функцийн уламжлал" },
+      { minor: 2, title: "y = ln x функцийн уламжлал" },
+      { minor: 3, title: "y = sin x ба y = cos x функцийн уламжлал" },
+      { minor: 4, title: "Үржвэр функцийн уламжлал" },
+      { minor: 5, title: "Ногдвор функцийн уламжлал" },
+      { minor: 6, title: "y = tg x функцийн уламжлал" },
+      { minor: 7, title: "Давхар функцийн уламжлал" },
+    ],
+    5: [
+      { minor: 1, title: "Илтгэгч, тригонометр, рационал функцийн интеграл" },
+      { minor: 2, title: "Рационал функцийн интеграл" },
+      { minor: 3, title: "F'(x) / F(x) хэлбэрийн интеграл бодох" },
+      { minor: 4, title: "ln|f(x)| + C томьёо ашиглан тодорхой интеграл бодох" },
+      {
+        minor: 5,
+        title:
+          "Орлуулах аргаар тодорхой болон тодорхой бус интегралыг хялбар интегралд шилжүүлэн бодох",
+      },
+    ],
+    6: [
+      { minor: 1, title: "Дискрет санамсаргүй хувьсагч" },
+      { minor: 2, title: "Математик дундаж" },
+      { minor: 3, title: "Дисперс" },
+    ],
+    7: [
+      { minor: 1, title: "Комплекс тоо, түүний бодит ба хуурмаг хэсэг" },
+      { minor: 2, title: "Комплекс тооны нэмэх үйлдэл" },
+      { minor: 3, title: "Комплекс тооны үржүүлэх үйлдэл" },
+      {
+        minor: 4,
+        title: "Хоёр комплекс тооны тэнцүүгийн тодорхойлолтыг хэрэглэх",
+      },
+      { minor: 5, title: "Комплекс тооны хуваах үйлдэл" },
+      { minor: 6, title: "Комплекс тооны модул ба хосмог тоо" },
+      {
+        minor: 7,
+        title:
+          "Бодит коэффициенттэй квадрат тэгшитгэлийн комплекс тоон язгуур",
+      },
+      { minor: 8, title: "Комплекс тооны геометр дүрслэл" },
+    ],
+  },
+};
+
+function buildSectionByKeyFromMajorMap(sectionTitlesByMajor) {
+  const out = {};
+  const source =
+    sectionTitlesByMajor && typeof sectionTitlesByMajor === "object"
+      ? sectionTitlesByMajor
+      : {};
+  Object.keys(source).forEach((majorKey) => {
+    const major = Math.trunc(Number(majorKey));
+    const items = Array.isArray(source[majorKey]) ? source[majorKey] : [];
+    items.forEach((item) => {
+      const minor = Math.trunc(Number(item?.minor || 0));
+      const title = String(item?.title || "").trim();
+      if (major >= 1 && minor >= 1 && title) {
+        out[`${major}.${minor}`] = title;
+      }
+    });
+  });
+  return out;
+}
+
+function looksLikeMath12Book(bookTitle, extractedLabels) {
+  const rawTitle = String(bookTitle || "").toLowerCase();
+  const hasMath12InTitle =
+    /12/.test(rawTitle) && /(matem|матем)/iu.test(rawTitle);
+  if (hasMath12InTitle) return true;
+
+  const sectionTitlesByMajor =
+    extractedLabels && typeof extractedLabels === "object"
+      ? extractedLabels.sectionTitlesByMajor || {}
+      : {};
+  const hasComplex =
+    Array.isArray(sectionTitlesByMajor[7]) &&
+    sectionTitlesByMajor[7].length >= 6;
+  const hasDerivative =
+    Array.isArray(sectionTitlesByMajor[4]) &&
+    sectionTitlesByMajor[4].length >= 5;
+  const hasAlgebra =
+    Array.isArray(sectionTitlesByMajor[1]) &&
+    sectionTitlesByMajor[1].length >= 3;
+  return hasComplex && hasDerivative && hasAlgebra;
+}
+
+function resolveTocLabelsForBook(bookTitle, extractedLabels) {
+  if (!looksLikeMath12Book(bookTitle, extractedLabels)) {
+    return extractedLabels;
+  }
+  const sectionTitlesByMajor = CANONICAL_MATH12_TOC.sectionTitlesByMajor;
+  return {
+    chapterByMajor: { ...CANONICAL_MATH12_TOC.chapterByMajor },
+    sectionTitlesByMajor,
+    sectionByKey: buildSectionByKeyFromMajorMap(sectionTitlesByMajor),
+  };
+}
+
+function getVisibleChapterSections(chapter, chapterIdx, tocLabels) {
+  const chapterSections = Array.isArray(chapter?.sections) ? chapter.sections : [];
+  const chapterNumber =
+    Number(chapter?.chapterNumber || 0) || getChapterNumber(chapter, chapterIdx);
+  const sectionTitlesByMajor =
+    tocLabels && typeof tocLabels === "object"
+      ? tocLabels.sectionTitlesByMajor || {}
+      : {};
+  const ordered = Array.isArray(sectionTitlesByMajor[chapterNumber])
+    ? sectionTitlesByMajor[chapterNumber]
+    : [];
+  if (!ordered.length) return chapterSections;
+
+  const maxMinor = Math.max(
+    ordered.length,
+    ...ordered.map((item) => Number(item?.minor || 0)),
+    1,
+  );
+  const byMinor = new Map();
+  const leftovers = [];
+
+  for (const section of chapterSections) {
+    const parsed = extractSectionNumber(section?.title || "");
+    const parsedMajor = Number(parsed?.major || 0);
+    const parsedMinor = Number(parsed?.minor || 0);
+    const isValidMinor =
+      parsed &&
+      parsedMajor === chapterNumber &&
+      parsedMinor >= 1 &&
+      parsedMinor <= maxMinor;
+    if (isValidMinor && !byMinor.has(parsedMinor)) {
+      byMinor.set(parsedMinor, section);
+      continue;
+    }
+    leftovers.push(section);
+  }
+
+  const out = [];
+  for (const item of ordered) {
+    const wantedMinor = Number(item?.minor || 0);
+    if (wantedMinor >= 1 && byMinor.has(wantedMinor)) {
+      out.push(byMinor.get(wantedMinor));
+      continue;
+    }
+    if (leftovers.length) {
+      out.push(leftovers.shift());
+    }
+  }
+
+  if (out.length > 0) return out;
+  return chapterSections.slice(0, ordered.length);
 }
 
 export default function App() {
@@ -674,52 +933,148 @@ export default function App() {
 
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const displayChapters = useMemo(() => {
+    const source = Array.isArray(structure.chapters) ? structure.chapters : [];
+    const grouped = [];
+    const byKey = new Map();
+
+    for (let chapterIdx = 0; chapterIdx < source.length; chapterIdx += 1) {
+      const chapter = source[chapterIdx];
+      const chapterNumber = getChapterNumber(chapter, chapterIdx);
+      const chapterDisplayTitle = getChapterDisplayTitle(
+        chapter,
+        chapterIdx,
+        tocLabels,
+      );
+      const normalizedTitle = String(chapterDisplayTitle || "")
+        .replace(/^\d+\.\s*/u, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase();
+      const groupKey = `${chapterNumber}:${normalizedTitle}`;
+      const chapterSections = Array.isArray(chapter?.sections)
+        ? chapter.sections
+        : [];
+
+      if (!byKey.has(groupKey)) {
+        const item = {
+          id: groupKey,
+          chapterNumber,
+          title: chapterDisplayTitle,
+          sections: [...chapterSections],
+        };
+        grouped.push(item);
+        byKey.set(groupKey, item);
+        continue;
+      }
+
+      const existing = byKey.get(groupKey);
+      const existingSectionIds = new Set(
+        (Array.isArray(existing?.sections) ? existing.sections : [])
+          .map((section) => String(section?.id || ""))
+          .filter(Boolean),
+      );
+      chapterSections.forEach((section) => {
+        const sectionId = String(section?.id || "");
+        if (sectionId && existingSectionIds.has(sectionId)) return;
+        existing.sections.push(section);
+        if (sectionId) existingSectionIds.add(sectionId);
+      });
+    }
+
+    const chapterByMajor =
+      tocLabels && typeof tocLabels === "object"
+        ? tocLabels.chapterByMajor || {}
+        : {};
+    const knownMajors = Object.keys(chapterByMajor)
+      .map((key) => Math.trunc(Number(key)))
+      .filter((value) => Number.isFinite(value) && value >= 1)
+      .sort((a, b) => a - b);
+    const hasCanonicalLikeSequence =
+      knownMajors.length >= 7 &&
+      knownMajors.slice(0, 7).every((value, idx) => value === idx + 1);
+
+    if (!hasCanonicalLikeSequence) {
+      return grouped;
+    }
+
+    return grouped.map((chapter, idx) => {
+      const forcedNumber = idx + 1;
+      const canonicalName = String(chapterByMajor[forcedNumber] || "").trim();
+      const fallbackName = String(chapter?.title || "")
+        .replace(/^\d+\.\s*/u, "")
+        .trim();
+      const mergedTitle = `${forcedNumber}. ${canonicalName || fallbackName || "БҮЛЭГ"}`;
+      return {
+        ...chapter,
+        chapterNumber: forcedNumber,
+        id: `${forcedNumber}:${(canonicalName || fallbackName || "БҮЛЭГ").toUpperCase()}`,
+        title: mergedTitle,
+      };
+    });
+  }, [structure.chapters, tocLabels]);
 
   const selectedBook = useMemo(
     () => books.find((book) => book.id === selectedBookId) || null,
     [books, selectedBookId],
   );
   const selectedSection = useMemo(
-    () => structure.sections.find((section) => section.id === selectedSectionId) || null,
+    () =>
+      structure.sections.find((section) => section.id === selectedSectionId) ||
+      null,
     [structure.sections, selectedSectionId],
   );
   const selectedChapterInfo = useMemo(() => {
-    const chapters = Array.isArray(structure.chapters) ? structure.chapters : [];
+    const chapters = Array.isArray(displayChapters) ? displayChapters : [];
     for (let chapterIdx = 0; chapterIdx < chapters.length; chapterIdx += 1) {
       const chapter = chapters[chapterIdx];
-      const chapterSections = Array.isArray(chapter?.sections) ? chapter.sections : [];
+      const chapterSections = Array.isArray(chapter?.sections)
+        ? chapter.sections
+        : [];
       if (chapterSections.some((section) => section.id === selectedSectionId)) {
         return {
           chapter,
           chapterIdx,
-          key: makeChapterKey(chapter, chapterIdx),
+          key: resolveChapterKey(chapter, chapterIdx),
         };
       }
     }
     return null;
-  }, [structure.chapters, selectedSectionId]);
-  const selectedChapter = selectedChapterInfo?.chapter || structure.chapters[0] || null;
+  }, [displayChapters, selectedSectionId]);
+  const selectedChapter =
+    selectedChapterInfo?.chapter || displayChapters[0] || null;
   const selectedChapterSections = useMemo(
-    () => (Array.isArray(selectedChapter?.sections) ? selectedChapter.sections : []),
-    [selectedChapter],
+    () => {
+      if (!selectedChapter) return [];
+      const fallbackIdx = Number(selectedChapterInfo?.chapterIdx || 0);
+      return getVisibleChapterSections(selectedChapter, fallbackIdx, tocLabels);
+    },
+    [selectedChapter, selectedChapterInfo?.chapterIdx, tocLabels],
   );
   const chapterKeys = useMemo(
     () =>
-      (Array.isArray(structure.chapters) ? structure.chapters : []).map((chapter, chapterIdx) =>
-        makeChapterKey(chapter, chapterIdx),
+      (Array.isArray(displayChapters) ? displayChapters : []).map(
+        (chapter, chapterIdx) => resolveChapterKey(chapter, chapterIdx),
       ),
-    [structure.chapters],
+    [displayChapters],
   );
   const selectedChapterNumber = useMemo(
     () =>
       selectedChapterInfo
-        ? getChapterNumber(selectedChapterInfo.chapter, selectedChapterInfo.chapterIdx)
-        : getChapterNumber(structure.chapters[0] || null, 0),
-    [selectedChapterInfo, structure.chapters],
+        ? Number(selectedChapterInfo?.chapter?.chapterNumber || 0) ||
+          getChapterNumber(
+            selectedChapterInfo.chapter,
+            selectedChapterInfo.chapterIdx,
+          )
+        : Number(displayChapters[0]?.chapterNumber || 0) ||
+          getChapterNumber(displayChapters[0] || null, 0),
+    [selectedChapterInfo, displayChapters],
   );
   const selectedSectionIndexInChapter = useMemo(() => {
     if (!selectedSectionId) return -1;
-    return selectedChapterSections.findIndex((section) => String(section?.id || "") === selectedSectionId);
+    return selectedChapterSections.findIndex(
+      (section) => String(section?.id || "") === selectedSectionId,
+    );
   }, [selectedChapterSections, selectedSectionId]);
   const selectedSectionDisplayTitle = useMemo(() => {
     if (!selectedSection) return "";
@@ -729,27 +1084,102 @@ export default function App() {
       selectedChapterNumber,
       tocLabels,
     );
-  }, [selectedSection, selectedSectionIndexInChapter, selectedChapterNumber, tocLabels]);
+  }, [
+    selectedSection,
+    selectedSectionIndexInChapter,
+    selectedChapterNumber,
+    tocLabels,
+  ]);
   const selectedSectionIdSet = useMemo(
-    () => new Set((Array.isArray(selectedSectionIds) ? selectedSectionIds : []).filter(Boolean)),
+    () =>
+      new Set(
+        (Array.isArray(selectedSectionIds) ? selectedSectionIds : []).filter(
+          Boolean,
+        ),
+      ),
     [selectedSectionIds],
   );
+  const sectionSummaryById = useMemo(() => {
+    const map = new Map();
+    const sections = Array.isArray(structure.sections) ? structure.sections : [];
+    sections.forEach((section) => {
+      const id = String(section?.id || "");
+      if (!id) return;
+      map.set(id, section);
+    });
+    return map;
+  }, [structure.sections]);
+  const checkedSectionsForPreview = useMemo(() => {
+    const out = [];
+    const chapters = Array.isArray(structure.chapters) ? structure.chapters : [];
+    for (let chapterIdx = 0; chapterIdx < chapters.length; chapterIdx += 1) {
+      const chapter = chapters[chapterIdx];
+      const chapterNumber = getChapterNumber(chapter, chapterIdx);
+      const chapterSections = getVisibleChapterSections(
+        chapter,
+        chapterIdx,
+        tocLabels,
+      );
+      for (let sectionIdx = 0; sectionIdx < chapterSections.length; sectionIdx += 1) {
+        const section = chapterSections[sectionIdx];
+        const sectionId = String(section?.id || "");
+        if (!sectionId || !selectedSectionIdSet.has(sectionId)) continue;
+
+        const summary = sectionSummaryById.get(sectionId);
+        const summaryPages = Array.isArray(summary?.pageNumbers)
+          ? summary.pageNumbers
+          : [];
+        const rawPages = summaryPages.length
+          ? summaryPages
+          : Array.isArray(section?.pages)
+            ? section.pages.map((page) => page?.pageNumber)
+            : [];
+        const pageNumbers = [
+          ...new Set(
+            rawPages
+              .map((pageNumber) => Math.trunc(Number(pageNumber)))
+              .filter(
+                (pageNumber) => Number.isFinite(pageNumber) && pageNumber >= 1,
+              ),
+          ),
+        ].sort((a, b) => a - b);
+
+        out.push({
+          id: sectionId,
+          displayTitle: getSectionDisplayTitle(
+            section,
+            sectionIdx,
+            chapterNumber,
+            tocLabels,
+          ),
+          pageNumbers,
+        });
+      }
+    }
+    return out;
+  }, [structure.chapters, sectionSummaryById, selectedSectionIdSet, tocLabels]);
   const difficultyTotalRequested = useMemo(
     () =>
-      clampNonNegativeInt(difficultyCounts.easy)
-      + clampNonNegativeInt(difficultyCounts.medium)
-      + clampNonNegativeInt(difficultyCounts.hard),
+      clampNonNegativeInt(difficultyCounts.easy) +
+      clampNonNegativeInt(difficultyCounts.medium) +
+      clampNonNegativeInt(difficultyCounts.hard),
     [difficultyCounts.easy, difficultyCounts.medium, difficultyCounts.hard],
   );
   const resolvedQuestionCount = useMemo(
-    () => (difficultyTotalRequested > 0 ? difficultyTotalRequested : clampQuestionCount(questionCount)),
+    () =>
+      difficultyTotalRequested > 0
+        ? difficultyTotalRequested
+        : clampQuestionCount(questionCount),
     [difficultyTotalRequested, questionCount],
   );
 
   useEffect(() => {
     try {
       if (typeof window !== "undefined") {
-        window.localStorage.setItem("book_api_base", String(apiBaseOverride || ""));
+        window.localStorage.setItem(
+          "book_api_base",
+          String(apiBaseOverride || ""),
+        );
       }
     } catch {
       // ignore
@@ -784,7 +1214,9 @@ export default function App() {
       setHealthError("");
     } catch (error) {
       setHealth(null);
-      setHealthError(error instanceof Error ? error.message : "Health check алдаа");
+      setHealthError(
+        error instanceof Error ? error.message : "Health check алдаа",
+      );
     }
   }
 
@@ -797,7 +1229,11 @@ export default function App() {
       if (!items.length) {
         setSelectedBookId("");
         setStructure({ chapters: [], sections: [] });
-        setTocLabels({ chapterByMajor: {}, sectionByKey: {}, sectionTitlesByMajor: {} });
+        setTocLabels({
+          chapterByMajor: {},
+          sectionByKey: {},
+          sectionTitlesByMajor: {},
+        });
         setAllTopicsMode(false);
         setSelectedSectionId("");
         setSelectedSectionIds([]);
@@ -813,7 +1249,11 @@ export default function App() {
             : items[0].id;
       setSelectedBookId(nextBookId);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Номын жагсаалт уншиж чадсангүй.");
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Номын жагсаалт уншиж чадсангүй.",
+      );
     } finally {
       setIsRefreshing(false);
     }
@@ -822,17 +1262,20 @@ export default function App() {
   async function loadStructure(bookId) {
     if (!bookId) return;
     try {
-      const payload = await requestWithFallback(`/api/books/${bookId}/structure`);
+      const payload = await requestWithFallback(
+        `/api/books/${bookId}/structure`,
+      );
       const chapters = Array.isArray(payload?.chapters) ? payload.chapters : [];
       const sections = Array.isArray(payload?.sections) ? payload.sections : [];
       setStructure({ chapters, sections });
       if (sections.length > 0) {
         const nextSectionId =
-          selectedSectionId && sections.some((section) => section.id === selectedSectionId)
+          selectedSectionId &&
+          sections.some((section) => section.id === selectedSectionId)
             ? selectedSectionId
             : pickPreferredSectionId(sections);
         setSelectedSectionId(nextSectionId);
-        setSelectedSectionIds(nextSectionId ? [nextSectionId] : []);
+        setSelectedSectionIds([]);
       } else {
         setAllTopicsMode(false);
         setSelectedSectionId("");
@@ -841,25 +1284,43 @@ export default function App() {
       }
     } catch (error) {
       setStructure({ chapters: [], sections: [] });
-      setErrorMessage(error instanceof Error ? error.message : "Structure уншиж чадсангүй.");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Structure уншиж чадсангүй.",
+      );
     }
   }
 
   async function loadTocLabels(bookId) {
     if (!bookId) {
-      setTocLabels({ chapterByMajor: {}, sectionByKey: {}, sectionTitlesByMajor: {} });
+      setTocLabels({
+        chapterByMajor: {},
+        sectionByKey: {},
+        sectionTitlesByMajor: {},
+      });
       return;
     }
     try {
-      const payload = await requestWithFallback(`/api/books/${bookId}?includeText=1`);
+      const payload = await requestWithFallback(
+        `/api/books/${bookId}?includeText=1`,
+      );
       const pages = Array.isArray(payload?.pages) ? payload.pages : [];
-      setTocLabels(extractTocTitlesFromPages(pages));
+      const extracted = extractTocTitlesFromPages(pages);
+      setTocLabels(resolveTocLabelsForBook(payload?.title || "", extracted));
     } catch {
-      setTocLabels({ chapterByMajor: {}, sectionByKey: {}, sectionTitlesByMajor: {} });
+      setTocLabels({
+        chapterByMajor: {},
+        sectionByKey: {},
+        sectionTitlesByMajor: {},
+      });
     }
   }
 
-  async function loadSectionWindow({ bookId, sectionId, offset = 0, nextWindowSize = windowSize }) {
+  async function loadSectionWindow({
+    bookId,
+    sectionId,
+    offset = 0,
+    nextWindowSize = windowSize,
+  }) {
     if (!bookId || !sectionId) return;
     setLoadingSection(true);
     setErrorMessage("");
@@ -872,7 +1333,11 @@ export default function App() {
         `Section content ачааллаа: ${payload.visiblePageNumbers?.join(", ") || "-"}`,
       );
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Section content уншиж чадсангүй.");
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Section content уншиж чадсангүй.",
+      );
     } finally {
       setLoadingSection(false);
     }
@@ -886,7 +1351,11 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedBookId) {
-      setTocLabels({ chapterByMajor: {}, sectionByKey: {}, sectionTitlesByMajor: {} });
+      setTocLabels({
+        chapterByMajor: {},
+        sectionByKey: {},
+        sectionTitlesByMajor: {},
+      });
       return;
     }
     void loadStructure(selectedBookId);
@@ -896,7 +1365,11 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedBookId || !selectedSectionId) return;
-    void loadSectionWindow({ bookId: selectedBookId, sectionId: selectedSectionId, offset: 0 });
+    void loadSectionWindow({
+      bookId: selectedBookId,
+      sectionId: selectedSectionId,
+      offset: 0,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBookId, selectedSectionId, windowSize]);
 
@@ -911,14 +1384,15 @@ export default function App() {
         .filter(Boolean),
     );
     setSelectedSectionIds((prev) => {
-      const filtered = (Array.isArray(prev) ? prev : []).filter((id) => availableIds.has(id));
-      if (filtered.length) return filtered;
-      return selectedSectionId && availableIds.has(selectedSectionId) ? [selectedSectionId] : [];
+      const filtered = (Array.isArray(prev) ? prev : []).filter((id) =>
+        availableIds.has(id),
+      );
+      return filtered;
     });
-  }, [structure.sections, selectedSectionId]);
+  }, [structure.sections]);
 
   useEffect(() => {
-    const chapters = Array.isArray(structure.chapters) ? structure.chapters : [];
+    const chapters = Array.isArray(displayChapters) ? displayChapters : [];
     if (!chapters.length) {
       setExpandedChapterKeys([]);
       return;
@@ -926,15 +1400,21 @@ export default function App() {
 
     const selectedKey = String(selectedChapterInfo?.key || "");
     setExpandedChapterKeys((prev) => {
-      const availableKeys = chapters.map((chapter, chapterIdx) => makeChapterKey(chapter, chapterIdx));
-      const filtered = (Array.isArray(prev) ? prev : []).filter((key) => availableKeys.includes(key));
+      const availableKeys = chapters.map((chapter, chapterIdx) =>
+        resolveChapterKey(chapter, chapterIdx),
+      );
+      const filtered = (Array.isArray(prev) ? prev : []).filter((key) =>
+        availableKeys.includes(key),
+      );
       if (selectedKey) {
-        return filtered.includes(selectedKey) ? filtered : [...filtered, selectedKey];
+        return filtered.includes(selectedKey)
+          ? filtered
+          : [...filtered, selectedKey];
       }
       if (filtered.length > 0) return filtered;
-      return [makeChapterKey(chapters[0], 0)];
+      return [resolveChapterKey(chapters[0], 0)];
     });
-  }, [structure.chapters, selectedChapterInfo?.key]);
+  }, [displayChapters, selectedChapterInfo?.key]);
 
   async function handleUpload(event) {
     event.preventDefault();
@@ -966,7 +1446,9 @@ export default function App() {
   async function handleGenerateTest() {
     const activeSectionIds = Array.from(selectedSectionIdSet);
     const useVisiblePages =
-      activeSectionIds.length <= 1 && Array.isArray(sectionWindow?.visiblePageNumbers) && sectionWindow.visiblePageNumbers.length > 0;
+      activeSectionIds.length <= 1 &&
+      Array.isArray(sectionWindow?.visiblePageNumbers) &&
+      sectionWindow.visiblePageNumbers.length > 0;
     if (!selectedBookId || (!activeSectionIds.length && !selectedSectionId)) {
       setErrorMessage("Эхлээд дор хаяж нэг сэдэв сонгоно уу.");
       return;
@@ -974,40 +1456,51 @@ export default function App() {
 
     setIsGeneratingTest(true);
     setErrorMessage("");
-    setStatusMessage("Сонгосон сэдвүүд дээр тулгуурлан шалгалтын материал үүсгэж байна...");
+    setStatusMessage(
+      "Сонгосон сэдвүүд дээр тулгуурлан шалгалтын материал үүсгэж байна...",
+    );
 
     try {
-      const payload = await requestWithFallback(`/api/books/${selectedBookId}/generate-test`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sectionId: selectedSectionId || activeSectionIds[0] || "",
-          sectionIds: activeSectionIds,
-          visiblePageNumbers: useVisiblePages ? sectionWindow.visiblePageNumbers : undefined,
-          questionCount: resolvedQuestionCount,
-          difficulty,
-          difficultyCounts: {
-            easy: clampNonNegativeInt(difficultyCounts.easy),
-            medium: clampNonNegativeInt(difficultyCounts.medium),
-            hard: clampNonNegativeInt(difficultyCounts.hard),
+      const payload = await requestWithFallback(
+        `/api/books/${selectedBookId}/generate-test`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-          openQuestionCount: clampNonNegativeInt(openQuestionCount),
-          totalScore: clampNonNegativeInt(totalScore, 100),
-        }),
-      });
+          body: JSON.stringify({
+            sectionId: selectedSectionId || activeSectionIds[0] || "",
+            sectionIds: activeSectionIds,
+            visiblePageNumbers: useVisiblePages
+              ? sectionWindow.visiblePageNumbers
+              : undefined,
+            questionCount: resolvedQuestionCount,
+            difficulty,
+            difficultyCounts: {
+              easy: clampNonNegativeInt(difficultyCounts.easy),
+              medium: clampNonNegativeInt(difficultyCounts.medium),
+              hard: clampNonNegativeInt(difficultyCounts.hard),
+            },
+            openQuestionCount: clampNonNegativeInt(openQuestionCount),
+            totalScore: clampNonNegativeInt(totalScore, 100),
+          }),
+        },
+      );
 
       setTestResult(payload);
       setSelectedAnswers({});
       setSubmitted(false);
       setShowExplanations(true);
-      setTestModalOpen(true);
+      setTestModalOpen(false);
       setStatusMessage(
         `Шалгалт бэлэн: ${payload.questionCountGenerated || 0} сонгох + ${payload.openQuestionCountGenerated || 0} задгай`,
       );
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Тест үүсгэх үед алдаа гарлаа.");
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Тест үүсгэх үед алдаа гарлаа.",
+      );
       setStatusMessage("");
     } finally {
       setIsGeneratingTest(false);
@@ -1021,18 +1514,27 @@ export default function App() {
   function handleSelectAllTopics() {
     setAllTopicsMode(true);
     setExpandedChapterKeys(chapterKeys);
-    const allIds = (Array.isArray(structure.sections) ? structure.sections : [])
+    const allIds = (Array.isArray(displayChapters) ? displayChapters : [])
+      .flatMap((chapter, chapterIdx) =>
+        getVisibleChapterSections(chapter, chapterIdx, tocLabels),
+      )
       .map((section) => String(section?.id || ""))
       .filter(Boolean);
     setSelectedSectionIds(allIds);
     if (allIds.length > 0) {
-      setSelectedSectionId((current) => (current && allIds.includes(current) ? current : allIds[0]));
+      setSelectedSectionId((current) =>
+        current && allIds.includes(current) ? current : allIds[0],
+      );
     }
   }
 
   function handleSelectChapterTopics(chapter, chapterIdx) {
-    const chapterKey = makeChapterKey(chapter, chapterIdx);
-    const chapterSections = Array.isArray(chapter?.sections) ? chapter.sections : [];
+    const chapterKey = resolveChapterKey(chapter, chapterIdx);
+    const chapterSections = getVisibleChapterSections(
+      chapter,
+      chapterIdx,
+      tocLabels,
+    );
     setAllTopicsMode(false);
     setExpandedChapterKeys((prev) => {
       const list = Array.isArray(prev) ? prev : [];
@@ -1043,7 +1545,9 @@ export default function App() {
     if (firstSectionId) {
       setSelectedSectionId(firstSectionId);
     }
-    const ids = chapterSections.map((section) => String(section?.id || "")).filter(Boolean);
+    const ids = chapterSections
+      .map((section) => String(section?.id || ""))
+      .filter(Boolean);
     setSelectedSectionIds((prev) => {
       const set = new Set(Array.isArray(prev) ? prev : []);
       ids.forEach((id) => set.add(id));
@@ -1055,10 +1559,6 @@ export default function App() {
     setAllTopicsMode(false);
     const id = String(sectionId || "");
     setSelectedSectionId(id);
-    setSelectedSectionIds((prev) => {
-      const list = Array.isArray(prev) ? prev : [];
-      return id && !list.includes(id) ? [...list, id] : list;
-    });
   }
 
   function handleToggleSectionSelection(sectionId) {
@@ -1078,11 +1578,19 @@ export default function App() {
     });
   }
 
-  function handleToggleChapterSelection(chapter) {
-    const chapterSections = Array.isArray(chapter?.sections) ? chapter.sections : [];
-    const chapterSectionIds = chapterSections.map((section) => String(section?.id || "")).filter(Boolean);
+  function handleToggleChapterSelection(chapter, chapterIdx) {
+    const chapterSections = getVisibleChapterSections(
+      chapter,
+      chapterIdx,
+      tocLabels,
+    );
+    const chapterSectionIds = chapterSections
+      .map((section) => String(section?.id || ""))
+      .filter(Boolean);
     if (!chapterSectionIds.length) return;
-    const allSelected = chapterSectionIds.every((id) => selectedSectionIdSet.has(id));
+    const allSelected = chapterSectionIds.every((id) =>
+      selectedSectionIdSet.has(id),
+    );
 
     setSelectedSectionIds((prev) => {
       const list = Array.isArray(prev) ? prev : [];
@@ -1096,7 +1604,10 @@ export default function App() {
         next = Array.from(set);
       }
       setSelectedSectionId((current) => {
-        if (!allSelected) return current && next.includes(current) ? current : chapterSectionIds[0];
+        if (!allSelected)
+          return current && next.includes(current)
+            ? current
+            : chapterSectionIds[0];
         if (current && !chapterSectionIds.includes(current)) return current;
         return String(next[0] || "");
       });
@@ -1115,25 +1626,32 @@ export default function App() {
   }
 
   function handleChapterToggle(chapter, chapterIdx) {
-    const chapterKey = makeChapterKey(chapter, chapterIdx);
-    const chapterSections = Array.isArray(chapter?.sections) ? chapter.sections : [];
+    const chapterKey = resolveChapterKey(chapter, chapterIdx);
+    const chapterSections = getVisibleChapterSections(
+      chapter,
+      chapterIdx,
+      tocLabels,
+    );
     const opening = !expandedChapterKeys.includes(chapterKey);
     setExpandedChapterKeys((prev) => {
       const list = Array.isArray(prev) ? prev : [];
-      return opening ? [...list, chapterKey] : list.filter((item) => item !== chapterKey);
+      return opening
+        ? [...list, chapterKey]
+        : list.filter((item) => item !== chapterKey);
     });
 
     if (!opening || !chapterSections.length) return;
     if (!chapterSections.some((section) => section.id === selectedSectionId)) {
       const nextSectionId = String(chapterSections[0]?.id || "");
       if (nextSectionId) {
-        handleSelectSection(nextSectionId);
+        setSelectedSectionId(nextSectionId);
       }
     }
   }
 
   function handlePrevPageWindow() {
-    if (!selectedBookId || !selectedSectionId || !sectionWindow?.hasPrev) return;
+    if (!selectedBookId || !selectedSectionId || !sectionWindow?.hasPrev)
+      return;
     const offset = Math.max(0, Number(sectionWindow?.offset || 0) - windowSize);
     void loadSectionWindow({
       bookId: selectedBookId,
@@ -1143,7 +1661,8 @@ export default function App() {
   }
 
   function handleNextPageWindow() {
-    if (!selectedBookId || !selectedSectionId || !sectionWindow?.hasNext) return;
+    if (!selectedBookId || !selectedSectionId || !sectionWindow?.hasNext)
+      return;
     const offset = Math.max(0, Number(sectionWindow?.offset || 0) + windowSize);
     void loadSectionWindow({
       bookId: selectedBookId,
@@ -1153,7 +1672,9 @@ export default function App() {
   }
 
   const score = useMemo(() => {
-    const questions = Array.isArray(testResult?.questions) ? testResult.questions : [];
+    const questions = Array.isArray(testResult?.questions)
+      ? testResult.questions
+      : [];
     if (!questions.length) return { correct: 0, total: 0 };
 
     let correct = 0;
@@ -1172,29 +1693,14 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">AI Textbook Reader + Test Generator</p>
-          <h1>PDF OCR Reader</h1>
-          <p className="subtext">
-            OCR-оор уншсан номыг бүлэг → сэдвээр нь нээж, зөвхөн сэдвийн гарчигийг харуулна.
-          </p>
-        </div>
-        <div className="status-pills">
-          <span className="pill">API: {apiBase || "(same-origin)"}</span>
-          <span className={`pill ${health?.ok ? "ok" : "warn"}`}>
-            {health?.ok ? "Backend online" : "Backend offline"}
-          </span>
-          <span className="pill">Model: {health?.model || "-"}</span>
-        </div>
-      </header>
-
       <section className="toolbar">
         <form onSubmit={handleUpload} className="upload-form">
           <input
             type="file"
             accept=".pdf,application/pdf"
-            onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+            onChange={(event) =>
+              setSelectedFile(event.target.files?.[0] || null)
+            }
             required
           />
           <button type="submit" disabled={isUploading}>
@@ -1227,7 +1733,12 @@ export default function App() {
             </select>
           </label>
 
-          <button className="ghost" type="button" onClick={() => void loadBooks()} disabled={isRefreshing}>
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => void loadBooks()}
+            disabled={isRefreshing}
+          >
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
@@ -1235,7 +1746,8 @@ export default function App() {
 
       {selectedBook ? (
         <p className="book-meta">
-          {selectedBook.title} • {selectedBook.pageCount} page • {formatDate(selectedBook.createdAt)}
+          {selectedBook.title} • {selectedBook.pageCount} page •{" "}
+          {formatDate(selectedBook.createdAt)}
         </p>
       ) : null}
 
@@ -1244,7 +1756,9 @@ export default function App() {
           <p className="sidebar-kicker">Сурах бичиг</p>
           <div className="builder-card">
             <div className="sidebar-head">
-              <h2 className="builder-book-title">{selectedBook?.title || "Математик-12"}</h2>
+              <h2 className="builder-book-title">
+                {selectedBook?.title || "Математик-12"}
+              </h2>
               <div className="sidebar-actions">
                 <button
                   type="button"
@@ -1264,56 +1778,93 @@ export default function App() {
               placeholder="Хичээлийн сэдвээр хайх"
             />
 
-            {!structure.chapters.length ? (
-              <p className="empty">Chapter/section бүтэц хараахан алга байна.</p>
+            {!displayChapters.length ? (
+              <p className="empty">
+                Chapter/section бүтэц хараахан алга байна.
+              </p>
             ) : (
               <div className="chapter-list exam-chapter-list">
-                {structure.chapters.map((chapter, chapterIdx) => {
-                  const chapterSections = Array.isArray(chapter?.sections) ? chapter.sections : [];
-                  const chapterKey = makeChapterKey(chapter, chapterIdx);
+                {displayChapters.map((chapter, chapterIdx) => {
+                  const chapterSections = getVisibleChapterSections(
+                    chapter,
+                    chapterIdx,
+                    tocLabels,
+                  );
+                  const chapterKey = resolveChapterKey(chapter, chapterIdx);
                   const isOpen = expandedChapterKeys.includes(chapterKey);
-                  const chapterNumber = getChapterNumber(chapter, chapterIdx);
-                  const chapterDisplayTitle = getChapterDisplayTitle(chapter, chapterIdx, tocLabels);
-                  const searchLower = String(topicSearch || "").trim().toLowerCase();
+                  const chapterNumber =
+                    Number(chapter?.chapterNumber || 0) ||
+                    getChapterNumber(chapter, chapterIdx);
+                  const chapterDisplayTitle =
+                    String(chapter?.title || "").trim() ||
+                    getChapterDisplayTitle(chapter, chapterIdx, tocLabels);
+                  const searchLower = String(topicSearch || "")
+                    .trim()
+                    .toLowerCase();
                   const sectionEntries = chapterSections
                     .map((section, sectionIdx) => ({
                       section,
                       sectionIdx,
-                      displayTitle: getSectionDisplayTitle(section, sectionIdx, chapterNumber, tocLabels),
+                      displayTitle: getSectionDisplayTitle(
+                        section,
+                        sectionIdx,
+                        chapterNumber,
+                        tocLabels,
+                      ),
                     }))
                     .filter((entry) => {
                       if (!searchLower) return true;
-                      return String(entry.displayTitle || "").toLowerCase().includes(searchLower);
+                      return String(entry.displayTitle || "")
+                        .toLowerCase()
+                        .includes(searchLower);
                     });
-                  const chapterMatches = !searchLower
-                    || String(chapterDisplayTitle || "").toLowerCase().includes(searchLower)
-                    || sectionEntries.length > 0;
+                  const chapterMatches =
+                    !searchLower ||
+                    String(chapterDisplayTitle || "")
+                      .toLowerCase()
+                      .includes(searchLower) ||
+                    sectionEntries.length > 0;
                   if (!chapterMatches) return null;
 
                   const visibleSectionIds = sectionEntries
                     .map((entry) => String(entry.section?.id || ""))
                     .filter(Boolean);
                   const allChapterVisibleSelected =
-                    visibleSectionIds.length > 0 && visibleSectionIds.every((id) => selectedSectionIdSet.has(id));
+                    visibleSectionIds.length > 0 &&
+                    visibleSectionIds.every((id) =>
+                      selectedSectionIdSet.has(id),
+                    );
 
                   return (
-                    <div key={`chapter-${chapterIdx}`} className={`chapter-block ${isOpen ? "open" : ""}`}>
+                    <div
+                      key={`chapter-${chapterIdx}`}
+                      className={`chapter-block ${isOpen ? "open" : ""}`}
+                    >
                       <div className="chapter-select-row">
                         <label className="check-row chapter-check-row">
                           <input
                             type="checkbox"
                             checked={allChapterVisibleSelected}
-                            onChange={() => handleToggleChapterSelection(chapter)}
+                            onChange={() =>
+                              handleToggleChapterSelection(chapter, chapterIdx)
+                            }
                           />
-                          <span className="chapter-title">{chapterDisplayTitle}</span>
+                          <span className="chapter-title">
+                            {chapterDisplayTitle}
+                          </span>
                         </label>
                         <button
                           type="button"
                           className={`chapter-toggle ${isOpen ? "open" : ""}`}
-                          onClick={() => handleChapterToggle(chapter, chapterIdx)}
+                          onClick={() =>
+                            handleChapterToggle(chapter, chapterIdx)
+                          }
                           aria-expanded={isOpen}
                         >
-                          <span className={`chapter-chevron ${isOpen ? "open" : ""}`} aria-hidden="true">
+                          <span
+                            className={`chapter-chevron ${isOpen ? "open" : ""}`}
+                            aria-hidden="true"
+                          >
                             ⌄
                           </span>
                         </button>
@@ -1323,7 +1874,9 @@ export default function App() {
                           <button
                             type="button"
                             className="chapter-select-all-btn"
-                            onClick={() => handleSelectChapterTopics(chapter, chapterIdx)}
+                            onClick={() =>
+                              handleSelectChapterTopics(chapter, chapterIdx)
+                            }
                             disabled={!chapterSections.length}
                           >
                             Энэ бүлгийн бүх сэдэв
@@ -1331,21 +1884,29 @@ export default function App() {
                           {sectionEntries.length ? (
                             sectionEntries.map((entry) => {
                               const sectionId = String(entry.section?.id || "");
-                              const isChecked = selectedSectionIdSet.has(sectionId);
+                              const isChecked =
+                                selectedSectionIdSet.has(sectionId);
                               return (
                                 <div
-                                  key={sectionId || `${chapterKey}-sec-${entry.sectionIdx}`}
+                                  key={
+                                    sectionId ||
+                                    `${chapterKey}-sec-${entry.sectionIdx}`
+                                  }
                                   className={`section-check-row ${selectedSectionId === sectionId ? "active" : ""}`}
                                 >
                                   <input
                                     type="checkbox"
                                     checked={isChecked}
-                                    onChange={() => handleToggleSectionSelection(sectionId)}
+                                    onChange={() =>
+                                      handleToggleSectionSelection(sectionId)
+                                    }
                                   />
                                   <button
                                     type="button"
                                     className="section-inline-btn"
-                                    onClick={() => handleSelectSection(sectionId)}
+                                    onClick={() =>
+                                      handleSelectSection(sectionId)
+                                    }
                                   >
                                     {entry.displayTitle}
                                   </button>
@@ -1369,7 +1930,9 @@ export default function App() {
                 type="number"
                 min={0}
                 value={questionCount}
-                onChange={(event) => setQuestionCount(clampQuestionCount(event.target.value))}
+                onChange={(event) =>
+                  setQuestionCount(clampQuestionCount(event.target.value))
+                }
                 placeholder="Тестийн тоо оруулна уу"
               />
             </label>
@@ -1380,7 +1943,9 @@ export default function App() {
                 type="number"
                 min={0}
                 value={openQuestionCount}
-                onChange={(event) => setOpenQuestionCount(clampNonNegativeInt(event.target.value))}
+                onChange={(event) =>
+                  setOpenQuestionCount(clampNonNegativeInt(event.target.value))
+                }
                 placeholder="Задгай даалгаврын тоо оруулна уу"
               />
             </label>
@@ -1391,7 +1956,9 @@ export default function App() {
                 type="number"
                 min={0}
                 value={totalScore}
-                onChange={(event) => setTotalScore(clampNonNegativeInt(event.target.value, 100))}
+                onChange={(event) =>
+                  setTotalScore(clampNonNegativeInt(event.target.value, 100))
+                }
                 placeholder="Нийт оноо оруулна уу"
               />
             </label>
@@ -1404,7 +1971,9 @@ export default function App() {
                   type="number"
                   min={0}
                   value={difficultyCounts.easy}
-                  onChange={(event) => handleDifficultyCountChange("easy", event.target.value)}
+                  onChange={(event) =>
+                    handleDifficultyCountChange("easy", event.target.value)
+                  }
                 />
               </label>
               <label className="difficulty-row">
@@ -1413,7 +1982,9 @@ export default function App() {
                   type="number"
                   min={0}
                   value={difficultyCounts.medium}
-                  onChange={(event) => handleDifficultyCountChange("medium", event.target.value)}
+                  onChange={(event) =>
+                    handleDifficultyCountChange("medium", event.target.value)
+                  }
                 />
               </label>
               <label className="difficulty-row">
@@ -1422,7 +1993,9 @@ export default function App() {
                   type="number"
                   min={0}
                   value={difficultyCounts.hard}
-                  onChange={(event) => handleDifficultyCountChange("hard", event.target.value)}
+                  onChange={(event) =>
+                    handleDifficultyCountChange("hard", event.target.value)
+                  }
                 />
               </label>
             </div>
@@ -1431,7 +2004,11 @@ export default function App() {
               type="button"
               className="create-exam-btn"
               onClick={() => void handleGenerateTest()}
-              disabled={isGeneratingTest || !selectedBookId || selectedSectionIdSet.size === 0}
+              disabled={
+                isGeneratingTest ||
+                !selectedBookId ||
+                selectedSectionIdSet.size === 0
+              }
             >
               {isGeneratingTest ? "Үүсгэж байна..." : "Шалгалт үүсгэх"}
             </button>
@@ -1441,103 +2018,177 @@ export default function App() {
         <section className="reader">
           <div className="reader-head">
             <div>
-              <h2 className="reader-main-title">Номын PDF зураг</h2>
-              <p className="subtext">Сонгосон сэдвийн хуудсууд энд зураг хэлбэрээр харагдана.</p>
+              <h2 className="reader-main-title">Model-ийн Гаргалгаа</h2>
+              <p className="subtext">
+                `Шалгалт үүсгэх` дарсны дараах model-ийн гаргалгаа энд шууд харагдана.
+              </p>
             </div>
+            {testResult ? (
+              <div className="reader-actions">
+                <button type="button" onClick={handleSubmitTest}>
+                  Submit
+                </button>
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => setShowExplanations((prev) => !prev)}
+                >
+                  {showExplanations ? "Hide explanations" : "Show explanations"}
+                </button>
+              </div>
+            ) : null}
           </div>
 
-          {selectedSectionId ? (
+          {isGeneratingTest ? (
+            <p className="empty">Model ажиллаж байна, шалгалтыг үүсгэж байна...</p>
+          ) : null}
+
+          {!isGeneratingTest && testResult ? (
             <div className="visual-panel">
               <div className="window-nav">
                 <p>
-                  {selectedSection
-                    ? `PDF зураг: ${selectedSectionDisplayTitle}`
-                    : "Сонгосон сэдвийн PDF зураг"}
+                  Difficulty: {testResult.difficulty} • {testResult.questionCountGenerated} асуулт • Pages:{" "}
+                  {Array.isArray(testResult.visiblePageNumbers)
+                    ? testResult.visiblePageNumbers.join(", ")
+                    : "-"}
                 </p>
-                <div className="window-nav-actions">
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={handlePrevPageWindow}
-                    disabled={loadingSection || !sectionWindow?.hasPrev}
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={handleNextPageWindow}
-                    disabled={loadingSection || !sectionWindow?.hasNext}
-                  >
-                    Next
-                  </button>
-                </div>
               </div>
 
-              {Array.isArray(sectionWindow?.visiblePages) && sectionWindow.visiblePages.length ? (
-                <div className="page-cards">
-                  {sectionWindow.visiblePages.map((page, idx) => {
-                    const pageNumber = Math.max(1, Math.trunc(Number(page?.pageNumber || idx + 1)));
-                    const pageImageKey = `page-${pageNumber}-${idx}`;
-                    const directPdfUrl = buildPdfFileUrl({
-                      bookId: selectedBookId,
-                      apiBase,
-                    });
-                    const pageImageUrl = buildPdfPageImageUrl({
-                      bookId: selectedBookId,
-                      pageNumber,
-                      apiBase,
-                    });
-                    const pagePreviewUrl = buildPdfPagePreviewUrl({
-                      fileUrl: directPdfUrl,
-                      pageNumber,
-                    });
+              <p className="subtext">
+                Задгай даалгавар: {testResult.openQuestionCountGenerated || 0}
+              </p>
 
-                    return (
-                      <article className="page-card" key={pageImageKey}>
-                        <h4>Хуудас {pageNumber}</h4>
-                        <div className="page-preview-wrap">
-                          {failedPageImages[pageImageKey] ? (
-                            <p className="empty">
-                              Хуудасны зураг ачаалж чадсангүй.{" "}
-                              <a href={pagePreviewUrl} target="_blank" rel="noreferrer">
-                                PDF-ээ шууд нээх
-                              </a>
-                            </p>
-                          ) : (
-                            <img
-                              src={pageImageUrl}
-                              alt={`Хуудас ${pageNumber}`}
-                              className="page-preview-image"
-                              loading="lazy"
-                              onError={() =>
-                                setFailedPageImages((prev) => ({
-                                  ...prev,
-                                  [pageImageKey]: true,
-                                }))
-                              }
-                            />
-                          )}
-                        </div>
-                        <a
-                          className="page-preview-open"
-                          href={pagePreviewUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Томоор нээх
-                        </a>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="empty">
-                  {loadingSection ? "PDF зураг ачаалж байна..." : "Энэ сэдэвт харуулах PDF зураг олдсонгүй."}
+              {submitted ? (
+                <p className="score">
+                  Score: {score.correct} / {score.total}
                 </p>
-              )}
+              ) : null}
+
+              {Array.isArray(testResult.warnings) && testResult.warnings.length ? (
+                <div className="warning-box">
+                  {testResult.warnings.map((warning, idx) => (
+                    <p key={`warn-inline-${idx}`}>{warning}</p>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="question-list">
+                {(Array.isArray(testResult.questions) ? testResult.questions : []).map(
+                  (question, qIdx) => (
+                    <article key={`inline-q-${qIdx}`} className="question-item">
+                      {String(
+                        question.bookProblem || question.sourceExcerpt || "",
+                      ).trim() ? (
+                        <p className="problem-line">
+                          <strong>Номын бодлого:</strong>{" "}
+                          <MathText
+                            text={String(
+                              question.bookProblem || question.sourceExcerpt || "",
+                            ).trim()}
+                          />
+                        </p>
+                      ) : null}
+
+                      <h3>
+                        {qIdx + 1}. <MathText text={question.question} />
+                      </h3>
+
+                      <div className="choice-list">
+                        {(Array.isArray(question.choices) ? question.choices : []).map(
+                          (choice, choiceIdx) => {
+                            const parsed = extractChoiceToken(choice, choiceIdx);
+                            const selected = selectedAnswers[qIdx] === parsed.label;
+                            const isCorrect = parsed.label === question.correctAnswer;
+                            const classNames = [
+                              "choice-item",
+                              selected ? "selected" : "",
+                              isCorrect ? "correct" : "",
+                              submitted && selected && !isCorrect ? "incorrect" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ");
+
+                            return (
+                              <label
+                                key={`inline-q-${qIdx}-c-${choiceIdx}`}
+                                className={classNames}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`inline-q-${qIdx}`}
+                                  value={parsed.label}
+                                  checked={selected}
+                                  onChange={() =>
+                                    setSelectedAnswers((prev) => ({
+                                      ...prev,
+                                      [qIdx]: parsed.label,
+                                    }))
+                                  }
+                                />
+                                <span className="choice-label">{parsed.label}.</span>
+                                <span>
+                                  <MathText text={parsed.body} />
+                                </span>
+                              </label>
+                            );
+                          },
+                        )}
+                      </div>
+
+                      <p className="answer-line">
+                        Correct answer: {question.correctAnswer}
+                      </p>
+
+                      {Array.isArray(question.sourcePages) &&
+                      question.sourcePages.length ? (
+                        <p className="source-line">
+                          Source pages: {question.sourcePages.join(", ")}
+                        </p>
+                      ) : null}
+
+                      {showExplanations ? (
+                        <p className="explain-line">
+                          <MathText text={question.explanation || ""} />
+                        </p>
+                      ) : null}
+                    </article>
+                  ),
+                )}
+              </div>
+
+              {Array.isArray(testResult.openQuestions) &&
+              testResult.openQuestions.length ? (
+                <div className="question-list">
+                  {testResult.openQuestions.map((task, idx) => (
+                    <article
+                      key={`inline-open-${idx}`}
+                      className="question-item open-item"
+                    >
+                      <h3>
+                        Задгай {idx + 1}.{" "}
+                        <MathText text={task.prompt || task.question || ""} />
+                      </h3>
+                      {Number.isFinite(Number(task.score)) ? (
+                        <p className="source-line">Оноо: {Number(task.score)}</p>
+                      ) : null}
+                      {task.difficulty ? (
+                        <p className="source-line">Түвшин: {task.difficulty}</p>
+                      ) : null}
+                      {Array.isArray(task.sourcePages) && task.sourcePages.length ? (
+                        <p className="source-line">
+                          Source pages: {task.sourcePages.join(", ")}
+                        </p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          ) : (
+            <p className="empty">
+              `Шалгалт үүсгэх` дээр дарсны дараа model-ийн гаргалгаа энд харагдана.
+            </p>
+          )}
         </section>
       </main>
 
@@ -1546,14 +2197,21 @@ export default function App() {
           <div className="modal">
             <div className="modal-head">
               <h2>Generated Test</h2>
-              <button className="ghost" type="button" onClick={() => setTestModalOpen(false)}>
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => setTestModalOpen(false)}
+              >
                 Close
               </button>
             </div>
 
             <p className="subtext">
-              Difficulty: {testResult.difficulty} • {testResult.questionCountGenerated} асуулт • Pages:{" "}
-              {Array.isArray(testResult.visiblePageNumbers) ? testResult.visiblePageNumbers.join(", ") : "-"}
+              Difficulty: {testResult.difficulty} •{" "}
+              {testResult.questionCountGenerated} асуулт • Pages:{" "}
+              {Array.isArray(testResult.visiblePageNumbers)
+                ? testResult.visiblePageNumbers.join(", ")
+                : "-"}
             </p>
             <p className="subtext">
               Задгай даалгавар: {testResult.openQuestionCountGenerated || 0}
@@ -1569,12 +2227,17 @@ export default function App() {
               <button type="button" onClick={handleSubmitTest}>
                 Submit
               </button>
-              <button className="ghost" type="button" onClick={() => setShowExplanations((prev) => !prev)}>
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => setShowExplanations((prev) => !prev)}
+              >
                 {showExplanations ? "Hide explanations" : "Show explanations"}
               </button>
             </div>
 
-            {Array.isArray(testResult.warnings) && testResult.warnings.length ? (
+            {Array.isArray(testResult.warnings) &&
+            testResult.warnings.length ? (
               <div className="warning-box">
                 {testResult.warnings.map((warning, idx) => (
                   <p key={`warn-${idx}`}>{warning}</p>
@@ -1583,12 +2246,21 @@ export default function App() {
             ) : null}
 
             <div className="question-list">
-              {(Array.isArray(testResult.questions) ? testResult.questions : []).map((question, qIdx) => (
+              {(Array.isArray(testResult.questions)
+                ? testResult.questions
+                : []
+              ).map((question, qIdx) => (
                 <article key={`q-${qIdx}`} className="question-item">
-                  {String(question.bookProblem || question.sourceExcerpt || "").trim() ? (
+                  {String(
+                    question.bookProblem || question.sourceExcerpt || "",
+                  ).trim() ? (
                     <p className="problem-line">
                       <strong>Номын бодлого:</strong>{" "}
-                      <MathText text={String(question.bookProblem || question.sourceExcerpt || "").trim()} />
+                      <MathText
+                        text={String(
+                          question.bookProblem || question.sourceExcerpt || "",
+                        ).trim()}
+                      />
                     </p>
                   ) : null}
 
@@ -1597,7 +2269,10 @@ export default function App() {
                   </h3>
 
                   <div className="choice-list">
-                    {(Array.isArray(question.choices) ? question.choices : []).map((choice, choiceIdx) => {
+                    {(Array.isArray(question.choices)
+                      ? question.choices
+                      : []
+                    ).map((choice, choiceIdx) => {
                       const parsed = extractChoiceToken(choice, choiceIdx);
                       const selected = selectedAnswers[qIdx] === parsed.label;
                       const isCorrect = parsed.label === question.correctAnswer;
@@ -1611,7 +2286,10 @@ export default function App() {
                         .join(" ");
 
                       return (
-                        <label key={`q-${qIdx}-c-${choiceIdx}`} className={classNames}>
+                        <label
+                          key={`q-${qIdx}-c-${choiceIdx}`}
+                          className={classNames}
+                        >
                           <input
                             type="radio"
                             name={`q-${qIdx}`}
@@ -1625,16 +2303,23 @@ export default function App() {
                             }
                           />
                           <span className="choice-label">{parsed.label}.</span>
-                          <span><MathText text={parsed.body} /></span>
+                          <span>
+                            <MathText text={parsed.body} />
+                          </span>
                         </label>
                       );
                     })}
                   </div>
 
-                  <p className="answer-line">Correct answer: {question.correctAnswer}</p>
+                  <p className="answer-line">
+                    Correct answer: {question.correctAnswer}
+                  </p>
 
-                  {Array.isArray(question.sourcePages) && question.sourcePages.length ? (
-                    <p className="source-line">Source pages: {question.sourcePages.join(", ")}</p>
+                  {Array.isArray(question.sourcePages) &&
+                  question.sourcePages.length ? (
+                    <p className="source-line">
+                      Source pages: {question.sourcePages.join(", ")}
+                    </p>
                   ) : null}
 
                   {showExplanations ? (
@@ -1646,12 +2331,17 @@ export default function App() {
               ))}
             </div>
 
-            {Array.isArray(testResult.openQuestions) && testResult.openQuestions.length ? (
+            {Array.isArray(testResult.openQuestions) &&
+            testResult.openQuestions.length ? (
               <div className="question-list">
                 {testResult.openQuestions.map((task, idx) => (
-                  <article key={`open-${idx}`} className="question-item open-item">
+                  <article
+                    key={`open-${idx}`}
+                    className="question-item open-item"
+                  >
                     <h3>
-                      Задгай {idx + 1}. <MathText text={task.prompt || task.question || ""} />
+                      Задгай {idx + 1}.{" "}
+                      <MathText text={task.prompt || task.question || ""} />
                     </h3>
                     {Number.isFinite(Number(task.score)) ? (
                       <p className="source-line">Оноо: {Number(task.score)}</p>
@@ -1659,8 +2349,11 @@ export default function App() {
                     {task.difficulty ? (
                       <p className="source-line">Түвшин: {task.difficulty}</p>
                     ) : null}
-                    {Array.isArray(task.sourcePages) && task.sourcePages.length ? (
-                      <p className="source-line">Source pages: {task.sourcePages.join(", ")}</p>
+                    {Array.isArray(task.sourcePages) &&
+                    task.sourcePages.length ? (
+                      <p className="source-line">
+                        Source pages: {task.sourcePages.join(", ")}
+                      </p>
                     ) : null}
                   </article>
                 ))}
@@ -1670,7 +2363,7 @@ export default function App() {
         </div>
       ) : null}
 
-      {(statusMessage || errorMessage || healthError) ? (
+      {statusMessage || errorMessage || healthError ? (
         <footer className="footer-status">
           {statusMessage ? <p className="status ok">{statusMessage}</p> : null}
           {errorMessage ? <p className="status err">{errorMessage}</p> : null}

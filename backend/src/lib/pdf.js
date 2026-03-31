@@ -1315,6 +1315,7 @@ async function parsePdfPages(buffer, options = {}) {
   let localOcr = { errorReason: "", pages: [] };
   let carvedOcr = { errorReason: "", pages: [] };
   let ocr = { errorReason: "", pages: [] };
+  let triedGemini = false;
 
   const tryLocal = async () => {
     localOcr = await extractViaLocalOcr(buffer);
@@ -1335,6 +1336,7 @@ async function parsePdfPages(buffer, options = {}) {
   };
 
   const tryGemini = async () => {
+    triedGemini = true;
     ocr = await extractViaGeminiOcr(buffer);
     const quality = evaluatePages(ocr.pages);
     if (ocr.pages.length > 0 && quality.compactLen > 0) {
@@ -1367,6 +1369,12 @@ async function parsePdfPages(buffer, options = {}) {
     if (local.length > 0) return local;
     const carved = await tryCarved();
     if (carved.length > 0) return carved;
+    const pages = await tryGemini();
+    if (pages.length > 0) return pages;
+  }
+
+  // Hard fallback: if OCR flow failed and Gemini key exists, force one final Gemini attempt.
+  if (hasGeminiKey && !triedGemini) {
     const pages = await tryGemini();
     if (pages.length > 0) return pages;
   }

@@ -464,6 +464,27 @@ button.ghost {
   gap: 10px;
 }
 
+.checked-section-list {
+  display: grid;
+  gap: 14px;
+}
+
+.checked-section-card {
+  border: 1px solid #d8e0d4;
+  border-radius: 14px;
+  background: #fdfefd;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.checked-section-title {
+  margin: 0;
+  font-size: 15px;
+  color: #21463e;
+  font-weight: 800;
+}
+
 .window-nav p {
   margin: 0;
   font-size: 13px;
