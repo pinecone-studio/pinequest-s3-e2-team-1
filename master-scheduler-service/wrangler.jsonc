@@ -1,0 +1,22 @@
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "account_id": "25ff2a265521aa8843147a4d3fec0eb6",
+    "name": "master-scheduler-service",
+    "main": "src/index.ts",
+    "compatibility_date": "2026-03-17",
+    "compatibility_flags": ["nodejs_compat"],
+    "observability": {
+      "enabled": true
+    },
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "create-exams", // Таны өмнөх баазын нэр
+        "database_id": "f90dad03-6683-4e49-b58b-167632fdc471", // Таны жинхэнэ ID
+        "remote": true
+      }
+    ],
+    "vars": {
+      "GEMINI_MODEL":"gemini-2.5-flash"
+    }
+  }
