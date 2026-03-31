@@ -45,3 +45,32 @@ To learn more about Next.js, take a look at the following resources:
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Book Section (PDF -> AI Questions)
+
+- New UI route: `http://localhost:3000/book`
+- Home page (`/`) дээрээс `Book Section` товчоор орно.
+
+Backend URL-г заах бол:
+
+```bash
+NEXT_PUBLIC_BOOK_API_URL=http://localhost:4000
+```
+
+Энэ хувьсагчийг `frontend/.env.local` дотор нэмнэ.
+
+### Bun-аар ажиллуулах
+
+```bash
+cd backend
+cp .env.example .env
+bun install
+bun run dev
+```
+
+```bash
+cd frontend
+echo 'NEXT_PUBLIC_BOOK_API_URL=http://localhost:4000' > .env.local
+bun install
+bun run dev
+```
