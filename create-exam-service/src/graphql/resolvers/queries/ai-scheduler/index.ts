@@ -6,9 +6,9 @@ import { getTeacherMainLessonsListQuery } from "./getTeacherMainLessonsList";
 
 /** AI хуваарь унших query-ууд */
 export const aiSchedulerQueryResolvers = {
-	...getAiExamScheduleQuery,
-	...getStudentMainLessonsListQuery,
-	...getStudentsListQuery,
-	...getTeachersListQuery,
-	...getTeacherMainLessonsListQuery,
+  ...getAiExamScheduleQuery,
+  ...getStudentMainLessonsListQuery,
+  ...getStudentsListQuery,
+  ...getTeachersListQuery,
+  ...getTeacherMainLessonsListQuery,
 };

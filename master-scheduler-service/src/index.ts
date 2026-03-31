@@ -566,6 +566,11 @@ export default {
         // Room conflicts are the most common reason for silent drops (ON CONFLICT DO NOTHING).
         // Provide the full room occupancy so the model can avoid conflicts up-front.
         const occupiedRoomSlotsFull = occupiedRoomSlots;
+        // Room conflicts can be enforced by DB unique index; keep a small hint set (LAB + home room only).
+        const candidateRoomIds = new Set<string>();
+        if (group.homeClassroomId) candidateRoomIds.add(String(group.homeClassroomId));
+        for (const r of classrooms) if (String(r.type).toUpperCase() === "LAB") candidateRoomIds.add(String(r.id));
+        const occupiedRoomSlotsSmall = occupiedRoomSlots.filter((s: any) => candidateRoomIds.has(String(s.classroomId)));
 
         // 3) AI PROMPT БЭЛДЭХ
         const prompt = `
@@ -579,6 +584,7 @@ export default {
           - Цаг (Periods): ${JSON.stringify(shiftPeriods)}
           - Бөглөрсөн багшийн слот (This group's teachers): ${JSON.stringify(occupiedTeacherSlotsSmall)}
           - Бөглөрсөн өрөөний слот (All): ${JSON.stringify(occupiedRoomSlotsFull)}
+          - Бөглөрсөн өрөөний слот (Hints only): ${JSON.stringify(occupiedRoomSlotsSmall)}
 
           ХАТУУ ДҮРЭМ:
           1. Энэ ангийн curriculum бүрийн weeklyHours-г бүрэн гүйцэт төлөвлө.
@@ -814,6 +820,16 @@ Return FULL corrected schedule array (not just diffs).
           }
 
           scheduleItems = planned;
+          return Response.json(
+            {
+              error: "AI could not generate a complete schedule after retries.",
+              missing: lastMissing,
+              count: scheduleItems.length,
+              groupId,
+              semesterId,
+            },
+            { status: 422 },
+          );
         }
 
         // 4.6) Validation + sanitization before DB (өдөр/цаг/өрөө)
@@ -933,6 +949,7 @@ Return FULL corrected schedule array (not just diffs).
         const insertedActual = Number(insertedActualRow?.[0]?.n ?? 0);
 
         if (insertedActual !== scheduleItems.length) {
+        if (inserted !== scheduleItems.length) {
           return Response.json(
             {
               success: false,
@@ -940,6 +957,7 @@ Return FULL corrected schedule array (not just diffs).
                 "Schedule generation produced rows but not all could be inserted (likely room/time conflicts or DB constraints).",
               count: scheduleItems.length,
               inserted: insertedActual,
+              inserted,
               groupId,
               semesterId,
             },

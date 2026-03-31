@@ -332,7 +332,9 @@ export const typeDefs = /* GraphQL */ `
     # AI-аар шинжлүүлэх
     analyzeQuestion(prompt: String!): QuestionAnalysisResult!
     # AI-аар үүсгэсэн загварыг хадгалах
-    createAiExamTemplate(input: CreateAiExamTemplateInput!): AiExamTemplatePayload!
+    createAiExamTemplate(
+      input: CreateAiExamTemplateInput!
+    ): AiExamTemplatePayload!
     # Шалгалтын хуваарь: D1-д pending үүсгээд Queue руу — AI consumer дараа нь батална
     requestAiExamSchedule(
       testId: ID!

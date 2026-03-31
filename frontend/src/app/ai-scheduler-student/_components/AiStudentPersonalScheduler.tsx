@@ -782,6 +782,43 @@ export function AiStudentPersonalScheduler({
                       {visibleBlocks.length} блок
                     </span>
                   </div>
+<<<<<<< HEAD
+=======
+                  <div className="mt-2 flex flex-col gap-1.5 border-t border-zinc-200/80 pt-2 dark:border-zinc-700/80 sm:flex-row sm:items-center sm:justify-between">
+                    <div
+                      className="flex shrink-0 rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-600 dark:bg-zinc-900"
+                      role="group"
+                      aria-label="Хуанлийн анхны төвлөрөл"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={shift === "I"}
+                        onClick={() => setShift("I")}
+                        className={cn(
+                          "rounded-md px-2 py-1 text-[9px] font-semibold transition-colors",
+                          shift === "I"
+                            ? "bg-emerald-600 text-white shadow-sm dark:bg-emerald-500"
+                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800",
+                        )}
+                      >
+                        I · Өглөө
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={shift === "II"}
+                        onClick={() => setShift("II")}
+                        className={cn(
+                          "rounded-md px-2 py-1 text-[9px] font-semibold transition-colors",
+                          shift === "II"
+                            ? "bg-amber-600 text-white shadow-sm dark:bg-amber-600"
+                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800",
+                        )}
+                      >
+                        II · Өдөр
+                      </button>
+                    </div>
+                  </div>
+>>>>>>> c3aaec078f11c68c7f2fdcf655a6635c054f03e4
                 </div>
 
                 <div className="mb-2 grid grid-cols-[2.75rem_repeat(7,minmax(0,1fr))] gap-x-1 border-b border-zinc-200 pb-2 dark:border-zinc-700 sm:grid-cols-[3.25rem_repeat(7,minmax(0,1fr))]">
