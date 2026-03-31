@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ClipboardList,
   Clock3,
+  Eye,
   FileCheck2,
   FileText,
   GraduationCap,
@@ -400,98 +401,69 @@ function ResultCardsGrid({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      {rows.map((row) => {
-        const attempt = attemptsById.get(row.attemptId);
-        const isClickable = Boolean(attempt && row.isApproved);
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_6px_22px_rgba(15,23,42,0.06)]">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left">
+          <thead className="bg-slate-50">
+            <tr className="text-sm font-semibold text-slate-700">
+              <th className="px-4 py-4">Шалгалтын нэр</th>
+              <th className="px-4 py-4">Хичээл</th>
+              <th className="px-4 py-4">Анги</th>
+              <th className="px-4 py-4">Багш</th>
+              <th className="px-4 py-4">Эхэлсэн огноо</th>
+              <th className="px-4 py-4">Дууссан огноо</th>
+              <th className="px-4 py-4 text-center">Авсан оноо</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const attempt = attemptsById.get(row.attemptId);
+              const isClickable = Boolean(attempt && row.isApproved);
 
-        return (
-          <article
-            key={row.attemptId}
-            className={`relative overflow-hidden rounded-2xl border bg-white p-5 pt-6 shadow-[0_6px_22px_rgba(15,23,42,0.06)] transition ${
-              row.isApproved
-                ? "border-emerald-200 ring-1 ring-emerald-100"
-                : "border-slate-200"
-            } ${isClickable ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,23,42,0.09)]" : ""}`}
-            onClick={() => {
-              if (isClickable) {
-                onOpenAttempt(row.attemptId);
-              }
-            }}
-          >
-            <div
-              className={`absolute inset-x-0 top-0 h-1 ${
-                row.isApproved ? "bg-emerald-400" : "bg-[#59c9ee]"
-              }`}
-            />
-            <div className="space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-lg font-semibold text-slate-900">
-                  {row.examName}
-                </h3>
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    row.isApproved
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-slate-100 text-slate-600"
+              return (
+                <tr
+                  key={row.attemptId}
+                  className={`border-t border-slate-200 text-sm text-slate-800 ${
+                    row.isApproved ? "bg-emerald-50/40" : "bg-white"
                   }`}
                 >
-                  {row.isApproved ? "Батлагдсан" : "Хүлээгдэж байна"}
-                </span>
-              </div>
-              <p className="flex items-center gap-2 text-sm text-slate-500">
-                <BookOpen className="h-4 w-4" />
-                {row.subject}
-              </p>
-              <p className="flex items-center gap-2 text-xs text-slate-500">
-                <GraduationCap className="h-4 w-4" />
-                {row.className}
-              </p>
-              <p className="flex items-center gap-2 text-xs text-slate-500">
-                <CalendarClock className="h-4 w-4" />
-                Дууссан: {row.finishedAt}
-              </p>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                  Авсан оноо
-                </p>
-                <p
-                  className={`mt-1 text-2xl font-bold leading-none ${
-                    row.isApproved ? "text-emerald-700" : "text-slate-700"
-                  }`}
-                >
-                  {row.scoreText}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                disabled={!isClickable}
-                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
-                  isClickable
-                    ? "bg-emerald-500 text-white hover:bg-emerald-600"
-                    : "bg-slate-100 text-slate-500"
-                }`}
-              >
-                {row.isApproved ? (
-                  <>
-                    <FileCheck2 className="h-4 w-4" />
-                    Дэлгэрэнгүй
-                  </>
-                ) : (
-                  <>
-                    <Clock3 className="h-4 w-4" />
-                    Хүлээгдэж байна
-                  </>
-                )}
-              </button>
-            </div>
-          </article>
-        );
-      })}
+                  <td className="px-4 py-4 font-medium text-slate-900">
+                    {row.examName}
+                  </td>
+                  <td className="px-4 py-4">{row.subject}</td>
+                  <td className="px-4 py-4">{row.className}</td>
+                  <td className="px-4 py-4">{row.teacher}</td>
+                  <td className="px-4 py-4 whitespace-nowrap">{row.startedAt}</td>
+                  <td className="px-4 py-4 whitespace-nowrap">{row.finishedAt}</td>
+                  <td className="px-4 py-4">
+                    <div className="relative flex items-center justify-center">
+                      <span
+                        className={`font-semibold ${
+                          row.isApproved ? "text-emerald-700" : "text-amber-700"
+                        }`}
+                      >
+                        {row.isApproved ? row.scoreText : "Хүлээгдэж байна"}
+                      </span>
+                      {isClickable ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onOpenAttempt(row.attemptId);
+                          }}
+                          className="absolute right-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200 bg-white text-emerald-700 transition hover:bg-emerald-50"
+                          aria-label="Дэлгэрэнгүй харах"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -848,7 +820,7 @@ export function StudentPageShell({
           {selectedResultAttempt ? (
             <>
               <DialogHeader>
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-3 pr-10">
                   <div>
                     <DialogTitle>{selectedResultAttempt.title}</DialogTitle>
                     <DialogDescription>
@@ -856,7 +828,7 @@ export function StudentPageShell({
                       Алдаа, тайлбар болон feedback-ийг доороос харна.
                     </DialogDescription>
                   </div>
-                  <div className="rounded-full bg-emerald-50 px-4 py-2 text-right">
+                  <div className="mr-2 flex min-w-28 flex-col items-center rounded-full bg-emerald-50 px-4 py-2 text-center">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
                       Нийт оноо
                     </p>

@@ -316,7 +316,9 @@ const buildQuestionFeedbackItems = (
 			return {
 				baseExplanation:
 					question.explanation?.trim() ||
-					row?.responseGuide?.trim() ||
+					(!isLikelyInstructionText(row?.responseGuide?.trim() || "")
+						? row?.responseGuide?.trim() || ""
+						: "") ||
 					row?.explanation?.trim() ||
 					"",
 				competency: question.competency?.trim() || row?.competency?.trim() || "",

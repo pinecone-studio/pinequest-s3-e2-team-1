@@ -94,6 +94,14 @@ export type SebCheckResponse = {
   ok: boolean;
 };
 
+export type MathNaturalLanguageResponse = {
+  explanation: string;
+  expression: string;
+  source: AiContentSource;
+};
+
+export type MathNaturalLanguageProvider = "auto" | "gemini" | "ollama";
+
 const gqlRequest = async <TData, TVariables>(
   document: TypedDocumentNode<TData, TVariables>,
   variables?: TVariables,
@@ -516,6 +524,31 @@ export const loadDashboardPayload = async (
 
 export const invalidateStudentDashboardCache = () => {
   dashboardCache = null;
+};
+
+export const generateMathExpressionRequest = async (
+  text: string,
+  preferredProvider: MathNaturalLanguageProvider = "auto",
+): Promise<MathNaturalLanguageResponse> => {
+  const response = await fetch("/api/math-natural-language", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ preferredProvider, text }),
+  });
+
+  const payload = (await response.json()) as
+    | MathNaturalLanguageResponse
+    | { message?: string };
+
+  if (!response.ok) {
+    throw new Error(
+      "message" in payload && payload.message
+        ? payload.message
+        : "Текстийг томьёо болгож чадсангүй.",
+    );
+  }
+
+  return payload as MathNaturalLanguageResponse;
 };
 
 export const startExamRequest = async (payload: {

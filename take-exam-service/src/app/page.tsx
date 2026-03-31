@@ -19,6 +19,16 @@ import type {
   SubmitAnswersResponse,
 } from "@/lib/exam-service/types";
 import { Toaster } from "@/components/ui/sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useAnimatedDocumentTitle } from "@/app/_pagecomponents/use-animated-document-title";
 import {
@@ -34,6 +44,7 @@ import { useStudentDashboardData } from "@/app/_pagecomponents/use-student-dashb
 export default function StudentAppPage() {
   const ACTIVE_ATTEMPT_STORAGE_KEY = "active_exam_attempt";
   const FREE_TEXT_COMMIT_DELAY_MS = 900;
+  const getPersistedAnswersStorageKey = (attemptId: string) => `answers_${attemptId}`;
   const [activeAttempt, setActiveAttempt] = useState<StartExamResponse | null>(
     null,
   );
@@ -48,8 +59,12 @@ export default function StudentAppPage() {
   const [error, setError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [isFinalizingAttempt, setIsFinalizingAttempt] = useState(false);
+  const [pendingResumeAttempt, setPendingResumeAttempt] = useState<{
+    attemptId: string;
+    studentId: string;
+  } | null>(null);
   const autosaveInFlightRef = useRef(false);
-  const autoResumeAttemptIdRef = useRef<string | null>(null);
+  const promptedResumeAttemptIdRef = useRef<string | null>(null);
   const mathAnswerCommitTimersRef = useRef<Record<string, number>>({});
   const committedMathAnswersRef = useRef<Record<string, string>>({});
   const questionMetricsRef = useRef<
@@ -99,6 +114,21 @@ export default function StudentAppPage() {
 
   const normalizeFreeTextAnswer = useCallback((value?: string | null) => {
     return value?.replace(/\s+/g, " ").trim() ?? "";
+  }, []);
+
+  const readPersistedAnswersSnapshot = useCallback((attemptId: string) => {
+    try {
+      const rawValue = localStorage.getItem(getPersistedAnswersStorageKey(attemptId));
+      if (!rawValue) {
+        return {} as Record<string, string | null>;
+      }
+
+      const parsed = JSON.parse(rawValue) as Record<string, string | null>;
+      return parsed ?? {};
+    } catch {
+      localStorage.removeItem(getPersistedAnswersStorageKey(attemptId));
+      return {} as Record<string, string | null>;
+    }
   }, []);
 
   const resetQuestionMetricsTracking = useCallback(() => {
@@ -321,6 +351,101 @@ export default function StudentAppPage() {
       description: warning.description,
     });
   }, []);
+
+  const finalizeSavedAttempt = useCallback(
+    async (attemptId: string) => {
+      setError(null);
+      setIsMutating(true);
+      setIsFinalizingAttempt(true);
+
+      try {
+        const persistedAnswers = readPersistedAnswersSnapshot(attemptId);
+        const submittedProgress = await submitAnswersRequest({
+          attemptId,
+          answers: Object.entries(persistedAnswers).map(
+            ([questionId, selectedOptionId]) => ({
+              questionId,
+              selectedOptionId: selectedOptionId ?? null,
+            }),
+          ),
+          finalize: true,
+        });
+
+        setLatestProgress(submittedProgress);
+        clearMonitoringState(attemptId);
+        clearAnswers(attemptId);
+        setActiveAttempt(null);
+        setPendingResumeAttempt(null);
+        setFlaggedQuestions({});
+        resetQuestionMetricsTracking();
+        resetActivityTracking();
+        sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+        setActiveSection("results");
+        await loadDashboardData({ force: true });
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Шалгалтыг дуусгах үед алдаа гарлаа.",
+        );
+      } finally {
+        setIsFinalizingAttempt(false);
+        setIsMutating(false);
+      }
+    },
+    [
+      ACTIVE_ATTEMPT_STORAGE_KEY,
+      clearAnswers,
+      clearMonitoringState,
+      loadDashboardData,
+      readPersistedAnswersSnapshot,
+      resetActivityTracking,
+      resetQuestionMetricsTracking,
+    ],
+  );
+
+  const handleConfirmResumeAttempt = useCallback(async () => {
+    if (!pendingResumeAttempt) {
+      return;
+    }
+
+    setError(null);
+    setIsMutating(true);
+
+    try {
+      const sebCheck = await verifySebAccess();
+      if (!sebCheck.ok) {
+        showSebFriendlyWarning(sebCheck.message);
+        return;
+      }
+
+      const resumedAttempt = await resumeExamRequest(pendingResumeAttempt.attemptId);
+      setPendingResumeAttempt(null);
+      openAttempt(resumedAttempt);
+    } catch (err) {
+      sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
+      setPendingResumeAttempt(null);
+      setError(
+        err instanceof Error ? err.message : "Шалгалтыг сэргээж чадсангүй.",
+      );
+    } finally {
+      setIsMutating(false);
+    }
+  }, [
+    ACTIVE_ATTEMPT_STORAGE_KEY,
+    openAttempt,
+    pendingResumeAttempt,
+    showSebFriendlyWarning,
+    verifySebAccess,
+  ]);
+
+  const handleDeclineResumeAttempt = useCallback(async () => {
+    if (!pendingResumeAttempt) {
+      return;
+    }
+
+    await finalizeSavedAttempt(pendingResumeAttempt.attemptId);
+  }, [finalizeSavedAttempt, pendingResumeAttempt]);
 
   const handleStartExam = async (testId: string) => {
     if (!selectedStudent) {
@@ -626,7 +751,7 @@ export default function StudentAppPage() {
         return;
       }
 
-      if (autoResumeAttemptIdRef.current === parsed.attemptId) {
+      if (promptedResumeAttemptIdRef.current === parsed.attemptId) {
         return;
       }
 
@@ -636,29 +761,11 @@ export default function StudentAppPage() {
         return;
       }
 
-      autoResumeAttemptIdRef.current = attemptId;
-
-      void (async () => {
-        setError(null);
-        setIsMutating(true);
-
-        try {
-          const sebCheck = await verifySebAccess();
-          if (!sebCheck.ok) {
-            showSebFriendlyWarning(sebCheck.message);
-            return;
-          }
-
-          const resumedAttempt = await resumeExamRequest(attemptId);
-          openAttempt(resumedAttempt);
-        } catch (err) {
-          setError(
-            err instanceof Error ? err.message : "Шалгалтыг сэргээж чадсангүй.",
-          );
-        } finally {
-          setIsMutating(false);
-        }
-      })();
+      promptedResumeAttemptIdRef.current = attemptId;
+      setPendingResumeAttempt({
+        attemptId,
+        studentId: parsed.studentId,
+      });
     } catch {
       sessionStorage.removeItem(ACTIVE_ATTEMPT_STORAGE_KEY);
     }
@@ -667,10 +774,8 @@ export default function StudentAppPage() {
     isInitialLoading,
     isMutating,
     isSebChecking,
-    openAttempt,
+    pendingResumeAttempt,
     selectedStudent,
-    showSebFriendlyWarning,
-    verifySebAccess,
   ]);
 
   useEffect(() => {
@@ -753,6 +858,38 @@ export default function StudentAppPage() {
   return (
     <>
       <Toaster richColors position="top-center" />
+      <AlertDialog open={Boolean(pendingResumeAttempt)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Шалгалтаа үргэлжлүүлэх үү?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Таны эхлүүлсэн шалгалт олдлоо. Үргэлжлүүлбэл өмнөх хариултууд болон
+              асуултын дараалал хэвээр сэргэнэ. Үгүй гэвэл одоогийн оролдлогыг
+              шууд дууссан гэж тэмдэглэнэ.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isMutating}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeclineResumeAttempt();
+              }}
+            >
+              Үгүй, дуусга
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isMutating}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmResumeAttempt();
+              }}
+            >
+              Үргэлжлүүлье
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {isSebChecking ? (
         <SebAccessGate isChecking={true} message={null} onRetry={() => {}} />
       ) : (
