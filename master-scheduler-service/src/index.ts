@@ -195,9 +195,18 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // Fail fast with a clear message if GEMINI is not configured.
+    const apiKey = (env.GEMINI_API_KEY ?? "").trim();
+
     if (url.pathname === "/models" && request.method === "GET") {
       try {
-        const data = await listGeminiModels(env.GEMINI_API_KEY);
+        if (!apiKey) {
+          return Response.json(
+            { error: "Missing GEMINI_API_KEY. Put it in master-scheduler-service/.dev.vars for local dev." },
+            { status: 400 },
+          );
+        }
+        const data = await listGeminiModels(apiKey);
         return Response.json(data);
       } catch (error: any) {
         return Response.json({ error: error?.message ?? String(error) }, { status: 500 });
@@ -206,7 +215,13 @@ export default {
 
     if (url.pathname === "/test-ai" && request.method === "GET") {
       try {
-        const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+        if (!apiKey) {
+          return Response.json(
+            { error: "Missing GEMINI_API_KEY. Put it in master-scheduler-service/.dev.vars for local dev." },
+            { status: 400 },
+          );
+        }
+        const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
           model: env.GEMINI_MODEL ?? "gemini-2.5-flash",
         });
@@ -242,6 +257,12 @@ export default {
 
     // POST /generate-all?semesterId=2026-SPRING&delayMs=2500
     if (url.pathname === "/generate-all" && request.method === "POST") {
+      if (!apiKey) {
+        return Response.json(
+          { error: "Missing GEMINI_API_KEY. Put it in master-scheduler-service/.dev.vars for local dev." },
+          { status: 400 },
+        );
+      }
       const semesterId = url.searchParams.get("semesterId") ?? "2026-SPRING";
       const delayMs = Number(url.searchParams.get("delayMs") ?? "2500");
       const retryDelayMs = Number(url.searchParams.get("retryDelayMs") ?? "10000");
@@ -262,7 +283,7 @@ export default {
 
       let discoveredModels: string[] = [];
       try {
-        const data: any = await listGeminiModels(env.GEMINI_API_KEY);
+        const data: any = await listGeminiModels(apiKey);
         discoveredModels = extractModelIdsFromListModelsResponse(data);
       } catch {
         discoveredModels = [];
@@ -400,7 +421,13 @@ export default {
       }
 
       const db = getDb(env.DB);
-      const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+      if (!apiKey) {
+        return Response.json(
+          { error: "Missing GEMINI_API_KEY. Put it in master-scheduler-service/.dev.vars for local dev." },
+          { status: 400 },
+        );
+      }
+      const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
         // Default to a commonly supported model; override via GEMINI_MODEL.
         model: modelOverride ?? env.GEMINI_MODEL ?? "gemini-2.5-flash",

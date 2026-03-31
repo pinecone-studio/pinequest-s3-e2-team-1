@@ -16,6 +16,14 @@ CREATE TABLE IF NOT EXISTS `users` (
 	`teaching_level` text NOT NULL DEFAULT 'MIDDLE'
 );
 
+-- If DB already has dependent rows, deleting users can fail with FK constraint.
+-- Make the seed idempotent by clearing children first (works even when FK is ON).
+DELETE FROM teacher_subjects;
+DELETE FROM teacher_availability;
+DELETE FROM ancillary_activities;
+DELETE FROM school_event_teacher_targets;
+DELETE FROM curriculum;
+DELETE FROM `groups`;
 DELETE FROM users;
 
 INSERT INTO users (
@@ -141,7 +149,45 @@ INSERT INTO users (
 ('ART_05','Уянга','Багш','У.Уянга','art.0@school1.edu.mn','ART_SPORT','ALL','TEACHER',6),
 ('ART_06','Болор','Багш','Б.Болор','art.1@school1.edu.mn','ART_SPORT','ALL','TEACHER',6),
 ('ART_07','Чимэг','Багш','Ч.Чимэг','art.2@school1.edu.mn','ART_SPORT','ALL','TEACHER',6),
-('ART_08','Сувд','Багш','С.Сувд','art.3@school1.edu.mn','ART_SPORT','ALL','TEACHER',6);
+('ART_08','Сувд','Багш','С.Сувд','art.3@school1.edu.mn','ART_SPORT','ALL','TEACHER',6),
+
+-- ==========================================================
+-- Extra HIGH school seed (user-requested IDs)
+-- NOTE: These IDs are additive; existing seeds still use ELEM_*, MATH_*, SCI_*...
+-- ==========================================================
+
+-- 1. ЗАХИРГАА (Ахлах анги хариуцсан менежерүүд)
+('ADMIN_HIGH','Тунгалаг','Дамба','Д.Тунгалаг','tungalag.d2@school1.edu.mn','ADMIN','HIGH','ADMIN',2),
+('ADMIN_COORD','Батжаргал','Сүх','С.Батжаргал','batjargal.s2@school1.edu.mn','ADMIN','HIGH','ADMIN',2),
+
+-- 2. МАТЕМАТИК (Ахлах анги, Гүнзгий)
+('MATH_H1','Ганболд','Багш','Г.Ганболд','math.h1@school1.edu.mn','MATH','HIGH','TEACHER',7),
+('MATH_H2','Батцэцэг','Багш','Б.Батцэцэг','math.h2@school1.edu.mn','MATH','HIGH','TEACHER',7),
+('MATH_H3','Баясгалан','Багш','Б.Баясгалан','math.h3@school1.edu.mn','MATH','HIGH','TEACHER',7),
+('MATH_H4','Мөнхбат','Багш','М.Мөнхбат','math.h4@school1.edu.mn','MATH','HIGH','TEACHER',7),
+
+-- 3. ФИЗИК, ХИМИ, БИОЛОГИ (Ахлах ангийн лабораторийн багш нар)
+('SCI_PHYS_1','Алтанхуяг','Багш','Г.Алтанхуяг','phys.h1@school1.edu.mn','PHYSICS','HIGH','TEACHER',6),
+('SCI_PHYS_2','Бат-Орших','Багш','Б.Бат-Орших','phys.h2@school1.edu.mn','PHYSICS','HIGH','TEACHER',6),
+('SCI_CHEM_1','Болормаа','Багш','С.Болормаа','chem.h1@school1.edu.mn','CHEMISTRY','HIGH','TEACHER',6),
+('SCI_CHEM_2','Энхмаа','Багш','Т.Энхмаа','chem.h2@school1.edu.mn','CHEMISTRY','HIGH','TEACHER',6),
+('SCI_BIO_1','Батжаргал','Багш','С.Батжаргал','bio.h1@school1.edu.mn','BIOLOGY','HIGH','TEACHER',6),
+
+-- 4. МЭДЭЭЛЭЛ ЗҮЙ (IT - Ахлах ангийн програмчлал)
+('IT_H1','Цэвээнсүрэн','Багш','Б.Цэвээнсүрэн','it.h1@school1.edu.mn','IT','HIGH','TEACHER',6),
+('IT_H2','Мөнх-Эрдэнэ','Багш','С.Мөнх-Эрдэнэ','it.h2@school1.edu.mn','IT','HIGH','TEACHER',6),
+
+-- 5. МОНГОЛ ХЭЛ & УРАН ЗОХИОЛ
+('MGL_H1','Уртнасан','Багш','У.Уртнасан','mgl.h1@school1.edu.mn','LANGUAGE','HIGH','TEACHER',6),
+('MGL_H2','Энхжаргал','Багш','Э.Энхжаргал','mgl.h2@school1.edu.mn','LANGUAGE','HIGH','TEACHER',6),
+
+-- 6. ГАДААД ХЭЛ (Англи хэл, IELTS-ийн бэлтгэл)
+('ENG_H1','Enkh-Amgalan','Teacher','E.Enkh-Amgalan','eng.h1@school1.edu.mn','FOREIGN_LANG','HIGH','TEACHER',6),
+('ENG_H2','Bolormaa','Teacher','B.Bolormaa','eng.h2@school1.edu.mn','FOREIGN_LANG','HIGH','TEACHER',6),
+
+-- 7. НИЙГЭМ, ТҮҮХ
+('HIST_H1','Түвшинжаргал','Багш','Т.Түвшинжаргал','hist.h1@school1.edu.mn','HISTORY','HIGH','TEACHER',6),
+('SOC_H1','Гантуяа','Багш','Г.Гантуяа','soc.h1@school1.edu.mn','HUMANITY','HIGH','TEACHER',6);
 
 PRAGMA foreign_keys = ON;
 

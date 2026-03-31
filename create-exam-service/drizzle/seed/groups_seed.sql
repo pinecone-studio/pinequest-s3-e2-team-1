@@ -8,6 +8,12 @@
 --   bun run db:seed:classrooms:local|remote
 PRAGMA foreign_keys = OFF;
 
+-- If DB already has dependent rows, deleting groups can fail with FK constraint.
+-- Make the seed idempotent by clearing children first (works even when FK is ON).
+DELETE FROM master_schedules;
+DELETE FROM ancillary_activities;
+DELETE FROM curriculum;
+
 DELETE FROM `groups`;
 
 PRAGMA foreign_keys = OFF;

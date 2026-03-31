@@ -20,6 +20,14 @@ CREATE TABLE IF NOT EXISTS `classrooms` (
   `is_lab` integer NOT NULL DEFAULT 0
 );
 
+-- If DB already has dependent rows, deleting classrooms can fail with FK constraint.
+-- Make the seed idempotent by clearing children first (works even when FK is ON).
+DELETE FROM master_schedules;
+DELETE FROM ancillary_activities;
+DELETE FROM exam_schedules;
+DELETE FROM curriculum;
+DELETE FROM `groups`;
+
 DELETE FROM classrooms;
 
 -- NOTE: `room_number` + `is_lab` are legacy NOT NULL columns in older migrations.

@@ -10,6 +10,9 @@ INSERT OR IGNORE INTO subjects (id, name, requires_lab, category, level, status)
 ('PHYS_LAB', 'Физик (лаб)', 1, 'STEM', 'MIDDLE', 'ACTIVE'),
 ('ICT_BASIC', 'Мэдээлэл зүй (суурь)', 1, 'STEM', 'MIDDLE', 'ACTIVE');
 
+-- master_schedules references curriculum; clear it first to avoid FK errors.
+DELETE FROM master_schedules;
+
 DELETE FROM curriculum WHERE semester_id = '2026-SPRING';
 
 -- ==========================================================

@@ -10,6 +10,12 @@ CREATE TABLE IF NOT EXISTS `subjects` (
 	`status` text NOT NULL DEFAULT 'ACTIVE'
 );
 
+-- If DB already has dependent rows, deleting subjects can fail with FK constraint.
+-- Make the seed idempotent by clearing children first (works even when FK is ON).
+DELETE FROM teacher_subjects;
+DELETE FROM master_schedules;
+DELETE FROM curriculum;
+
 DELETE FROM subjects;
 
 INSERT INTO subjects (id, name, requires_lab, category, level, status) VALUES
