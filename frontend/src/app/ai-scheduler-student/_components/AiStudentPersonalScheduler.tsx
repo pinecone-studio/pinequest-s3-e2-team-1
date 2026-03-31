@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useLazyQuery, useQuery } from "@apollo/client/react";
 import { useTheme } from "next-themes";
 import {
@@ -42,7 +49,6 @@ import {
 } from "@/constants/calendar";
 import {
   CalendarClock,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -81,6 +87,7 @@ type StudentBlock = {
   layer: StudentLayerId;
   title: string;
   subtitle?: string;
+  roomLabel?: string;
   colIdx: number; // 0=Mon ... 6=Sun
   startH: number;
   startM: number;
@@ -97,12 +104,9 @@ function formatBlockDuration(
   endMinute: number,
 ) {
   const pad = (n: number) => String(n).padStart(2, "0");
-  const s = startHour * 60 + startMinute;
-  const e = endHour * 60 + endMinute;
-  const mins = Math.max(0, e - s);
   return `${pad(startHour)}:${pad(startMinute)}–${pad(endHour)}:${pad(
     endMinute,
-  )} · ${mins} мин`;
+  )}`;
 }
 
 function SchedulerAppearanceMenu() {
@@ -293,9 +297,12 @@ export function AiStudentPersonalScheduler({
   const [selectedGrade, setSelectedGrade] = useState<"9" | "10" | "11" | "12">(
     "9",
   );
-  const [selectedGroup, setSelectedGroup] = useState<"A" | "B" | "C" | "D">("A");
+  const [selectedGroup, setSelectedGroup] = useState<"A" | "B" | "C" | "D">(
+    "A",
+  );
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
+  const bootstrappedDefaultStudentRef = useRef(false);
 
   const calendarMainRef = useRef<HTMLElement>(null);
   const calendarFocusAnchorRef = useRef<HTMLDivElement>(null);
@@ -345,13 +352,13 @@ export function AiStudentPersonalScheduler({
   type GetStudentsListVars = { grade: number; group: string };
 
   const [loadStudents, { data: studentsData, loading: studentsLoading }] =
-    useLazyQuery<
-      GetStudentsListData,
-      GetStudentsListVars
-    >(GetStudentsListDocument, {
-      fetchPolicy: "cache-first",
-      notifyOnNetworkStatusChange: true,
-    });
+    useLazyQuery<GetStudentsListData, GetStudentsListVars>(
+      GetStudentsListDocument,
+      {
+        fetchPolicy: "cache-first",
+        notifyOnNetworkStatusChange: true,
+      },
+    );
 
   const fetchStudentsForSelectedGroup = useCallback(() => {
     loadStudents({
@@ -376,6 +383,21 @@ export function AiStudentPersonalScheduler({
   }, [selectedStudentId, studentOptions]);
 
   useEffect(() => {
+    // Refresh хийхэд default (9A) эхний сурагчийг автоматаар сонгоно.
+    // getStudentsList нь page load дээр 1 удаа дуудагдана.
+    if (bootstrappedDefaultStudentRef.current) return;
+    bootstrappedDefaultStudentRef.current = true;
+    fetchStudentsForSelectedGroup();
+  }, [fetchStudentsForSelectedGroup]);
+
+  useEffect(() => {
+    // Default fetch-ийн дараа 1-р сурагчийг сонгоно (хэрэглэгч өөрөө сонгосон бол override хийхгүй).
+    if (selectedStudentId) return;
+    const first = studentOptions[0]?.id ?? "";
+    if (first) setSelectedStudentId(first);
+  }, [selectedStudentId, studentOptions]);
+
+  useEffect(() => {
     // Анги/бүлэг солигдоход өмнөх сонголт үлдэхээс сэргийлнэ.
     setSelectedStudentId("");
   }, [selectedGrade, selectedGroup]);
@@ -389,22 +411,20 @@ export function AiStudentPersonalScheduler({
     includeDraft?: boolean;
   };
 
-  const {
-    data: studentScheduleData,
-    loading: studentScheduleLoading,
-  } = useQuery<GetStudentMainLessonsListData, GetStudentMainLessonsListVars>(
-    GetStudentMainLessonsListDocument,
-    {
-      variables: {
-        studentId: selectedStudentId,
-        semesterId: "2026-SPRING",
-        includeDraft: false,
+  const { data: studentScheduleData, loading: studentScheduleLoading } =
+    useQuery<GetStudentMainLessonsListData, GetStudentMainLessonsListVars>(
+      GetStudentMainLessonsListDocument,
+      {
+        variables: {
+          studentId: selectedStudentId,
+          semesterId: "2026-SPRING",
+          includeDraft: false,
+        },
+        skip: !selectedStudentId,
+        fetchPolicy: "cache-first",
+        notifyOnNetworkStatusChange: true,
       },
-      skip: !selectedStudentId,
-      fetchPolicy: "cache-first",
-      notifyOnNetworkStatusChange: true,
-    },
-  );
+    );
 
   function parseHHMM(t: string): { h: number; m: number } {
     const [hh, mm] = String(t ?? "").split(":");
@@ -427,12 +447,13 @@ export function AiStudentPersonalScheduler({
     return rows.map((r) => {
       const s = parseHHMM(r.startTime);
       const e = parseHHMM(r.endTime);
-      const teacher = r.teacherShortName ? ` · ${r.teacherShortName}` : "";
+      const teacher = r.teacherShortName ? String(r.teacherShortName) : "";
       return {
         id: r.id,
         layer: "class_schedule",
         title: r.subjectName,
-        subtitle: `${r.classroomRoomNumber}${teacher}`,
+        subtitle: teacher || undefined,
+        roomLabel: r.classroomRoomNumber,
         colIdx: Math.max(0, Math.min(6, (r.dayOfWeek ?? 1) - 1)),
         startH: s.h,
         startM: s.m,
@@ -485,9 +506,6 @@ export function AiStudentPersonalScheduler({
                 <h1 className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-base">
                   Сурагчийн хуанли
                 </h1>
-                <p className={cn("truncate text-xs", textDim)}>
-                  Батлагдсан давтлага · Секц · Personal төлөвлөгөө
-                </p>
                 <p className={cn("truncate text-[11px]", textDim)}>
                   {format(anchor, "yyyy MMMM", { locale: mn })}
                 </p>
@@ -507,10 +525,7 @@ export function AiStudentPersonalScheduler({
                   <span className="max-w-[min(100%,10rem)] truncate">
                     {selectedGrade}-р анги
                   </span>
-                  <ChevronDown
-                    className="ml-2 size-4 opacity-70"
-                    aria-hidden
-                  />
+                  <ChevronDown className="ml-2 size-4 opacity-70" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
@@ -521,7 +536,9 @@ export function AiStudentPersonalScheduler({
                     setSelectedGrade(v as "9" | "10" | "11" | "12")
                   }
                 >
-                  <DropdownMenuRadioItem value="9">9-р анги</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="9">
+                    9-р анги
+                  </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="10">
                     10-р анги
                   </DropdownMenuRadioItem>
@@ -545,22 +562,29 @@ export function AiStudentPersonalScheduler({
                   <span className="max-w-[min(100%,8rem)] truncate">
                     {selectedGroup} бүлэг
                   </span>
-                  <ChevronDown
-                    className="ml-2 size-4 opacity-70"
-                    aria-hidden
-                  />
+                  <ChevronDown className="ml-2 size-4 opacity-70" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuLabel>Бүлэг</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={selectedGroup}
-                  onValueChange={(v) => setSelectedGroup(v as "A" | "B" | "C" | "D")}
+                  onValueChange={(v) =>
+                    setSelectedGroup(v as "A" | "B" | "C" | "D")
+                  }
                 >
-                  <DropdownMenuRadioItem value="A">A бүлэг</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="B">B бүлэг</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="C">C бүлэг</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="D">D бүлэг</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="A">
+                    A бүлэг
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="B">
+                    B бүлэг
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="C">
+                    C бүлэг
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="D">
+                    D бүлэг
+                  </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -782,43 +806,6 @@ export function AiStudentPersonalScheduler({
                       {visibleBlocks.length} блок
                     </span>
                   </div>
-<<<<<<< HEAD
-=======
-                  <div className="mt-2 flex flex-col gap-1.5 border-t border-zinc-200/80 pt-2 dark:border-zinc-700/80 sm:flex-row sm:items-center sm:justify-between">
-                    <div
-                      className="flex shrink-0 rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-600 dark:bg-zinc-900"
-                      role="group"
-                      aria-label="Хуанлийн анхны төвлөрөл"
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={shift === "I"}
-                        onClick={() => setShift("I")}
-                        className={cn(
-                          "rounded-md px-2 py-1 text-[9px] font-semibold transition-colors",
-                          shift === "I"
-                            ? "bg-emerald-600 text-white shadow-sm dark:bg-emerald-500"
-                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800",
-                        )}
-                      >
-                        I · Өглөө
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={shift === "II"}
-                        onClick={() => setShift("II")}
-                        className={cn(
-                          "rounded-md px-2 py-1 text-[9px] font-semibold transition-colors",
-                          shift === "II"
-                            ? "bg-amber-600 text-white shadow-sm dark:bg-amber-600"
-                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800",
-                        )}
-                      >
-                        II · Өдөр
-                      </button>
-                    </div>
-                  </div>
->>>>>>> c3aaec078f11c68c7f2fdcf655a6635c054f03e4
                 </div>
 
                 <div className="mb-2 grid grid-cols-[2.75rem_repeat(7,minmax(0,1fr))] gap-x-1 border-b border-zinc-200 pb-2 dark:border-zinc-700 sm:grid-cols-[3.25rem_repeat(7,minmax(0,1fr))]">
@@ -960,26 +947,27 @@ export function AiStudentPersonalScheduler({
                                   <span className="min-w-0 flex-1 truncate">
                                     {b.title}
                                   </span>
-                                  {b.confirmed ? (
-                                    <CheckCircle2
-                                      className="size-3.5 shrink-0 opacity-80"
-                                      aria-hidden
-                                    />
+                                  {b.layer === "class_schedule" ? (
+                                    <span className="shrink-0 rounded-md border border-zinc-200/70 bg-white/70 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-zinc-700 dark:border-zinc-600/70 dark:bg-zinc-900/60 dark:text-zinc-200">
+                                      {b.roomLabel}
+                                    </span>
                                   ) : null}
                                 </div>
                                 <span className="mt-0.5 block truncate text-[9px] font-normal opacity-90">
-                                  {formatBlockDuration(
-                                    b.startH,
-                                    b.startM,
-                                    b.endH,
-                                    b.endM,
-                                  )}
+                                  {b.subtitle
+                                    ? `${b.subtitle} · ${formatBlockDuration(
+                                        b.startH,
+                                        b.startM,
+                                        b.endH,
+                                        b.endM,
+                                      )}`
+                                    : formatBlockDuration(
+                                        b.startH,
+                                        b.startM,
+                                        b.endH,
+                                        b.endM,
+                                      )}
                                 </span>
-                                {b.subtitle ? (
-                                  <span className="mt-0.5 block truncate text-[9px] font-normal opacity-90">
-                                    {b.subtitle}
-                                  </span>
-                                ) : null}
                               </div>
                             );
                           })}
