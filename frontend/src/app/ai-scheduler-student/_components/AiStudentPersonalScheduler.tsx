@@ -71,6 +71,12 @@ const panelLight =
   "rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-200/40 dark:border-zinc-600/80 dark:bg-zinc-900/95 dark:shadow-black/40";
 const textDim = "text-zinc-500 dark:text-zinc-400";
 
+function formatMnMonthDay(d: Date) {
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  return `${m}-р сарын ${day}`;
+}
+
 /** getISODay: 1=Даваа … 7=Ням */
 const WEEKDAY_LETTER_MN: Record<number, string> = {
   1: "Д",
@@ -336,11 +342,7 @@ export function AiStudentPersonalScheduler({
     [weekStart],
   );
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
-  const weekRangeLabel = `${format(weekStart, "MMM d", { locale: mn })} – ${format(
-    weekEnd,
-    "MMM d",
-    { locale: mn },
-  )}`;
+  const weekRangeLabel = `${formatMnMonthDay(weekStart)} – ${formatMnMonthDay(weekEnd)}`;
 
   function toggleLayer(id: StudentLayerId) {
     setLayerOn((p) => ({ ...p, [id]: !p[id] }));
@@ -775,7 +777,7 @@ export function AiStudentPersonalScheduler({
               >
                 <div className="px-3 py-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                    Эвэнт ({Object.keys(LAYER_META).length})
+                    Эвент ({Object.keys(LAYER_META).length})
                   </p>
                 </div>
                 {(Object.keys(LAYER_META) as StudentLayerId[]).map((id) => {

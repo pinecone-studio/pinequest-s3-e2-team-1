@@ -73,6 +73,12 @@ const WEEKDAY_LETTER_MN: Record<number, string> = {
   7: "Н",
 };
 
+function formatMnMonthDay(d: Date) {
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  return `${m}-р сарын ${day}`;
+}
+
 type SchoolEventType =
   | "HOLIDAY"
   | "EXAM"
@@ -97,65 +103,65 @@ const SCHOOL_EVENT_TYPE_META: Record<
     labelMn: "Амралт",
     examplesMn: "Нийтийн амралт, баярын өдөр",
     impactMn: "Хичээл төлөвлөхгүй (ихэвчлэн)",
-    swatch: "bg-rose-500",
+    swatch: "bg-rose-600",
     cardClass:
-      "border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-800/70 dark:bg-rose-950/45 dark:text-rose-50",
+      "border-rose-300 bg-rose-100 text-rose-950 dark:border-rose-700 dark:bg-rose-950/70 dark:text-rose-50",
   },
   EXAM: {
     labelMn: "Шалгалт",
     examplesMn: "Улсын/улирлын шалгалт, олимпиад",
     impactMn: "Hard lock (EXAM)",
-    swatch: "bg-red-600",
+    swatch: "bg-red-700",
     cardClass:
-      "border-red-200 bg-red-50 text-red-950 dark:border-red-800/70 dark:bg-red-950/45 dark:text-red-50",
+      "border-red-300 bg-red-100 text-red-950 dark:border-red-700 dark:bg-red-950/70 dark:text-red-50",
   },
   TEACHER_DEVELOPMENT: {
     labelMn: "Багш нар",
     examplesMn: "Сургалт, заах арга зүй, шуурхай",
     impactMn: "Teacher lock",
-    swatch: "bg-sky-500",
+    swatch: "bg-sky-600",
     cardClass:
-      "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-800/70 dark:bg-sky-950/45 dark:text-sky-50",
+      "border-sky-300 bg-sky-100 text-sky-950 dark:border-sky-700 dark:bg-sky-950/70 dark:text-sky-50",
   },
   EXTRACURRICULAR: {
     labelMn: "Дугуйлан/секц",
     examplesMn: "Спорт, секц, тэмцээн",
     impactMn: "Partial lock (сонгосон анги)",
-    swatch: "bg-emerald-500",
+    swatch: "bg-emerald-600",
     cardClass:
-      "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-800/70 dark:bg-emerald-950/45 dark:text-emerald-50",
+      "border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-50",
   },
   PARENT_MEETING: {
     labelMn: "Эцэг эх",
     examplesMn: "Эцэг эхийн хурал, уулзалт",
     impactMn: "Ихэвчлэн мэдээллийн",
-    swatch: "bg-amber-500",
+    swatch: "bg-amber-600",
     cardClass:
-      "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/45 dark:text-amber-50",
+      "border-amber-300 bg-amber-100 text-amber-950 dark:border-amber-700 dark:bg-amber-950/70 dark:text-amber-50",
   },
   MAINTENANCE: {
-    labelMn: "Засвар/тасалдал",
-    examplesMn: "Ариутгал, засвар, интернет тасрах",
+    labelMn: "Засвар/Ариутгал",
+    examplesMn: "Ариутгал, засвар, цэвэрлэгээ",
     impactMn: "Нөөцийн түгжээ",
-    swatch: "bg-zinc-500",
+    swatch: "bg-zinc-600",
     cardClass:
-      "border-zinc-200 bg-zinc-50 text-zinc-950 dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-50",
+      "border-zinc-300 bg-zinc-100 text-zinc-950 dark:border-zinc-600 dark:bg-zinc-900/70 dark:text-zinc-50",
   },
   TRIP: {
     labelMn: "Аялал",
-    examplesMn: "Музей, аялал, гадаад арга хэмжээ",
+    examplesMn: "Музей, аялал арга хэмжээ",
     impactMn: "Full/partial lock (анги)",
-    swatch: "bg-pink-500",
+    swatch: "bg-pink-600",
     cardClass:
-      "border-pink-200 bg-pink-50 text-pink-950 dark:border-pink-800/70 dark:bg-pink-950/45 dark:text-pink-50",
+      "border-pink-300 bg-pink-100 text-pink-950 dark:border-pink-700 dark:bg-pink-950/70 dark:text-pink-50",
   },
   EVENT: {
     labelMn: "Арга хэмжээ",
-    examplesMn: "Уулзалт, тэмдэглэлт өдөр",
+    examplesMn: "Хичээлийн шинэ жил, Төгсөлтийн баяр",
     impactMn: "Soft/Flexible байж болно",
-    swatch: "bg-blue-500",
+    swatch: "bg-blue-600",
     cardClass:
-      "border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-800/70 dark:bg-blue-950/45 dark:text-blue-50",
+      "border-blue-300 bg-blue-100 text-blue-950 dark:border-blue-700 dark:bg-blue-950/70 dark:text-blue-50",
   },
 };
 
@@ -233,7 +239,7 @@ function ReclaimLightBackdrop() {
   );
 }
 
-type SchoolSidebarLayerKey = SchoolEventType | "teacherExams";
+type SchoolSidebarLayerKey = SchoolEventType;
 
 function defaultSchoolLayerVisibility(): Record<
   SchoolSidebarLayerKey,
@@ -248,7 +254,6 @@ function defaultSchoolLayerVisibility(): Record<
     MAINTENANCE: true,
     TRIP: true,
     EVENT: true,
-    teacherExams: true,
   };
 }
 
@@ -300,7 +305,7 @@ export function SchoolEventScheduler({
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart],
   );
-  const weekRangeLabel = `${format(weekStart, "MMM d", { locale: mn })} – ${format(weekEnd, "MMM d, yyyy", { locale: mn })}`;
+  const weekRangeLabel = `${formatMnMonthDay(weekStart)} – ${formatMnMonthDay(weekEnd)}`;
 
   type GetSchoolEventsData = { getSchoolEvents: SchoolEvent[] };
   type GetSchoolEventsVars = { startDate: string; endDate: string };
@@ -583,16 +588,8 @@ export function SchoolEventScheduler({
                   )}
                 >
                   <p className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                    Харагдац
+                    Эвент
                   </p>
-                  <div className="px-3 pt-1 pb-0.5">
-                    <p className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300">
-                      Сургуулийн эвент
-                    </p>
-                    <p className="mt-0.5 text-[9px] leading-snug text-zinc-500 dark:text-zinc-500">
-                      Дэд давхарга — ачааллын эрэмбэ (өөр өнгө)
-                    </p>
-                  </div>
                   {SCHOOL_EVENT_TYPES.map((kind) => {
                     const meta = SCHOOL_EVENT_TYPE_META[kind];
                     const on = layerOn[kind];
@@ -643,55 +640,6 @@ export function SchoolEventScheduler({
                       </button>
                     );
                   })}
-                  {(() => {
-                    const layer = {
-                      id: "teacherExams" as const,
-                      label: "Багшийн оруулсан шалгалт",
-                      role: "Ирээдүйд exam_schedules / баталгаажсан хуваарь",
-                      swatch: "bg-violet-500",
-                    };
-                    const on = layerOn.teacherExams;
-                    return (
-                      <button
-                        key={layer.id}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => toggleLayer("teacherExams")}
-                        className={cn(
-                          "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors",
-                          on
-                            ? "bg-blue-50/80 text-zinc-900 dark:bg-blue-950/40 dark:text-zinc-100"
-                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/60",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "size-2.5 shrink-0 rounded-sm",
-                            layer.swatch,
-                            !on && "opacity-35",
-                          )}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
-                            {layer.label}
-                          </span>
-                          <span className="block truncate text-[10px] text-zinc-500 dark:text-zinc-400">
-                            {layer.role}
-                          </span>
-                        </span>
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                            on
-                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/70 dark:text-blue-200"
-                              : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-                          )}
-                        >
-                          {on ? "Идэвхтэй" : "Нуугдсан"}
-                        </span>
-                      </button>
-                    );
-                  })()}
                 </div>
               </div>
             ) : (
@@ -913,14 +861,6 @@ export function SchoolEventScheduler({
                               </div>
                             );
                           })}
-                        {layerOn.teacherExams ? (
-                          <div
-                            className="pointer-events-none absolute bottom-2 left-1 right-1 z-4 rounded-lg border border-dashed border-violet-400/60 bg-violet-500/10 px-2 py-1 text-center text-[9px] font-medium text-violet-900/80 dark:border-violet-500/50 dark:bg-violet-950/30 dark:text-violet-200"
-                            data-school-skip-drag
-                          >
-                            Багшийн шалгалт — ирээдүйд GraphQL
-                          </div>
-                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -932,11 +872,7 @@ export function SchoolEventScheduler({
                     textDim,
                   )}
                 >
-                  Зөвхөн mock:{" "}
-                  <code className="text-zinc-600 dark:text-zinc-300">
-                    schoolCalendarRealWorldMock.ts
-                  </code>{" "}
-                  · D1 бэлэн болоход GraphQL query дахин нээнэ.
+                  @ Copyright 2026 TeamOne LLC. All rights reserved.
                 </p>
               </div>
             </main>

@@ -227,6 +227,12 @@ const panelLight =
   "rounded-2xl border border-zinc-200/90 bg-white shadow-sm shadow-zinc-200/40 dark:border-zinc-600/80 dark:bg-zinc-900/95 dark:shadow-black/40";
 const textDim = "text-zinc-500 dark:text-zinc-400";
 
+function formatMnMonthDay(d: Date) {
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  return `${m}-р сарын ${day}`;
+}
+
 const DEPARTMENT_LABELS: Record<string, string> = {
   MATH: "Математик",
   PHYSICS: "Физик",
@@ -251,12 +257,16 @@ const TEACHING_LEVEL_LABELS: Record<string, string> = {
 };
 
 function teacherDepartmentLabel(value?: string | null) {
-  const key = String(value ?? "").trim().toUpperCase();
+  const key = String(value ?? "")
+    .trim()
+    .toUpperCase();
   return DEPARTMENT_LABELS[key] ?? value ?? "Тэнхим";
 }
 
 function teacherTeachingLevelLabel(value?: string | null) {
-  const key = String(value ?? "").trim().toUpperCase();
+  const key = String(value ?? "")
+    .trim()
+    .toUpperCase();
   return TEACHING_LEVEL_LABELS[key] ?? value ?? "Түвшин";
 }
 
@@ -849,11 +859,7 @@ export function AiTeacherPersonalScheduler({
   }
 
   const weekEnd = addDays(weekStart, 6);
-  const weekRangeLabel = `${format(weekStart, "MMM d", { locale: mn })} – ${format(
-    weekEnd,
-    "MMM d",
-    { locale: mn },
-  )}`;
+  const weekRangeLabel = `${formatMnMonthDay(weekStart)} – ${formatMnMonthDay(weekEnd)}`;
 
   function shiftWeek(deltaWeeks: number) {
     setDate((d) => addDays(d ?? new Date(), deltaWeeks * 7));
@@ -927,10 +933,6 @@ export function AiTeacherPersonalScheduler({
                 <h1 className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-base">
                   Багшийн хуанли
                 </h1>
-                <p className={cn("truncate text-xs", textDim)}>
-                  {selectedTeacher.displayName} · {selectedTeacher.roleNote} · I
-                  ээлж
-                </p>
               </div>
             </div>
           </div>
@@ -1162,7 +1164,7 @@ export function AiTeacherPersonalScheduler({
               >
                 <div className="px-3 py-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                    Эвэнт ({CALENDAR_LAYERS.length})
+                    Эвент ({CALENDAR_LAYERS.length})
                   </p>
                 </div>
                 {CALENDAR_LAYERS.map((layer) => {
