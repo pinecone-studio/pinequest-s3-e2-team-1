@@ -1,0 +1,103 @@
+-- 1–5-р анги (Бага анги): ээлж 1 (Өглөө), ихэнх нь 21–34; 4C/4D тусгайлан 35–36
+-- 6–9-р анги (Дунд анги): ээлж 2 (Өдөр), ихэнх нь 21–36 (seed-д давхцуулахгүйгээр)
+-- 10–12-р анги (Ахлах анги): ээлж 1 (Өглөө), ихэнх нь 41–49
+--
+-- Анхаар: D1 нэг командыг тусдаа session-ээр ажиллуулж болох тул FK шалгалт идэвхтэй үед
+-- `advisor_id` / `home_classroom_id` алдаа гарна. Эхлээд:
+--   bun run db:seed:users:local|remote
+--   bun run db:seed:classrooms:local|remote
+PRAGMA foreign_keys = OFF;
+
+-- If DB already has dependent rows, deleting groups can fail with FK constraint.
+-- Make the seed idempotent by clearing children first (works even when FK is ON).
+DELETE FROM master_schedules;
+DELETE FROM ancillary_activities;
+DELETE FROM curriculum;
+
+DELETE FROM `groups`;
+
+PRAGMA foreign_keys = OFF;
+
+INSERT INTO `groups` (
+	id,
+	grade_level,
+	student_count,
+	advisor_id,
+	home_classroom_id,
+	shift,
+	is_advanced,
+	status
+) VALUES
+-- 1-р анги
+('1A', 1, 35, 'ELEM_01', '21', 1, 0, 'ACTIVE'),
+('1B', 1, 35, 'ELEM_02', '22', 1, 0, 'ACTIVE'),
+('1C', 1, 35, 'ELEM_03', '23', 1, 0, 'ACTIVE'),
+('1D', 1, 35, 'ELEM_04', '24', 1, 0, 'ACTIVE'),
+
+-- 2-р анги
+('2A', 2, 32, 'ELEM_05', '25', 1, 0, 'ACTIVE'),
+('2B', 2, 32, 'ELEM_06', '26', 1, 0, 'ACTIVE'),
+('2C', 2, 32, 'ELEM_07', '27', 1, 0, 'ACTIVE'),
+('2D', 2, 32, 'ELEM_08', '28', 1, 0, 'ACTIVE'),
+
+-- 3-р анги
+('3A', 3, 30, 'ELEM_09', '29', 1, 0, 'ACTIVE'),
+('3B', 3, 30, 'ELEM_10', '30', 1, 0, 'ACTIVE'),
+('3C', 3, 30, 'ELEM_11', '31', 1, 0, 'ACTIVE'),
+('3D', 3, 30, 'ELEM_12', '32', 1, 0, 'ACTIVE'),
+
+-- 4-р анги
+('4A', 4, 30, 'ELEM_13', '33', 1, 0, 'ACTIVE'),
+('4B', 4, 30, 'ELEM_14', '34', 1, 0, 'ACTIVE'),
+('4C', 4, 30, 'ELEM_15', '35', 1, 0, 'ACTIVE'),
+('4D', 4, 30, 'ELEM_16', '36', 1, 0, 'ACTIVE'),
+
+-- 5-р анги
+('5A', 5, 30, 'ELEM_17', '37', 1, 0, 'ACTIVE'),
+('5B', 5, 30, 'ELEM_18', '38', 1, 0, 'ACTIVE'),
+('5C', 5, 30, 'ELEM_19', '39', 1, 0, 'ACTIVE'),
+('5D', 5, 30, 'ELEM_20', '40', 1, 0, 'ACTIVE'),
+
+-- 6-р анги (Дунд анги — ээлж 2)
+('6A', 6, 28, 'MATH_01', '21', 2, 0, 'ACTIVE'),
+('6B', 6, 28, 'MATH_02', '22', 2, 0, 'ACTIVE'),
+('6C', 6, 28, 'LANG_01', '23', 2, 0, 'ACTIVE'),
+('6D', 6, 28, 'LANG_02', '24', 2, 0, 'ACTIVE'),
+
+-- 7-р анги
+('7A', 7, 28, 'MGL_01', '25', 2, 0, 'ACTIVE'),
+('7B', 7, 28, 'MGL_02', '26', 2, 0, 'ACTIVE'),
+('7C', 7, 28, 'SCI_01', '27', 2, 0, 'ACTIVE'),
+('7D', 7, 28, 'SCI_02', '28', 2, 0, 'ACTIVE'),
+
+-- 8-р анги
+('8A', 8, 28, 'HIST_01', '29', 2, 0, 'ACTIVE'),
+('8B', 8, 28, 'HIST_02', '30', 2, 0, 'ACTIVE'),
+('8C', 8, 28, 'SOC_01', '31', 2, 0, 'ACTIVE'),
+('8D', 8, 28, 'SOC_02', '32', 2, 0, 'ACTIVE'),
+
+-- 9-р анги
+('9A', 9, 26, 'MATH_03', '33', 2, 1, 'ACTIVE'),
+('9B', 9, 26, 'MATH_04', '34', 2, 0, 'ACTIVE'),
+('9C', 9, 26, 'LANG_03', '35', 2, 0, 'ACTIVE'),
+('9D', 9, 26, 'LANG_04', '36', 2, 0, 'ACTIVE'),
+
+-- 10-р анги (Ахлах — ээлж 1)
+('10A', 10, 25, 'SCI_03', '41', 1, 1, 'ACTIVE'),
+('10B', 10, 25, 'SCI_04', '42', 1, 0, 'ACTIVE'),
+('10C', 10, 25, 'MGL_03', '43', 1, 0, 'ACTIVE'),
+('10D', 10, 25, 'MGL_04', '44', 1, 0, 'ACTIVE'),
+
+-- 11-р анги
+('11A', 11, 25, 'MATH_05', '45', 1, 1, 'ACTIVE'),
+('11B', 11, 25, 'MATH_06', '46', 1, 0, 'ACTIVE'),
+('11C', 11, 25, 'LANG_05', '47', 1, 0, 'ACTIVE'),
+('11D', 11, 25, 'LANG_06', '48', 1, 0, 'ACTIVE'),
+
+-- 12-р анги
+('12A', 12, 24, 'SCI_05', '49', 1, 1, 'ACTIVE'),
+('12B', 12, 24, 'SCI_06', '45', 1, 0, 'ACTIVE'),
+('12C', 12, 24, 'MGL_05', '46', 1, 0, 'ACTIVE'),
+('12D', 12, 24, 'MGL_06', '47', 1, 0, 'ACTIVE');
+
+PRAGMA foreign_keys = ON;

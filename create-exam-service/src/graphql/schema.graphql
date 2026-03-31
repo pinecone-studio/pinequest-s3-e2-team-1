@@ -112,10 +112,85 @@ enum MathExamQuestionType {
   MATH
 }
 
+enum QuestionAnalysisSuggestedType {
+  MCQ
+  MATH
+  MATCHING
+  FILL_IN
+  FREE_TEXT
+}
+
+type QuestionAnalysisResult {
+  difficulty: Difficulty!
+  points: Int!
+  tags: [String!]!
+  explanation: String!
+  options: [String!]
+  correctAnswer: String!
+  suggestedType: QuestionAnalysisSuggestedType!
+  """
+  Эх сурвалжийн таамаглал (жишээ нь ЭЕШ, сурах бичиг).
+  """
+  source: String
+  """
+  Bloom-ийн таксономи — Мэдлэг | Ойлгомж | Хэрэглээ | Шинжилгээ.
+  """
+  skillLevel: String
+}
+
+input CreateAiExamTemplateInput {
+  title: String!
+  subject: String!
+  grade: Int!
+  teacherId: String!
+  durationMinutes: Int!
+  questions: [AiQuestionTemplateInput!]!
+}
+
+input AiQuestionTemplateInput {
+  type: String!
+  aiSuggestedType: String
+  prompt: String!
+  optionsJson: String
+  correctAnswer: String
+  points: Int
+  difficulty: Difficulty
+  tags: String
+  explanation: String
+  source: String
+  skillLevel: String
+}
+
+type AiExamTemplatePayload {
+  templateId: ID!
+  title: String!
+  totalPoints: Int!
+  difficulty: Difficulty!
+  createdAt: String!
+}
+
 input NewMathExamGeneratorMetaInput {
   difficulty: String
   topics: String
   sourceContext: String
+}
+
+input NewMathExamSessionMetaInput {
+  grade: Int
+  groupClass: String
+  examType: String
+  subject: String
+  topics: [String!]
+  teacherId: String
+  roomId: String
+  examDate: String
+  startTime: String
+  endTime: String
+  durationMinutes: Int
+  mixQuestions: Boolean
+  withVariants: Boolean
+  variantCount: Int
+  description: String
 }
 
 input NewMathExamQuestionInput {
@@ -138,6 +213,7 @@ input SaveNewMathExamInput {
   mathCount: Int!
   totalPoints: Int!
   generator: NewMathExamGeneratorMetaInput
+  sessionMeta: NewMathExamSessionMetaInput
   questions: [NewMathExamQuestionInput!]!
 }
 
@@ -148,16 +224,158 @@ type SaveNewMathExamPayload {
   updatedAt: String!
 }
 
+type ExamScheduleVariant {
+  id: String!
+  label: String!
+  startTime: String!
+  roomId: String!
+  reason: String
+}
+
+type ExamSchedule {
+  id: ID!
+  testId: ID!
+  classId: String!
+  """
+  Багшийн сонгосон өдөр (эхлэл) — санал гармагц хувилбарын цаг тусдаа
+  """
+  startTime: String!
+  endTime: String
+  roomId: String
+  status: String!
+  """
+  pending | suggested | confirmed | failed
+  """
+  aiVariants: [ExamScheduleVariant!]!
+  aiReasoning: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Teacher {
+  id: ID!
+  firstName: String!
+  lastName: String!
+  shortName: String
+  email: String
+  department: String!
+  teachingLevel: String!
+  role: String!
+  workLoadLimit: Int!
+}
+
+"""
+ai-scheduler-student: ангид харьяалагдах сурагч (minimal fields)
+"""
+type Student {
+  id: ID!
+  firstName: String!
+  lastName: String!
+  studentCode: String!
+  groupId: String!
+  status: String!
+}
+
+"""
+ai-scheduler-student: сурагчийн үндсэн хичээлийн хуваарь (class timetable)
+"""
+type StudentMainLesson {
+  id: ID!
+  dayOfWeek: Int!
+  semesterId: String!
+  isDraft: Boolean!
+  groupId: String!
+  gradeLevel: Int!
+  subjectId: String!
+  subjectName: String!
+  teacherId: ID!
+  teacherShortName: String
+  classroomId: String!
+  classroomRoomNumber: String!
+  periodId: Int!
+  periodShift: Int!
+  periodNumber: Int!
+  startTime: String!
+  endTime: String!
+}
+
+type TeacherMainLesson {
+  id: ID!
+  dayOfWeek: Int!
+  semesterId: String!
+  isDraft: Boolean!
+  groupId: String!
+  gradeLevel: Int!
+  subjectId: String!
+  subjectName: String!
+  classroomId: String!
+  classroomRoomNumber: String!
+  periodId: Int!
+  periodShift: Int!
+  periodNumber: Int!
+  startTime: String!
+  endTime: String!
+}
+
 type Query {
-  health: String!
   listNewMathExams(limit: Int = 50): [NewMathExamSummary!]!
   getNewMathExam(examId: ID!): NewMathExam
+  """
+  AI scheduler: нэг мөрийн төлөв (polling-д ашиглана)
+  """
+  getAiExamSchedule(examId: ID!): ExamSchedule
+  """
+  ai-scheduler-teacher: 9–12-р ангийн Math (MATH_HS) ордог багш нар
+  """
+  getTeachersList(grades: [Int!] = [9, 10, 11, 12]): [Teacher!]!
+  """
+  ai-scheduler-student: 10A гэх мэт ангид харьяалагдах сурагчдын жагсаалт
+  """
+  getStudentsList(grade: Int!, group: String!): [Student!]!
+  """
+  ai-scheduler-student: сонгосон сурагчийн үндсэн хуваарь (ангиар нь)
+  """
+  getStudentMainLessonsList(
+    studentId: ID!
+    semesterId: String = "2026-SPRING"
+    includeDraft: Boolean = false
+  ): [StudentMainLesson!]!
+  """
+  ai-scheduler-teacher: тухайн багшийн үндсэн хичээлийн (primary) хуваарь
+  """
+  getTeacherMainLessonsList(
+    teacherId: ID!
+    semesterId: String = "2026-SPRING"
+    includeDraft: Boolean = false
+  ): [TeacherMainLesson!]!
+}
+
+type RequestExamSchedulePayload {
+  success: Boolean!
+  message: String!
+  examId: ID
 }
 
 type Mutation {
   generateExamQuestions(input: ExamGenerationInput!): ExamGenerationResult!
   saveExam(input: SaveExamInput!): SaveExamPayload!
   saveNewMathExam(input: SaveNewMathExamInput!): SaveNewMathExamPayload!
+  # AI-аар шинжлүүлэх
+  analyzeQuestion(prompt: String!): QuestionAnalysisResult!
+  # AI-аар үүсгэсэн загварыг хадгалах
+  createAiExamTemplate(
+    input: CreateAiExamTemplateInput!
+  ): AiExamTemplatePayload!
+  # Шалгалтын хуваарь: D1-д pending үүсгээд Queue руу — AI consumer дараа нь батална
+  requestAiExamSchedule(
+    testId: ID!
+    classId: String!
+    preferredDate: String!
+  ): RequestExamSchedulePayload!
+  """
+  Багш AI-ийн саналуудаас нэгийг сонгож батална (human-in-the-loop)
+  """
+  approveAiExamSchedule(examId: ID!, variantId: String!): ExamSchedule!
 }
 
 type NewMathExamSummary {
@@ -170,6 +388,24 @@ type NewMathExamGeneratorMeta {
   difficulty: String
   topics: String
   sourceContext: String
+}
+
+type NewMathExamSessionMeta {
+  grade: Int
+  groupClass: String
+  examType: String
+  subject: String
+  topics: [String!]
+  teacherId: String
+  roomId: String
+  examDate: String
+  startTime: String
+  endTime: String
+  durationMinutes: Int
+  mixQuestions: Boolean
+  withVariants: Boolean
+  variantCount: Int
+  description: String
 }
 
 type NewMathExamQuestion {
@@ -192,6 +428,7 @@ type NewMathExam {
   mathCount: Int!
   totalPoints: Int!
   generator: NewMathExamGeneratorMeta
+  sessionMeta: NewMathExamSessionMeta
   questions: [NewMathExamQuestion!]!
   createdAt: String!
   updatedAt: String!

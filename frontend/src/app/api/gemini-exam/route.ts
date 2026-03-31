@@ -3,19 +3,8 @@ import type {
   GenerateExamRequest,
   GeneratedExamPayload,
 } from "@/lib/math-exam-contract";
-
-function cleanJsonBlock(value: string) {
-  const trimmed = value.trim();
-
-  if (trimmed.startsWith("```")) {
-    return trimmed
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
-  }
-
-  return trimmed;
-}
+import { buildGeminiErrorResponse } from "@/lib/gemini-error";
+import { parseGeminiJson } from "@/lib/parse-gemini-json";
 
 function difficultyLabel(level: DifficultyLevel) {
   if (level === "easy") {
@@ -234,14 +223,11 @@ JSON бүтэц:
     };
 
     if (!geminiResponse.ok) {
-      return Response.json(
-        {
-          error:
-            geminiPayload.error?.message ??
-            "Gemini-с хариу авах үед алдаа гарлаа.",
-        },
-        { status: geminiResponse.status },
-      );
+      return buildGeminiErrorResponse({
+        fallbackMessage: "Gemini-с хариу авах үед алдаа гарлаа.",
+        providerMessage: geminiPayload.error?.message,
+        status: geminiResponse.status,
+      });
     }
 
     const text = geminiPayload.candidates?.[0]?.content?.parts
@@ -256,7 +242,7 @@ JSON бүтэц:
       );
     }
 
-    const exam = JSON.parse(cleanJsonBlock(text)) as GeneratedExamPayload;
+    const exam = parseGeminiJson<GeneratedExamPayload>(text);
 
     return Response.json({ exam });
   } catch (error) {

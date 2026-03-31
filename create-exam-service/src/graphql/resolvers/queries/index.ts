@@ -1,7 +1,7 @@
-import { healthQuery } from "./health";
+import { aiSchedulerQueryResolvers } from "./ai-scheduler";
 import { newMathExamQueries } from "./newMathExams";
 
 export const queryResolvers = {
-	...healthQuery,
 	...newMathExamQueries,
+	...aiSchedulerQueryResolvers,
 };

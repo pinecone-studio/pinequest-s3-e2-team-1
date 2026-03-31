@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ApolloProviderWrapper } from "@/components/providers/apollo-provider";
+import { ThemeProvider } from "@/components/providers/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,6 +21,9 @@ export const metadata: Metadata = {
     template: "Pinequest",
   },
   description: "Exam Module — Pinequest",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({
@@ -27,14 +32,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml"></link>
-      </head>
+    <html lang="mn" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ApolloProviderWrapper>{children}</ApolloProviderWrapper>
+        <ThemeProvider>
+          <ApolloProviderWrapper>
+            {children}
+            <Toaster position="top-center" />
+          </ApolloProviderWrapper>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -114,10 +114,79 @@ export const typeDefs = /* GraphQL */ `
     MATH
   }
 
+  enum QuestionAnalysisSuggestedType {
+    MCQ
+    MATH
+    MATCHING
+    FILL_IN
+    FREE_TEXT
+  }
+
+  type QuestionAnalysisResult {
+    difficulty: Difficulty!
+    points: Int!
+    tags: [String!]!
+    explanation: String!
+    options: [String!]
+    correctAnswer: String!
+    suggestedType: QuestionAnalysisSuggestedType!
+    source: String
+    skillLevel: String
+  }
+
+  input CreateAiExamTemplateInput {
+    title: String!
+    subject: String!
+    grade: Int!
+    teacherId: String!
+    durationMinutes: Int!
+    questions: [AiQuestionTemplateInput!]!
+  }
+
+  input AiQuestionTemplateInput {
+    type: String!
+    aiSuggestedType: String
+    prompt: String!
+    optionsJson: String
+    correctAnswer: String
+    points: Int
+    difficulty: Difficulty
+    tags: String
+    explanation: String
+    source: String
+    skillLevel: String
+  }
+
+  type AiExamTemplatePayload {
+    templateId: ID!
+    title: String!
+    totalPoints: Int!
+    difficulty: Difficulty!
+    createdAt: String!
+  }
+
   input NewMathExamGeneratorMetaInput {
     difficulty: String
     topics: String
     sourceContext: String
+  }
+
+  input NewMathExamSessionMetaInput {
+    grade: Int
+    groupClass: String
+    examType: String
+    subject: String
+    topics: [String!]
+    teacherId: String
+    roomId: String
+    examDate: String
+    startTime: String
+    endTime: String
+    durationMinutes: Int
+    mixQuestions: Boolean
+    withVariants: Boolean
+    variantCount: Int
+    description: String
   }
 
   input NewMathExamQuestionInput {
@@ -140,6 +209,7 @@ export const typeDefs = /* GraphQL */ `
     mathCount: Int!
     totalPoints: Int!
     generator: NewMathExamGeneratorMetaInput
+    sessionMeta: NewMathExamSessionMetaInput
     questions: [NewMathExamQuestionInput!]!
   }
 
@@ -150,16 +220,128 @@ export const typeDefs = /* GraphQL */ `
     updatedAt: String!
   }
 
+  type RequestExamSchedulePayload {
+    success: Boolean!
+    message: String!
+    examId: ID
+  }
+
+  type ExamScheduleVariant {
+    id: String!
+    label: String!
+    startTime: String!
+    roomId: String!
+    reason: String
+  }
+
+  type ExamSchedule {
+    id: ID!
+    testId: ID!
+    classId: String!
+    startTime: String!
+    endTime: String
+    roomId: String
+    status: String!
+    aiVariants: [ExamScheduleVariant!]!
+    aiReasoning: String
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type Teacher {
+    id: ID!
+    firstName: String!
+    lastName: String!
+    shortName: String
+    email: String
+    department: String!
+    teachingLevel: String!
+    role: String!
+    workLoadLimit: Int!
+  }
+
+  type Student {
+    id: ID!
+    firstName: String!
+    lastName: String!
+    studentCode: String!
+    groupId: String!
+    status: String!
+  }
+
+  type StudentMainLesson {
+    id: ID!
+    dayOfWeek: Int!
+    semesterId: String!
+    isDraft: Boolean!
+    groupId: String!
+    gradeLevel: Int!
+    subjectId: String!
+    subjectName: String!
+    teacherId: ID!
+    teacherShortName: String
+    classroomId: String!
+    classroomRoomNumber: String!
+    periodId: Int!
+    periodShift: Int!
+    periodNumber: Int!
+    startTime: String!
+    endTime: String!
+  }
+
+  type TeacherMainLesson {
+    id: ID!
+    dayOfWeek: Int!
+    semesterId: String!
+    isDraft: Boolean!
+    groupId: String!
+    gradeLevel: Int!
+    subjectId: String!
+    subjectName: String!
+    classroomId: String!
+    classroomRoomNumber: String!
+    periodId: Int!
+    periodShift: Int!
+    periodNumber: Int!
+    startTime: String!
+    endTime: String!
+  }
+
   type Query {
-    health: String!
     listNewMathExams(limit: Int = 50): [NewMathExamSummary!]!
     getNewMathExam(examId: ID!): NewMathExam
+    getAiExamSchedule(examId: ID!): ExamSchedule
+    getTeachersList(grades: [Int!] = [9, 10, 11, 12]): [Teacher!]!
+    getStudentsList(grade: Int!, group: String!): [Student!]!
+    getStudentMainLessonsList(
+      studentId: ID!
+      semesterId: String = "2026-SPRING"
+      includeDraft: Boolean = false
+    ): [StudentMainLesson!]!
+    getTeacherMainLessonsList(
+      teacherId: ID!
+      semesterId: String = "2026-SPRING"
+      includeDraft: Boolean = false
+    ): [TeacherMainLesson!]!
   }
 
   type Mutation {
     generateExamQuestions(input: ExamGenerationInput!): ExamGenerationResult!
     saveExam(input: SaveExamInput!): SaveExamPayload!
     saveNewMathExam(input: SaveNewMathExamInput!): SaveNewMathExamPayload!
+    # AI-аар шинжлүүлэх
+    analyzeQuestion(prompt: String!): QuestionAnalysisResult!
+    # AI-аар үүсгэсэн загварыг хадгалах
+    createAiExamTemplate(
+      input: CreateAiExamTemplateInput!
+    ): AiExamTemplatePayload!
+    # Шалгалтын хуваарь: D1-д pending үүсгээд Queue руу — AI consumer дараа нь батална
+    requestAiExamSchedule(
+      testId: ID!
+      classId: String!
+      preferredDate: String!
+    ): RequestExamSchedulePayload!
+    approveAiExamSchedule(examId: ID!, variantId: String!): ExamSchedule!
   }
 
   type NewMathExamSummary {
@@ -172,6 +354,24 @@ export const typeDefs = /* GraphQL */ `
     difficulty: String
     topics: String
     sourceContext: String
+  }
+
+  type NewMathExamSessionMeta {
+    grade: Int
+    groupClass: String
+    examType: String
+    subject: String
+    topics: [String!]
+    teacherId: String
+    roomId: String
+    examDate: String
+    startTime: String
+    endTime: String
+    durationMinutes: Int
+    mixQuestions: Boolean
+    withVariants: Boolean
+    variantCount: Int
+    description: String
   }
 
   type NewMathExamQuestion {
@@ -194,6 +394,7 @@ export const typeDefs = /* GraphQL */ `
     mathCount: Int!
     totalPoints: Int!
     generator: NewMathExamGeneratorMeta
+    sessionMeta: NewMathExamSessionMeta
     questions: [NewMathExamQuestion!]!
     createdAt: String!
     updatedAt: String!
