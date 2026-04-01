@@ -87,19 +87,24 @@ export function GeneralInfoSection() {
         </div>
 
         <div className={fieldWrapperClassName}>
-          <Label htmlFor="duration-minutes" className="text-[14px] font-medium text-slate-800">
+          <Label htmlFor="duration-left" className="text-[14px] font-medium text-slate-800">
             Үргэлжлэх минут
           </Label>
-          <Input
-            id="duration-minutes"
-            type="number"
-            min="1"
-            inputMode="numeric"
-            defaultValue="30"
-            placeholder="Минут оруулах"
-            className={fieldClassName}
-          />
+          <Select defaultValue="30">
+            <SelectTrigger
+              id="duration-left"
+              className={`${fieldClassName} cursor-pointer`}
+            >
+              <SelectValue placeholder="Хугацаа сонгох" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20">20 мин</SelectItem>
+              <SelectItem value="30">30 мин</SelectItem>
+              <SelectItem value="40">40 мин</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+
       </div>
     </section>
   );

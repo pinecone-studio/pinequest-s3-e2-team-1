@@ -58,7 +58,7 @@ export function TestSidebar() {
 
   return (
     <aside className="row-start-2 col-start-1 overflow-y-auto border-r border-slate-200 bg-[#f3f6f9] p-2">
-      <nav className="space-y-1">
+      <nav className="space-y-2">
         {navigationItems.map((item) => {
           const isActive =
             !item.disabled &&
@@ -71,12 +71,12 @@ export function TestSidebar() {
           const iconClassName =
             item.label === "Шалгалтын материал үүсгэх" ? "h-5 w-5" : "h-4 w-4";
 
-          const className = `flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+          const className = `flex w-full items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-left text-sm font-medium transition-all duration-200 ${
             isActive
-              ? "bg-[#e6f5fd] text-[#1287c7]"
+              ? "border-[#d6ebfb] bg-[#e6f5fd] text-[#1287c7] shadow-sm"
               : item.disabled
                 ? "cursor-not-allowed text-slate-400 opacity-70"
-                : "text-slate-700 hover:bg-slate-100"
+                : "text-slate-700 hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-100 hover:shadow-sm"
           }`;
 
           if (item.disabled) {
