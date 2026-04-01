@@ -1,5 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextResponse } from "next/server";
+import { chatWithOllama, DEFAULT_OLLAMA_MODEL } from "@/lib/ollama";
 
 type RequestBody = {
   competency?: string | null;
@@ -23,7 +24,6 @@ type RouteEnv = {
   OLLAMA_MODEL?: string;
 };
 
-const DEFAULT_OLLAMA_MODEL = "llama3.1:latest";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_API_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta";
@@ -35,9 +35,6 @@ const getEnvValue = (primary?: string, fallback?: string) => {
   const value = primary?.trim() || fallback?.trim();
   return value ? value : undefined;
 };
-
-const normalizeBaseUrl = (value?: string) =>
-  (value ?? "http://127.0.0.1:11434").replace(/\/+$/, "");
 
 const safeJsonParse = (value: string): ResponseBody | null => {
   try {
@@ -190,59 +187,30 @@ const generateOllamaFeedback = async (
     return null;
   }
 
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/api/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(env.OLLAMA_API_KEY || process.env.OLLAMA_API_KEY
-        ? {
-            Authorization: `Bearer ${
-              env.OLLAMA_API_KEY ?? process.env.OLLAMA_API_KEY
-            }`,
-          }
-        : {}),
-    },
-    body: JSON.stringify({
-      model: getEnvValue(env.OLLAMA_MODEL, process.env.OLLAMA_MODEL) ??
-        DEFAULT_OLLAMA_MODEL,
-      stream: false,
-      format: "json",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Та сурагчийн буруу хариултад зориулсан монгол хэлний богино тайлбар JSON үүсгэнэ.",
-        },
-        {
-          role: "user",
-          content: buildPrompt(body),
-        },
-      ],
-    }),
+  const ollama = await chatWithOllama({
+    apiKey: env.OLLAMA_API_KEY ?? process.env.OLLAMA_API_KEY,
+    baseUrl,
+    context: "Question feedback",
+    messages: [
+      {
+        role: "system",
+        content:
+          "Та сурагчийн буруу хариултад зориулсан монгол хэлний богино тайлбар JSON үүсгэнэ.",
+      },
+      {
+        role: "user",
+        content: buildPrompt(body),
+      },
+    ],
+    model:
+      getEnvValue(env.OLLAMA_MODEL, process.env.OLLAMA_MODEL) ??
+      DEFAULT_OLLAMA_MODEL,
   });
-
-  if (!response.ok) {
-    throw new Error(`Ollama feedback failed with status ${response.status}`);
-  }
-
-  const payload = (await response.json()) as {
-    error?: string;
-    message?: { content?: string };
-    response?: string;
-  };
-
-  if (payload.error) {
-    throw new Error(payload.error);
-  }
-
-  const parsed = safeJsonParse(payload.message?.content ?? payload.response ?? "");
+  const parsed = safeJsonParse(ollama.content);
   return parsed
     ? {
         ...parsed,
-        model:
-          parsed.model ??
-          getEnvValue(env.OLLAMA_MODEL, process.env.OLLAMA_MODEL) ??
-          DEFAULT_OLLAMA_MODEL,
+        model: parsed.model ?? ollama.model,
         source: "ollama",
       }
     : null;

@@ -2,6 +2,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "take-exam-service",
 	"main": "src/entry.ts",
+	"workers_dev": true,
 	"compatibility_date": "2026-03-17",
 	"compatibility_flags": [
 		"nodejs_compat",
@@ -51,5 +52,44 @@
 				"max_batch_timeout": 30
 			}
 		]
+	},
+	"vars": {
+		"CREATE_EXAM_SERVICE_GRAPHQL_URL": "https://create-exam-service.tsetsegulziiocherdene.workers.dev/api/graphql",
+		"OLLAMA_BASE_URL": "https://fax-guides-draw-minority.trycloudflare.com",
+		"OLLAMA_MODEL": "llama3.1:latest"
 	}
+	// Stable public URL setup:
+	// 1. Keep `workers_dev: true` until your custom domain DNS is ready.
+	// 2. Then add environment-specific routes and deploy with `--env`.
+	//
+	// "env": {
+	// 	"staging": {
+	// 		"workers_dev": false,
+	// 		"routes": [
+	// 			{
+	// 				"pattern": "staging-api.example.com",
+	// 				"custom_domain": true
+	// 			}
+	// 		],
+	// 		"vars": {
+	// 			"OLLAMA_MODEL": "llama3.1:latest",
+	// 			"OLLAMA_BASE_URL": "https://ollama.example.com",
+	// 			"CREATE_EXAM_SERVICE_GRAPHQL_URL": "https://staging-create.example.com/api/graphql"
+	// 		}
+	// 	},
+	// 	"production": {
+	// 		"workers_dev": false,
+	// 		"routes": [
+	// 			{
+	// 				"pattern": "api.example.com",
+	// 				"custom_domain": true
+	// 			}
+	// 		],
+	// 		"vars": {
+	// 			"OLLAMA_MODEL": "llama3.1:latest",
+	// 			"OLLAMA_BASE_URL": "https://ollama.example.com",
+	// 			"CREATE_EXAM_SERVICE_GRAPHQL_URL": "https://create.example.com/api/graphql"
+	// 		}
+	// 	}
+	// }
 }

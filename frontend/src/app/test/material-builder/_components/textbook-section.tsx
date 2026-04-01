@@ -54,7 +54,7 @@ export function TextbookSection() {
                   </div>
                 </div>
 
-                {section.lessons ? (
+                {"lessons" in section ? (
                   <div className="space-y-2 pl-7">
                     {section.lessons.map((lesson) => (
                       <label
@@ -62,7 +62,7 @@ export function TextbookSection() {
                         className="flex items-start gap-3 text-[15px] leading-6 text-slate-900"
                       >
                         <Checkbox
-                          checked={Boolean(lesson.active)}
+                          checked={Boolean("active" in lesson && lesson.active)}
                           className="mt-1 h-4 w-4 rounded-[5px] border-[#dbe4f3] bg-white data-checked:border-[#0b5cab] data-checked:bg-[#0b5cab]"
                         />
                         <span>{lesson.label}</span>

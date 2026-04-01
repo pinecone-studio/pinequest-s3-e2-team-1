@@ -16,7 +16,7 @@ import {
 
 export default function MaterialBuilderPageContent() {
   const [source, setSource] = useState<MaterialSourceId>("question-bank");
-  const [selectedSharedMaterialId, setSelectedSharedMaterialId] = useState(
+  const [selectedSharedMaterialId, setSelectedSharedMaterialId] = useState<string>(
     sharedLibraryMaterials[0]?.id ?? "",
   );
 
