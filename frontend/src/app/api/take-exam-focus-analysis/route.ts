@@ -1,5 +1,10 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextResponse } from "next/server";
+import {
+  chatWithOllama,
+  DEFAULT_OLLAMA_MODEL,
+  normalizeOllamaBaseUrl,
+} from "@/lib/ollama";
 
 type FocusAnalysisRequest = {
   attempts: Array<{
@@ -70,7 +75,6 @@ type TopicAggregate = {
   unansweredCount: number;
 };
 
-const DEFAULT_OLLAMA_MODEL = "llama3.1:latest";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_API_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta";
@@ -82,9 +86,6 @@ const getEnvValue = (primary?: string, fallback?: string) => {
   const value = primary?.trim() || fallback?.trim();
   return value ? value : undefined;
 };
-
-const normalizeBaseUrl = (value?: string) =>
-  (value ?? "http://127.0.0.1:11434").replace(/\/+$/, "");
 
 const safeJsonParse = (value: string): FocusAnalysisResponse | null => {
   try {
@@ -270,53 +271,31 @@ const generateOllamaAnalysis = async (
     env.OLLAMA_API_KEY,
     process.env.OLLAMA_API_KEY,
   );
-  const ollamaBaseUrl = normalizeBaseUrl(
+  const ollamaBaseUrl = normalizeOllamaBaseUrl(
     getEnvValue(env.OLLAMA_BASE_URL, process.env.OLLAMA_BASE_URL),
   );
-  const model =
+  const configuredModel =
     getEnvValue(env.OLLAMA_MODEL, process.env.OLLAMA_MODEL) ??
     DEFAULT_OLLAMA_MODEL;
 
-  const response = await fetch(`${ollamaBaseUrl}/api/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(ollamaApiKey ? { Authorization: `Bearer ${ollamaApiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      format: "json",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Та шалгалтын аналитикийн туслах. Зөвхөн JSON буцаана. summary, areas гэсэн key ашигла. areas дотор topic, avgScore, affectedStudents, insight байна.",
-        },
-        {
-          role: "user",
-          content: buildOllamaPrompt(body.exam, fallback),
-        },
-      ],
-    }),
+  const ollama = await chatWithOllama({
+    apiKey: ollamaApiKey,
+    baseUrl: ollamaBaseUrl,
+    context: "Focus analysis",
+    messages: [
+      {
+        role: "system",
+        content:
+          "Та шалгалтын аналитикийн туслах. Зөвхөн JSON буцаана. summary, areas гэсэн key ашигла. areas дотор topic, avgScore, affectedStudents, insight байна.",
+      },
+      {
+        role: "user",
+        content: buildOllamaPrompt(body.exam, fallback),
+      },
+    ],
+    model: configuredModel,
   });
-
-  if (!response.ok) {
-    throw new Error(`Ollama analysis failed with status ${response.status}`);
-  }
-
-  const payload = (await response.json()) as {
-    error?: string;
-    message?: { content?: string };
-    response?: string;
-  };
-
-  if (payload.error) {
-    throw new Error(payload.error);
-  }
-
-  const content = payload.message?.content ?? payload.response;
-  const parsed = content ? safeJsonParse(content) : null;
+  const parsed = safeJsonParse(ollama.content);
 
   if (!parsed) {
     throw new Error("Ollama analysis JSON parse хийж чадсангүй.");
@@ -325,7 +304,7 @@ const generateOllamaAnalysis = async (
   return {
     ...parsed,
     generatedAt: new Date().toISOString(),
-    model,
+    model: ollama.model,
     source: "ollama" as const,
   };
 };

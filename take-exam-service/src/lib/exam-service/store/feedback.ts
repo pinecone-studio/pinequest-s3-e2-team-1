@@ -5,6 +5,7 @@ import type {
 	ExamResultSummary,
 } from "@/lib/exam-service/types";
 import type { DbClient } from "@/lib/db";
+import { chatWithOllama, DEFAULT_OLLAMA_MODEL } from "@/lib/ollama";
 import { getAttemptMonitoringSummaries } from "./activity";
 import { getQuestionOptions } from "./common";
 import type { AttemptResultRow } from "./results";
@@ -29,8 +30,6 @@ const FALLBACK_MODEL = "@cf/openai/gpt-oss-20b";
 const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_API_BASE_URL =
 	"https://generativelanguage.googleapis.com/v1beta";
-const DEFAULT_OLLAMA_MODEL = "llama3.1";
-
 type FeedbackOptions = {
 	ai?: AiBinding;
 	geminiApiKey?: string;
@@ -132,8 +131,6 @@ export const stringifyAttemptFeedback = (
 	feedback?: AttemptFeedback,
 ): string | null => (feedback ? JSON.stringify(feedback) : null);
 
-const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
-
 const getOptionTextById = (
 	options: Array<{ id?: string; text?: string }> | string[],
 	optionId: string | null,
@@ -164,7 +161,7 @@ const buildSystemPrompt = () =>
 	"Та шалгалтын дараах богино, дэмжсэн өнгө аястай монгол хэлний feedback JSON үүсгэнэ. headline, summary, strengths, improvements гэсэн 4 key ашигла. strengths болон improvements нь тус бүр 1-3 мөртэй массив байна.";
 
 const buildQuestionFeedbackSystemPrompt = () =>
-	"Та сурагчийн буруу эсвэл дутуу хариулт бүрт зориулсан богино монгол хэлний тайлбар JSON үүсгэнэ. Зөвхөн questionFeedback гэсэн key ашиглаж, массив дотор questionId ба feedback гэсэн 2 талбар өг. feedback нь 2-4 өгүүлбэртэй, юун дээр алдсан, зөв хариу юу байсан, ямар сэдвийг гүнзгийрүүлж давтах ёстойг ойлгомжтой тайлбарлана.";
+	"Та сурагчийн буруу эсвэл дутуу хариулт бүрт зориулсан товч монгол хэлний тайлбар JSON үүсгэнэ. Зөвхөн questionFeedback гэсэн key ашиглаж, массив дотор questionId ба feedback гэсэн 2 талбар өг. feedback нь 1-2 өгүүлбэртэй, аль болох богино байна. Юун дээр алдсан, зөв хариу юу байсан, дараа нь юуг дахин шалгах ёстойг шууд ойлгомжтой хэл.";
 
 const buildUserPayload = (
 	progress: ExamProgress,
@@ -187,8 +184,49 @@ const buildQuestionFeedbackPayload = (items: QuestionFeedbackItem[]) =>
 	JSON.stringify({
 		questions: items,
 		instruction:
-			"questionId бүрийн feedback-ийг монгол хэлээр бич. Асуултын prompt, сурагчийн өгсөн хариулт, зөв хариуг хооронд нь харьцуулж яг аль алхам эсвэл ойлголт дээр алдсаныг тодорхой тайлбарла. Хэт ерөнхий тайлбар бүү өг. Зөв хариуг дурд. Ямар дүрэм, сэдэв, эсвэл аргачлалаа давтах хэрэгтэйг заавал хэл.",
+			"questionId бүрийн feedback-ийг монгол хэлээр бич. 1-2 богино өгүүлбэр ашигла. Асуултын prompt, сурагчийн өгсөн хариулт, зөв хариуг харьцуулж яг аль алхам эсвэл ойлголт дээр алдсаныг товч хэл. Зөв хариуг дурд. Давтах зүйл байвал нэг богино зөвлөмжөөр төгсгө.",
 	});
+
+const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
+
+const splitSentences = (value: string) =>
+	normalizeWhitespace(value)
+		.split(/(?<=[.!?])\s+/)
+		.map((sentence) => sentence.trim())
+		.filter(Boolean);
+
+const compactExplanation = (value: string, item: QuestionFeedbackItem) => {
+	const sentences = splitSentences(
+		value
+			.replace(/^Анхаарах санаа:\s*/i, "")
+			.replace(/^Давтах зөвлөмж:\s*/i, ""),
+	);
+	if (sentences.length === 0) {
+		return "";
+	}
+
+	const selectedAnswer = item.selectedAnswerText.trim().toLowerCase();
+	const correctAnswer = item.correctAnswerText.trim().toLowerCase();
+
+	const filtered = sentences.filter((sentence, index) => {
+		if (index !== 0) {
+			return true;
+		}
+
+		const normalizedSentence = sentence.toLowerCase();
+		const mentionsSelected =
+			selectedAnswer.length > 0 && normalizedSentence.includes(selectedAnswer);
+		const mentionsCorrect =
+			correctAnswer.length > 0 && normalizedSentence.includes(correctAnswer);
+		const mentionsAnswerPattern =
+			normalizedSentence.includes("зөв хари") ||
+			normalizedSentence.includes("зөв нь");
+
+		return !(mentionsSelected && mentionsCorrect && mentionsAnswerPattern);
+	});
+
+	return filtered[0] ?? sentences[0] ?? "";
+};
 
 const isLikelyInstructionText = (value: string) => {
 	const normalized = value.trim().toLowerCase();
@@ -260,7 +298,7 @@ const buildFallbackQuestionFeedback = (item: QuestionFeedbackItem) => {
 		correctNumeric < 0 &&
 		studentNumeric >= 0
 	) {
-		return `Та ${subtraction.left}-${subtraction.right} үйлдлийг ${item.selectedAnswerText} гэж бодсон байна. Бага тооноос их тоог хасахад хариу сөрөг тэмдэгтэй гардгийг алдсан байна. ${item.correctAnswerText} гэж гарах шалтгааныг тооны шулуун дээр дүрслээд, сөрөг тооны хасалтын жишээ бодлогуудыг дахин ажиллаарай.`;
+		return `Та ${subtraction.left}-${subtraction.right} үйлдэл дээр сөрөг тэмдгийг алдсан байна. Зөв нь "${item.correctAnswerText}", бага тооноос их тоо хасахад хариу сөрөг гарна.`;
 	}
 
 	if (
@@ -269,18 +307,25 @@ const buildFallbackQuestionFeedback = (item: QuestionFeedbackItem) => {
 		item.selectedAnswerText &&
 		!item.selectedAnswerText.includes("+ C")
 	) {
-		return `Та үндсэн илэрхийллээ зөв олсон байж болох ч интегралын тогтмол болох +C-г орхигдуулсан байна. Зөв хариу нь "${item.correctAnswerText}" гэдгийг анзаараад, интеграл бодох бүрдээ эцсийн мөрөндөө +C нэмэх дүрмээ бататгаарай.`;
+		return `Та интегралын тогтмол +C-г орхигдуулсан байна. Зөв нь "${item.correctAnswerText}", интегралын эцэст +C-гээ заавал нэмээрэй.`;
 	}
 
+	const correctAnswer = item.correctAnswerText.trim();
 	const lead = item.selectedAnswerText
-		? `Таны хариулт "${item.selectedAnswerText}" байсан ч зөв хариу нь "${item.correctAnswerText}" байна.`
-		: `Энэ асуултад хариулаагүй байна. Зөв хариу нь "${item.correctAnswerText}" юм.`;
+		? correctAnswer
+			? `Таны хариулт "${item.selectedAnswerText}", зөв нь "${correctAnswer}".`
+			: `Таны хариулт "${item.selectedAnswerText}" байна.`
+		: correctAnswer
+			? `Энэ асуултад хариулаагүй. Зөв нь "${correctAnswer}".`
+			: "Энэ асуултад хариулаагүй байна.";
 	const explanation = item.baseExplanation
-		? `Анхаарах санаа: ${item.baseExplanation}`
-		: "Үндсэн ойлголтоо нэгтгэж, бодох алхмаа дахин шалгах хэрэгтэй.";
+		? compactExplanation(item.baseExplanation, item)
+		: "";
 	const studyTopic = normalizeStudyTopic(item.competency, item.questionType);
+	const reminder =
+		explanation || `${studyTopic}-ийн үндсэн ойлголтоо дахин шалгаарай.`;
 
-	return `${lead} ${explanation} Давтах зөвлөмж: ${studyTopic}-ийн үндсэн дүрэм, жишээ бодлого болон ижил хэв шинжийн даалгавруудыг ахиад ажиллаарай.`;
+	return `${lead} ${reminder}`;
 };
 
 const buildQuestionFeedbackItems = (
@@ -388,41 +433,17 @@ const generateOllamaQuestionFeedback = async (
 		return null;
 	}
 
-	const response = await fetch(`${normalizeBaseUrl(options.ollamaBaseUrl)}/api/chat`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			...(options.ollamaApiKey
-				? { Authorization: `Bearer ${options.ollamaApiKey}` }
-				: {}),
-		},
-		body: JSON.stringify({
-			model: options.ollamaModel ?? DEFAULT_OLLAMA_MODEL,
-			stream: false,
-			format: "json",
-			messages: [
-				{ role: "system", content: buildQuestionFeedbackSystemPrompt() },
-				{ role: "user", content: buildQuestionFeedbackPayload(items) },
-			],
-		}),
+	const ollama = await chatWithOllama({
+		apiKey: options.ollamaApiKey,
+		baseUrl: options.ollamaBaseUrl,
+		context: "Question feedback",
+		messages: [
+			{ role: "system", content: buildQuestionFeedbackSystemPrompt() },
+			{ role: "user", content: buildQuestionFeedbackPayload(items) },
+		],
+		model: options.ollamaModel ?? DEFAULT_OLLAMA_MODEL,
 	});
-
-	if (!response.ok) {
-		throw new Error(`Ollama question feedback failed with status ${response.status}`);
-	}
-
-	const payload = (await response.json()) as {
-		error?: string;
-		message?: { content?: string };
-		response?: string;
-	};
-
-	if (payload.error) {
-		throw new Error(payload.error);
-	}
-
-	const content = payload.message?.content ?? payload.response;
-	return content ? safeQuestionFeedbackParse(content) : null;
+	return safeQuestionFeedbackParse(ollama.content);
 };
 
 export const enrichResultWithQuestionFeedback = async (
@@ -566,43 +587,17 @@ const generateOllamaFeedback = async (
 		return null;
 	}
 
-	const response = await fetch(`${normalizeBaseUrl(options.ollamaBaseUrl)}/api/chat`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			...(options.ollamaApiKey
-				? { Authorization: `Bearer ${options.ollamaApiKey}` }
-				: {}),
-		},
-		body: JSON.stringify({
-			model: options.ollamaModel ?? DEFAULT_OLLAMA_MODEL,
-			stream: false,
-			format: "json",
-			messages: [
-				{ role: "system", content: systemPrompt },
-				{ role: "user", content: userPayload },
-			],
-		}),
+	const ollama = await chatWithOllama({
+		apiKey: options.ollamaApiKey,
+		baseUrl: options.ollamaBaseUrl,
+		context: "Attempt feedback",
+		messages: [
+			{ role: "system", content: systemPrompt },
+			{ role: "user", content: userPayload },
+		],
+		model: options.ollamaModel ?? DEFAULT_OLLAMA_MODEL,
 	});
-
-	if (!response.ok) {
-		throw new Error(`Ollama feedback failed with status ${response.status}`);
-	}
-
-	const payload = (await response.json()) as {
-		error?: string;
-		message?: {
-			content?: string;
-		};
-		response?: string;
-	};
-
-	if (payload.error) {
-		throw new Error(payload.error);
-	}
-
-	const content = payload.message?.content ?? payload.response;
-	return content ? safeJsonParse(content) : null;
+	return safeJsonParse(ollama.content);
 };
 
 const buildFallbackFeedback = (

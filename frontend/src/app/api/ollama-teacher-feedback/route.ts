@@ -1,5 +1,12 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextResponse } from "next/server";
+import {
+  chatWithOllama,
+  DEFAULT_OLLAMA_MODEL,
+  fetchOllamaJson,
+  isRemoteOllamaBaseUrl,
+  normalizeOllamaBaseUrl,
+} from "@/lib/ollama";
 
 type AttemptPayload = {
   attemptId: string;
@@ -80,87 +87,37 @@ const getEnvValue = (primary?: string, fallback?: string) => {
   return value ? value : undefined;
 };
 
-const normalizeBaseUrl = (value?: string) =>
-  (value ?? "http://127.0.0.1:11434").replace(/\/+$/, "");
-
-const buildOllamaHeaders = (apiKey?: string) => ({
-  "Content-Type": "application/json",
-  ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-});
-
 async function fetchOllamaStatus(baseUrl: string, model: string, apiKey?: string) {
   const checkedAt = new Date().toISOString();
 
   try {
-    const response = await fetch(`${baseUrl}/api/tags`, {
-      method: "GET",
-      headers: buildOllamaHeaders(apiKey),
-    });
-
-    const rawText = await response.text();
-    const trimmedText = rawText.trim();
-    let payload: {
+    const payload = await fetchOllamaJson<{
       error?: string;
       models?: Array<{ name?: string | null }>;
-    } | null = null;
-
-    if (trimmedText) {
-      try {
-        payload = JSON.parse(trimmedText) as {
-          error?: string;
-          models?: Array<{ name?: string | null }>;
-        };
-      } catch {
-        payload = null;
-      }
-    }
-
-    if (!payload) {
-      return {
-        baseUrl,
-        error:
-          response.status === 1016
-            ? "Ollama upstream host олдсонгүй (Cloudflare 1016)."
-            : `Ollama JSON биш хариу буцаалаа (${response.status}).`,
-        hasApiKey: Boolean(apiKey),
-        lastCheckedAt: checkedAt,
-        model,
-        modelAvailable: false,
-        models: [],
-        reachable: false,
-        remote: !baseUrl.includes("127.0.0.1") && !baseUrl.includes("localhost"),
-      };
-    }
+    }>({
+      apiKey,
+      baseUrl,
+      context: "Ollama status",
+      path: "/api/tags",
+      retries: 0,
+      timeoutMs: 5000,
+    });
 
     const models = (payload.models ?? [])
       .map((item) => item.name?.trim())
       .filter((value): value is string => Boolean(value));
-
-    if (!response.ok || payload.error) {
-      return {
-        baseUrl,
-        error:
-          payload.error ??
-          `Ollama status авахад алдаа гарлаа (${response.status}).`,
-        hasApiKey: Boolean(apiKey),
-        lastCheckedAt: checkedAt,
-        model,
-        modelAvailable: false,
-        models,
-        reachable: false,
-        remote: !baseUrl.includes("127.0.0.1") && !baseUrl.includes("localhost"),
-      };
-    }
 
     return {
       baseUrl,
       hasApiKey: Boolean(apiKey),
       lastCheckedAt: checkedAt,
       model,
-      modelAvailable: models.some((item) => item === model || item.startsWith(`${model}:`)),
+      modelAvailable: models.some(
+        (item) => item === model || item.startsWith(`${model}:`),
+      ),
       models,
       reachable: true,
-      remote: !baseUrl.includes("127.0.0.1") && !baseUrl.includes("localhost"),
+      remote: isRemoteOllamaBaseUrl(baseUrl),
     };
   } catch (error) {
     return {
@@ -173,7 +130,7 @@ async function fetchOllamaStatus(baseUrl: string, model: string, apiKey?: string
       modelAvailable: false,
       models: [],
       reachable: false,
-      remote: !baseUrl.includes("127.0.0.1") && !baseUrl.includes("localhost"),
+      remote: isRemoteOllamaBaseUrl(baseUrl),
     };
   }
 }
@@ -385,49 +342,33 @@ export async function POST(request: Request) {
     }
 
     const env = getRouteEnv();
-    const model = getEnvValue(env.OLLAMA_MODEL, process.env.OLLAMA_MODEL) ?? "llama3.1";
-    const baseUrl = normalizeBaseUrl(
+    const configuredModel =
+      getEnvValue(env.OLLAMA_MODEL, process.env.OLLAMA_MODEL) ??
+      DEFAULT_OLLAMA_MODEL;
+    const baseUrl = normalizeOllamaBaseUrl(
       getEnvValue(env.OLLAMA_BASE_URL, process.env.OLLAMA_BASE_URL),
     );
     const apiKey = getEnvValue(env.OLLAMA_API_KEY, process.env.OLLAMA_API_KEY);
     try {
-      const response = await fetch(`${baseUrl}/api/chat`, {
-        method: "POST",
-        headers: buildOllamaHeaders(apiKey),
-        body: JSON.stringify({
-          model,
-          stream: false,
-          format: "json",
-          messages: [
-            {
-              role: "system",
-              content:
-                "Та багшид зориулсан шалгалтын аналитик feedback-ийг зөвхөн JSON хэлбэрээр буцаана.",
-            },
-            {
-              role: "user",
-              content: buildPrompt(attempt),
-            },
-          ],
-        }),
+      const ollama = await chatWithOllama({
+        apiKey,
+        baseUrl,
+        context: "Teacher feedback",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Та багшид зориулсан шалгалтын аналитик feedback-ийг зөвхөн JSON хэлбэрээр буцаана.",
+          },
+          {
+            role: "user",
+            content: buildPrompt(attempt),
+          },
+        ],
+        model: configuredModel,
       });
-
-      const payload = (await response.json()) as {
-        error?: string;
-        message?: {
-          content?: string;
-        };
-      };
-
-      if (!response.ok || payload.error || !payload.message?.content) {
-        throw new Error(
-          payload.error ??
-            "Ollama-с teacher feedback авч чадсангүй. `ollama run llama3.1` ажиллаж байгаа эсэхийг шалгана уу.",
-        );
-      }
-
       const feedback = JSON.parse(
-        cleanJsonBlock(payload.message.content),
+        cleanJsonBlock(ollama.content),
       ) as OllamaTeacherFeedback;
 
       return NextResponse.json({
@@ -435,9 +376,9 @@ export async function POST(request: Request) {
         ollama: {
           baseUrl,
           hasApiKey: Boolean(apiKey),
-          model,
+          model: ollama.model,
           reachable: true,
-          remote: !baseUrl.includes("127.0.0.1") && !baseUrl.includes("localhost"),
+          remote: isRemoteOllamaBaseUrl(baseUrl),
         },
         provider: "ollama",
       });
@@ -455,8 +396,8 @@ export async function POST(request: Request) {
           warning: `Ollama холбогдсонгүй, fallback analysis ашиглалаа: ${message}`,
           ollama: {
             baseUrl,
-            model,
-            remote: !baseUrl.includes("127.0.0.1") && !baseUrl.includes("localhost"),
+            model: configuredModel,
+            remote: isRemoteOllamaBaseUrl(baseUrl),
           },
         },
         { status: 200 },
@@ -477,8 +418,10 @@ export async function POST(request: Request) {
 
 export async function GET() {
   const env = getRouteEnv();
-  const model = getEnvValue(env.OLLAMA_MODEL, process.env.OLLAMA_MODEL) ?? "llama3.1";
-  const baseUrl = normalizeBaseUrl(
+  const model =
+    getEnvValue(env.OLLAMA_MODEL, process.env.OLLAMA_MODEL) ??
+    DEFAULT_OLLAMA_MODEL;
+  const baseUrl = normalizeOllamaBaseUrl(
     getEnvValue(env.OLLAMA_BASE_URL, process.env.OLLAMA_BASE_URL),
   );
   const apiKey = getEnvValue(env.OLLAMA_API_KEY, process.env.OLLAMA_API_KEY);

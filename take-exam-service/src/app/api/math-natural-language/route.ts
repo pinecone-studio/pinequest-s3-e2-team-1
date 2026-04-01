@@ -1,5 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextResponse } from "next/server";
+import { chatWithOllama, DEFAULT_OLLAMA_MODEL } from "@/lib/ollama";
 
 type RouteEnv = {
   GEMINI_API_KEY?: string;
@@ -18,14 +19,11 @@ type ConvertResponse = {
 type PreferredProvider = "auto" | "gemini" | "ollama";
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
-const DEFAULT_OLLAMA_MODEL = "llama3.1";
 const GEMINI_API_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta";
 
 const getEnv = () =>
   (getCloudflareContext() as unknown as { env: RouteEnv }).env;
-
-const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
 
 const getGeminiApiKey = (env: RouteEnv) =>
   env.GEMINI_API_KEY ?? process.env.GEMINI_API_KEY;
@@ -96,34 +94,17 @@ async function convertWithOllama(
     return null;
   }
 
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/api/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(getOllamaApiKey(env)
-        ? { Authorization: `Bearer ${getOllamaApiKey(env)}` }
-        : {}),
-    },
-    body: JSON.stringify({
-      model: getOllamaModel(env),
-      stream: false,
-      format: "json",
-      messages: [
-        { role: "system", content: buildPrompt(text).system },
-        { role: "user", content: buildPrompt(text).user },
-      ],
-    }),
+  const ollama = await chatWithOllama({
+    apiKey: getOllamaApiKey(env),
+    baseUrl,
+    context: "Math natural language",
+    messages: [
+      { role: "system", content: buildPrompt(text).system },
+      { role: "user", content: buildPrompt(text).user },
+    ],
+    model: getOllamaModel(env),
   });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const payload = (await response.json()) as {
-    message?: { content?: string };
-  };
-
-  return parseAiResponse(payload.message?.content, "ollama");
+  return parseAiResponse(ollama.content, "ollama");
 }
 
 async function convertWithGemini(
