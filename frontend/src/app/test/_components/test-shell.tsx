@@ -32,7 +32,7 @@ export function TestShell({
               <GraduationCap className="h-5 w-5" />
             </div>
             <p className="truncate text-xl font-semibold text-slate-900">
-              Багш Портал
+              Багш
             </p>
           </aside>
 
@@ -53,9 +53,7 @@ export function TestShell({
                     <UserRound className="h-5 w-5" />
                   </div>
                   <div className="hidden sm:block">
-                    <p className="text-sm font-semibold text-slate-900">
-                      Багш
-                    </p>
+                    <p className="text-sm font-semibold text-slate-900">Багш</p>
                     <p className="text-xs text-slate-500">Teacher</p>
                   </div>
                   <ChevronDown className="hidden h-4 w-4 text-slate-500 sm:block" />
