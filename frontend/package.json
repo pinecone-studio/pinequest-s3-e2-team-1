@@ -4,12 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:webpack": "next dev --webpack",
+    "dev:reset": "rm -rf .next && next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "next build && wrangler deploy",
+    "upload": "next build && wrangler versions upload",
+    "preview": "next build && wrangler dev",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts",
     "codegen": "node scripts/run-codegen.cjs --config codegen.ts",
     "codegen:watch": "node scripts/run-codegen.cjs --config codegen.ts --watch"
@@ -19,7 +21,7 @@
     "@base-ui/react": "^1.3.0",
     "@opennextjs/cloudflare": "^1.17.1",
     "ably": "^2.21.0",
-    "chalk": "4",
+    "chalk": "4.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -67,7 +69,6 @@
     "wrangler": "^4.76.0"
   },
   "overrides": {
-    "chalk": "4.1.2",
     "log-symbols": "4.1.0"
   },
   "resolutions": {

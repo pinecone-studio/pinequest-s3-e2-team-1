@@ -134,6 +134,23 @@ export const typeDefs = /* GraphQL */ `
     skillLevel: String
   }
 
+  input GenerateQuestionAnswerInput {
+    prompt: String!
+    points: Int
+    difficulty: Difficulty
+    format: QuestionFormat
+  }
+
+  type GenerateQuestionAnswerResult {
+    questionText: String!
+    format: QuestionFormat!
+    difficulty: Difficulty!
+    points: Int!
+    options: [String!]
+    correctAnswer: String!
+    explanation: String!
+  }
+
   input CreateAiExamTemplateInput {
     title: String!
     subject: String!
@@ -266,6 +283,8 @@ export const typeDefs = /* GraphQL */ `
     lastName: String!
     studentCode: String!
     groupId: String!
+    gradeLevel: Int!
+    homeRoomNumber: String
     status: String!
   }
 
@@ -307,6 +326,26 @@ export const typeDefs = /* GraphQL */ `
     endTime: String!
   }
 
+  type SchoolEvent {
+    id: ID!
+    title: String!
+    description: String
+    eventType: String!
+    priority: Int!
+    urgencyLevel: String!
+    targetType: String!
+    isSchoolWide: Boolean!
+    isFullLock: Boolean!
+    repeatPattern: String!
+    startDate: String!
+    endDate: String!
+    startPeriodId: Int
+    endPeriodId: Int
+    colorCode: String
+    groupIds: [String!]!
+    teacherIds: [String!]!
+  }
+
   type Query {
     listNewMathExams(limit: Int = 50): [NewMathExamSummary!]!
     getNewMathExam(examId: ID!): NewMathExam
@@ -323,9 +362,11 @@ export const typeDefs = /* GraphQL */ `
       semesterId: String = "2026-SPRING"
       includeDraft: Boolean = false
     ): [TeacherMainLesson!]!
+    getSchoolEvents(startDate: String!, endDate: String!): [SchoolEvent!]!
   }
 
   type Mutation {
+    generateQuestionAnswer(input: GenerateQuestionAnswerInput!): GenerateQuestionAnswerResult!
     generateExamQuestions(input: ExamGenerationInput!): ExamGenerationResult!
     saveExam(input: SaveExamInput!): SaveExamPayload!
     saveNewMathExam(input: SaveNewMathExamInput!): SaveNewMathExamPayload!
@@ -342,11 +383,17 @@ export const typeDefs = /* GraphQL */ `
       preferredDate: String!
     ): RequestExamSchedulePayload!
     approveAiExamSchedule(examId: ID!, variantId: String!): ExamSchedule!
+    rejectAiExamScheduleVariant(
+      examId: ID!
+      variantId: String!
+      reason: String
+    ): ExamSchedule!
   }
 
   type NewMathExamSummary {
     examId: ID!
     title: String!
+    durationMinutes: Int
     updatedAt: String!
   }
 
