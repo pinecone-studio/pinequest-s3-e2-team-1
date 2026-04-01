@@ -1180,22 +1180,20 @@ export function AiTeacherPersonalScheduler({
     () => new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1),
     [weekStart],
   );
-  const {
-    data: confirmedSchedulesData,
-    refetch: refetchConfirmedSchedules,
-  } = useQuery<
-    ListTeacherConfirmedExamSchedulesData,
-    ListTeacherConfirmedExamSchedulesVars
-  >(ListTeacherConfirmedExamSchedulesDocument, {
-    variables: {
-      teacherId: selectedTeacherId,
-      startDate: weekStart.toISOString(),
-      endDate: weekQueryEnd.toISOString(),
-    },
-    skip: !selectedTeacherId,
-    fetchPolicy: "network-only",
-    notifyOnNetworkStatusChange: true,
-  });
+  const { data: confirmedSchedulesData, refetch: refetchConfirmedSchedules } =
+    useQuery<
+      ListTeacherConfirmedExamSchedulesData,
+      ListTeacherConfirmedExamSchedulesVars
+    >(ListTeacherConfirmedExamSchedulesDocument, {
+      variables: {
+        teacherId: selectedTeacherId,
+        startDate: weekStart.toISOString(),
+        endDate: weekQueryEnd.toISOString(),
+      },
+      skip: !selectedTeacherId,
+      fetchPolicy: "network-only",
+      notifyOnNetworkStatusChange: true,
+    });
 
   const { data: teacherSchoolEventData } = useQuery<
     GetSchoolEventsData,
@@ -1363,7 +1361,8 @@ export function AiTeacherPersonalScheduler({
   const showJob =
     liveSchedule && liveSchedule.id === lastQueuedExamId ? liveSchedule : null;
   const confirmedExamSchedules = useMemo(() => {
-    const persisted = confirmedSchedulesData?.listTeacherConfirmedExamSchedules ?? [];
+    const persisted =
+      confirmedSchedulesData?.listTeacherConfirmedExamSchedules ?? [];
     const merged = new Map<string, ExamSchedule>();
 
     for (const row of persisted) {
@@ -2145,7 +2144,8 @@ export function AiTeacherPersonalScheduler({
                             </>
                           ) : null}
 
-                          {layerOn.confirmed_exam && aiDraftIntent === "exam_intent"
+                          {layerOn.confirmed_exam &&
+                          aiDraftIntent === "exam_intent"
                             ? confirmedExamBlocks
                                 .filter((row) => row.colIdx === colIdx)
                                 .map((row) => (
@@ -2174,7 +2174,9 @@ export function AiTeacherPersonalScheduler({
                                         row.endAt.getHours(),
                                         row.endAt.getMinutes(),
                                       )}
-                                      {row.roomId ? ` · Өрөө ${row.roomId}` : ""}
+                                      {row.roomId
+                                        ? ` · Өрөө ${row.roomId}`
+                                        : ""}
                                     </span>
                                     <span className="mt-0.5 block text-[9px] font-normal text-emerald-600/90">
                                       {row.classId} · Баталгаажсан
