@@ -7,12 +7,15 @@ import {
   curriculum,
   examSchedules,
   masterSchedules,
+  newExams,
   periods,
   schoolEvents,
   users,
   groups,
 } from "../../../src/db/schema";
 import { parseAiVariantsJson } from "../../../src/lib/exam-schedule-variants";
+
+const DEFAULT_EXAM_DURATION_MINUTES = 90;
 
 export interface Env {
   DB: D1Database;
@@ -194,6 +197,9 @@ async function runScheduler(
   });
 
   const roomIds = rooms.map((r) => r.id).join(", ");
+  const preferredStart = new Date(current.startTime);
+  const preferredStartIso = preferredStart.toISOString();
+  const preferredYear = preferredStart.getUTCFullYear();
 
   const [teacherRow] = await db
     .select({
@@ -208,6 +214,20 @@ async function runScheduler(
   const availableRooms = rooms.filter(
     (r) => Number(r.capacity ?? 0) >= Number(group?.studentCount ?? 30),
   );
+  const [examRow] = await db
+    .select({
+      title: newExams.title,
+      durationMinutes: newExams.durationMinutes,
+    })
+    .from(newExams)
+    .where(eq(newExams.id, body.testId))
+    .limit(1);
+  const examDurationMinutes =
+    typeof examRow?.durationMinutes === "number" &&
+    Number.isFinite(examRow.durationMinutes) &&
+    examRow.durationMinutes > 0
+      ? Math.floor(examRow.durationMinutes)
+      : DEFAULT_EXAM_DURATION_MINUTES;
   const periodById = new Map(allPeriods.map((p) => [Number(p.id), p]));
   const primaryAnchorSlots = timetable
     .map((row) => {
@@ -238,6 +258,10 @@ async function runScheduler(
 Анги: ${classId}
 Сурагчдын тоо: ${group?.studentCount ?? 30}
 Багш: ${teacherRow?.shortName ?? "—"} (Өдөрт max ${teacherRow?.workLoadLimit ?? 6} цаг)
+Шалгалтын нэр: ${examRow?.title ?? body.testId}
+Шалгалтын үргэлжлэх хугацаа: ${examDurationMinutes} минут
+Багшийн хүссэн эхлэх огноо (preferredDate): ${preferredStartIso}
+Зөвшөөрөгдөх он: ${preferredYear}
 
 ДАВХАРГА 1 — master_schedules (JSON, constraint): ${JSON.stringify(timetable)}
 ANCHOR SLOT-ууд (яг энэ ангийн өөрийн үндсэн хичээлийн slot-ууд): ${JSON.stringify(primaryAnchorSlots)}
@@ -247,13 +271,16 @@ Periods (JSON): ${JSON.stringify(allPeriods)}
 
 ДҮРЭМ:
 1. Давхарга 3-д цаг орсон бол тэр хугацаанд шалгалтын startTime байх ёсгүй.
-2. Шалгалт 90 минут.
+2. Шалгалт ${examDurationMinutes} минут.
 3. roomId зөвхөн: [${roomIds}]
 4. ТАНХИМ: capacity >= ${group?.studentCount ?? 30} байх өрөөг сонго.
 5. СОФТ: сурагчид өдөрт олон шалгалт — боломжит бол өөр өдөр сонго.
 6. ЗААВАЛ: 3 хувилбарын дор хаяж 1 нь ANCHOR SLOT-уудын НЭГ дээр яг таарсан байх ёстой.
 7. Ялангуяа Variant A-г ANCHOR SLOT дээр тавь. Өөрөөр хэлбэл Variant A-ийн periodId / startTime нь дээрх anchor slot-ийн аль нэгтэй таарах ёстой.
 8. Үлдсэн Variant B/C нь anchor slot байж болно, эсвэл өөр оновчтой хувилбар байж болно.
+9. startTime нь preferredDate-ээс ӨМНӨ байж БОЛОХГҮЙ.
+10. startTime нь ЗААВАЛ ${preferredYear} он дотор байх ёстой. 2024/2025 гэх мэт өөр он руу БИТГИЙ төлөвлө.
+11. Хэрэв эргэлзээтэй бол preferredDate-тай хамгийн ойр, түүнээс хойших боломжит slot-уудыг сонго.
 
 Хариултыг ЗӨВХӨН нэг JSON объектоор:
 {
@@ -378,6 +405,30 @@ Periods (JSON): ${JSON.stringify(allPeriods)}
         .set({
           status: "failed",
           aiReasoning: `Буруу startTime: ${v.id}`,
+          updatedAt: now,
+        })
+        .where(eq(examSchedules.id, examId));
+      return;
+    }
+    if (t.getTime() < preferredStart.getTime()) {
+      const now = new Date().toISOString();
+      await db
+        .update(examSchedules)
+        .set({
+          status: "failed",
+          aiReasoning: `preferredDate-ээс өмнөх санал ирлээ: ${v.id} → ${v.startTime}`,
+          updatedAt: now,
+        })
+        .where(eq(examSchedules.id, examId));
+      return;
+    }
+    if (t.getUTCFullYear() !== preferredYear) {
+      const now = new Date().toISOString();
+      await db
+        .update(examSchedules)
+        .set({
+          status: "failed",
+          aiReasoning: `Буруу онтой санал ирлээ: ${v.id} → ${v.startTime}`,
           updatedAt: now,
         })
         .where(eq(examSchedules.id, examId));
