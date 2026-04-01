@@ -145,6 +145,16 @@ input GenerateQuestionAnswerInput {
   format: QuestionFormat
 }
 
+input RegenerateQuestionAnswerInput {
+  prompt: String!
+  points: Int
+  difficulty: Difficulty
+  format: QuestionFormat
+  previousOptions: [String!]
+  previousCorrectAnswer: String
+  previousExplanation: String
+}
+
 type GenerateQuestionAnswerResult {
   questionText: String!
   format: QuestionFormat!
@@ -366,6 +376,11 @@ type Query {
   AI scheduler: нэг мөрийн төлөв (polling-д ашиглана)
   """
   getAiExamSchedule(examId: ID!): ExamSchedule
+  listTeacherConfirmedExamSchedules(
+    teacherId: ID!
+    startDate: String!
+    endDate: String!
+  ): [ExamSchedule!]!
   """
   ai-scheduler-teacher: 9–12-р ангийн Math (MATH_HS) ордог багш нар
   """
@@ -403,6 +418,7 @@ type RequestExamSchedulePayload {
 
 type Mutation {
   generateQuestionAnswer(input: GenerateQuestionAnswerInput!): GenerateQuestionAnswerResult!
+  regenerateQuestionAnswer(input: RegenerateQuestionAnswerInput!): GenerateQuestionAnswerResult!
   generateExamQuestions(input: ExamGenerationInput!): ExamGenerationResult!
   saveExam(input: SaveExamInput!): SaveExamPayload!
   saveNewMathExam(input: SaveNewMathExamInput!): SaveNewMathExamPayload!
