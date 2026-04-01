@@ -50,6 +50,7 @@ export function QuestionBankSection() {
     explanation: string;
     format: "single-choice" | "written";
   }>(DEFAULT_GENERATED);
+  const [hasGenerated, setHasGenerated] = useState(false);
 
   const [generateAnswer, { loading: generating }] = useMutation(
     GenerateQuestionAnswerDocument,
@@ -126,6 +127,7 @@ export function QuestionBankSection() {
       );
       setFormat(nextFormat);
       setQuestionText(payload.questionText);
+      setHasGenerated(true);
       toast.success("AI хариулт үүсгэлээ.");
     } catch (e: unknown) {
       const message =
@@ -144,6 +146,7 @@ export function QuestionBankSection() {
       "Тэгшитгэлийг бод. 3x3 -8x2 +14x = 0",
     );
     setGenerated(DEFAULT_GENERATED);
+    setHasGenerated(false);
   }
 
   function handleReset() {
@@ -152,6 +155,7 @@ export function QuestionBankSection() {
     setDifficulty("");
     setQuestionText("");
     setGenerated(DEFAULT_GENERATED);
+    setHasGenerated(false);
   }
 
   return (
@@ -255,67 +259,71 @@ export function QuestionBankSection() {
         </Button>
       </div>
 
-      <Separator className="my-4 bg-[#e6edf7]" />
+      {hasGenerated ? (
+        <>
+          <Separator className="my-4 bg-[#e6edf7]" />
 
-      <div>
-        <p className="mb-3 text-[14px] font-medium text-slate-800">Хариулт</p>
-        {generated.format === "written" ? (
-          <div className="min-h-[44px] rounded-[10px] border border-[#e2e8f0] bg-[#eef3ff] px-4 py-3 text-[14px] text-slate-800">
-            {generated.correctAnswer}
+          <div>
+            <p className="mb-3 text-[14px] font-medium text-slate-800">Хариулт</p>
+            {generated.format === "written" ? (
+              <div className="min-h-[44px] rounded-[10px] border border-[#e2e8f0] bg-[#eef3ff] px-4 py-3 text-[14px] text-slate-800">
+                {generated.correctAnswer}
+              </div>
+            ) : (
+              <RadioGroup defaultValue={generated.correctAnswer} className="gap-3">
+                {generated.options.map((option, index) => (
+                  <label
+                    key={`${option}-${index}`}
+                    htmlFor={`generated-option-${index}`}
+                    className="flex min-h-[44px] items-center gap-3 rounded-[10px] border border-[#e2e8f0] bg-[#eef3ff] px-4 text-[14px] text-slate-800"
+                  >
+                    <RadioGroupItem
+                      id={`generated-option-${index}`}
+                      value={option}
+                      className="border-[#cdd8ea] text-[#0b5cab] data-checked:border-[#0b5cab] data-checked:bg-[#0b5cab]"
+                    />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </RadioGroup>
+            )}
           </div>
-        ) : (
-          <RadioGroup defaultValue={generated.correctAnswer} className="gap-3">
-            {generated.options.map((option, index) => (
-              <label
-                key={`${option}-${index}`}
-                htmlFor={`generated-option-${index}`}
-                className="flex min-h-[44px] items-center gap-3 rounded-[10px] border border-[#e2e8f0] bg-[#eef3ff] px-4 text-[14px] text-slate-800"
-              >
-                <RadioGroupItem
-                  id={`generated-option-${index}`}
-                  value={option}
-                  className="border-[#cdd8ea] text-[#0b5cab] data-checked:border-[#0b5cab] data-checked:bg-[#0b5cab]"
-                />
-                <span>{option}</span>
-              </label>
-            ))}
-          </RadioGroup>
-        )}
-      </div>
 
-      <div className="mt-4">
-        <Label
-          htmlFor="answer-explanation"
-          className="mb-3 block text-[14px] font-medium text-slate-800"
-        >
-          Зөв хариултын тайлбар
-        </Label>
-        <Textarea
-          id="answer-explanation"
-          value={generated.explanation}
-          readOnly
-          className={explanationClassName}
-        />
-      </div>
+          <div className="mt-4">
+            <Label
+              htmlFor="answer-explanation"
+              className="mb-3 block text-[14px] font-medium text-slate-800"
+            >
+              Зөв хариултын тайлбар
+            </Label>
+            <Textarea
+              id="answer-explanation"
+              value={generated.explanation}
+              readOnly
+              className={explanationClassName}
+            />
+          </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-        <button
-          type="button"
-          onClick={() => void handleGenerateAnswer()}
-          className="inline-flex items-center gap-2 text-[14px] font-medium text-slate-700 transition hover:text-slate-900"
-        >
-          <RefreshCcw className="h-4 w-4" />
-          Дахин үүсгүүлэх
-        </button>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+            <button
+              type="button"
+              onClick={() => void handleGenerateAnswer()}
+              className="inline-flex items-center gap-2 text-[14px] font-medium text-slate-700 transition hover:text-slate-900"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Дахин үүсгүүлэх
+            </button>
 
-        <Button
-          type="button"
-          variant="outline"
-          className="h-[38px]! min-w-[140px] rounded-[10px] border-[#0b5cab] bg-white px-5 text-[#0b5cab] hover:bg-[#f4f8ff]"
-        >
-          Асуулт нэмэх
-        </Button>
-      </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-[38px]! min-w-[140px] rounded-[10px] border-[#0b5cab] bg-white px-5 text-[#0b5cab] hover:bg-[#f4f8ff]"
+            >
+              Асуулт нэмэх
+            </Button>
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }

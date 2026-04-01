@@ -350,6 +350,11 @@ export const typeDefs = /* GraphQL */ `
     listNewMathExams(limit: Int = 50): [NewMathExamSummary!]!
     getNewMathExam(examId: ID!): NewMathExam
     getAiExamSchedule(examId: ID!): ExamSchedule
+    listTeacherConfirmedExamSchedules(
+      teacherId: ID!
+      startDate: String!
+      endDate: String!
+    ): [ExamSchedule!]!
     getTeachersList(grades: [Int!] = [9, 10, 11, 12]): [Teacher!]!
     getStudentsList(grade: Int!, group: String!): [Student!]!
     getStudentMainLessonsList(

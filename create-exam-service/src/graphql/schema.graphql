@@ -366,6 +366,11 @@ type Query {
   AI scheduler: нэг мөрийн төлөв (polling-д ашиглана)
   """
   getAiExamSchedule(examId: ID!): ExamSchedule
+  listTeacherConfirmedExamSchedules(
+    teacherId: ID!
+    startDate: String!
+    endDate: String!
+  ): [ExamSchedule!]!
   """
   ai-scheduler-teacher: 9–12-р ангийн Math (MATH_HS) ордог багш нар
   """

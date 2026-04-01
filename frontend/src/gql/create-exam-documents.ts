@@ -120,6 +120,38 @@ export const GetAiExamScheduleDocument = gql(`
 	}
 `);
 
+export const ListTeacherConfirmedExamSchedulesDocument = gql(`
+	query ListTeacherConfirmedExamSchedules(
+		$teacherId: ID!
+		$startDate: String!
+		$endDate: String!
+	) {
+		listTeacherConfirmedExamSchedules(
+			teacherId: $teacherId
+			startDate: $startDate
+			endDate: $endDate
+		) {
+			id
+			testId
+			classId
+			startTime
+			endTime
+			roomId
+			status
+			aiReasoning
+			aiVariants {
+				id
+				label
+				startTime
+				roomId
+				reason
+			}
+			createdAt
+			updatedAt
+		}
+	}
+`);
+
 export const GetTeachersListDocument = gql(`
 	query GetTeachersList($grades: [Int!]) {
 		getTeachersList(grades: $grades) {
