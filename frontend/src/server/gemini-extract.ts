@@ -1124,6 +1124,27 @@ function enhanceFocusLabel(focus: ExtractExamEnhanceFocus | undefined) {
   }
 }
 
+function examHasIncompleteQuestions(exam: GeneratedExamPayload) {
+  const questions = Array.isArray(exam.questions) ? exam.questions : [];
+
+  return questions.some((question) => {
+    if (question.type === "mcq") {
+      const options = Array.isArray(question.options) ? question.options : [];
+
+      return (
+        options.filter((option) => option?.trim().length > 0).length < 2 ||
+        typeof question.correctOption !== "number"
+      );
+    }
+
+    if (question.type === "math") {
+      return !(question.answerLatex?.trim() || question.responseGuide?.trim());
+    }
+
+    return true;
+  });
+}
+
 function buildLocalTextSources(args: {
   docxContexts: DocxContext[];
   textAttachments: TextAttachment[];
@@ -1485,6 +1506,20 @@ async function normalizeAttachments(attachments: AttachmentPayload[]) {
     }
 
     if (mimeType.startsWith("image/")) {
+      if (data) {
+        binaryAttachments.push({
+          data,
+          mimeType,
+          name,
+        });
+        sourceImages.push({
+          alt: name.replace(/\.[^.]+$/u, "").trim() || undefined,
+          dataUrl: `data:${mimeType};base64,${data}`,
+          mimeType,
+          name,
+        });
+      }
+
       continue;
     }
 
@@ -1545,7 +1580,11 @@ export async function handleGeminiExtractPost(
         );
       }
 
-      return Response.json({ exam: localExam });
+      const apiKey = env.GEMINI_API_KEY?.trim();
+
+      if (!examHasIncompleteQuestions(localExam) || !apiKey) {
+        return Response.json({ exam: localExam });
+      }
     }
 
     const apiKey = env.GEMINI_API_KEY?.trim();

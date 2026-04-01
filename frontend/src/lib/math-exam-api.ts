@@ -75,7 +75,20 @@ export async function serializeAttachment(
 }
 
 async function parseExamResponse(response: Response, fallbackError: string) {
-  const payload = (await response.json()) as ExamApiResponse | undefined;
+  const contentType = response.headers.get("content-type") ?? "";
+  const rawBody = await response.text();
+
+  if (!contentType.includes("application/json")) {
+    if (rawBody.trim().startsWith("<!DOCTYPE") || rawBody.trim().startsWith("<")) {
+      throw new Error(
+        "API route HTML буцаалаа. Dev server дээр `/api/gemini-extract` эсвэл `/api/gemini-exam` route ажиллаж байгаа эсэхийг шалгана уу.",
+      );
+    }
+
+    throw new Error(fallbackError);
+  }
+
+  const payload = JSON.parse(rawBody) as ExamApiResponse | undefined;
 
   if (!response.ok || !payload?.exam) {
     throw new Error(payload?.error || fallbackError);
