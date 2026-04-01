@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   BarChart3,
+  CalendarClock,
   ClipboardCheck,
+  FileQuestion,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,8 +43,13 @@ const navigationItems: NavigationItem[] = [
   },
   {
     href: "/test/material-builder",
-    icon: ClipboardCheck,
+    icon: FileQuestion,
     label: "Шалгалтын материал үүсгэх",
+  },
+  {
+    href: "/ai-scheduler-teacher",
+    icon: CalendarClock,
+    label: "Шалгалт товлох",
   },
 ];
 
@@ -57,15 +64,12 @@ export function TestSidebar() {
             !item.disabled &&
             Boolean(
               item.href &&
-                (pathname === item.href || pathname.startsWith(`${item.href}/`)),
+              (pathname === item.href || pathname.startsWith(`${item.href}/`)),
             );
 
-          const count =
-            item.label === "Шалгалтын тайлан"
-              ? "12"
-              : item.label === "Шалгалтын материал үүсгэх"
-                ? "3"
-                : undefined;
+          const count = item.label === "Шалгалтын тайлан" ? "12" : undefined;
+          const iconClassName =
+            item.label === "Шалгалтын материал үүсгэх" ? "h-5 w-5" : "h-4 w-4";
 
           const className = `flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
             isActive
@@ -83,7 +87,7 @@ export function TestSidebar() {
                 disabled
                 className={className}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className={iconClassName} />
                 <span>{item.label}</span>
               </button>
             );
@@ -91,7 +95,7 @@ export function TestSidebar() {
 
           return (
             <Link key={item.label} href={item.href} className={className}>
-              <item.icon className="h-4 w-4" />
+              <item.icon className={iconClassName} />
               <span>{item.label}</span>
               {count ? (
                 <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-200 px-1 text-[11px] font-semibold text-slate-700">

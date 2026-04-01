@@ -31,7 +31,7 @@ export function GeneralInfoSection() {
             Хичээл
           </Label>
           <Select defaultValue="math">
-            <SelectTrigger id="subject" className={fieldClassName}>
+            <SelectTrigger id="subject" className={`${fieldClassName} cursor-pointer`}>
               <SelectValue placeholder="Хичээл сонгох" />
             </SelectTrigger>
             <SelectContent>
@@ -47,10 +47,11 @@ export function GeneralInfoSection() {
             Анги
           </Label>
           <Select defaultValue="10">
-            <SelectTrigger id="classroom" className={fieldClassName}>
+            <SelectTrigger id="classroom" className={`${fieldClassName} cursor-pointer`}>
               <SelectValue placeholder="Анги сонгох" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="9">9 дүгээр анги</SelectItem>
               <SelectItem value="10">10 дугаар анги</SelectItem>
               <SelectItem value="11">11 дүгээр анги</SelectItem>
               <SelectItem value="12">12 дугаар анги</SelectItem>
@@ -63,7 +64,7 @@ export function GeneralInfoSection() {
             Төрөл
           </Label>
           <Select defaultValue="progress">
-            <SelectTrigger id="exam-type" className={fieldClassName}>
+            <SelectTrigger id="exam-type" className={`${fieldClassName} cursor-pointer`}>
               <SelectValue placeholder="Төрөл сонгох" />
             </SelectTrigger>
             <SelectContent>
@@ -86,35 +87,18 @@ export function GeneralInfoSection() {
         </div>
 
         <div className={fieldWrapperClassName}>
-          <Label htmlFor="duration-left" className="text-[14px] font-medium text-slate-800">
+          <Label htmlFor="duration-minutes" className="text-[14px] font-medium text-slate-800">
             Үргэлжлэх минут
           </Label>
-          <Select defaultValue="30">
-            <SelectTrigger id="duration-left" className={fieldClassName}>
-              <SelectValue placeholder="Хугацаа сонгох" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="20">20 мин</SelectItem>
-              <SelectItem value="30">30 мин</SelectItem>
-              <SelectItem value="40">40 мин</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className={fieldWrapperClassName}>
-          <Label htmlFor="duration-right" className="text-[14px] font-medium text-slate-800">
-            Үргэлжлэх минут
-          </Label>
-          <Select defaultValue="30">
-            <SelectTrigger id="duration-right" className={fieldClassName}>
-              <SelectValue placeholder="Хугацаа сонгох" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="20">20 мин</SelectItem>
-              <SelectItem value="30">30 мин</SelectItem>
-              <SelectItem value="40">40 мин</SelectItem>
-            </SelectContent>
-          </Select>
+          <Input
+            id="duration-minutes"
+            type="number"
+            min="1"
+            inputMode="numeric"
+            defaultValue="30"
+            placeholder="Минут оруулах"
+            className={fieldClassName}
+          />
         </div>
       </div>
     </section>
