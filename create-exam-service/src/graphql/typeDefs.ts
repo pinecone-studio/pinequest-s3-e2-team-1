@@ -247,6 +247,71 @@ export const typeDefs = /* GraphQL */ `
     updatedAt: String!
   }
 
+  enum ExamVariantJobStatus {
+    pending
+    processing
+    completed
+    failed
+  }
+
+  input ExamVariantQuestionInput {
+    order: Int!
+    prompt: String!
+    type: String!
+    options: [String!]
+    correctAnswer: String
+    explanation: String
+  }
+
+  input RequestExamVariantsInput {
+    examId: ID
+    variantCount: Int!
+    questions: [ExamVariantQuestionInput!]!
+  }
+
+  type RequestExamVariantsPayload {
+    success: Boolean!
+    message: String!
+    jobId: ID
+  }
+
+  type ExamVariantJob {
+    jobId: ID!
+    examId: ID
+    status: ExamVariantJobStatus!
+    variantCount: Int!
+    variants: [ExamVariant!]!
+    sourceQuestionsJson: String!
+    resultJson: String
+    errorMessage: String
+    requestedBy: String
+    requestedAt: String!
+    startedAt: String
+    completedAt: String
+    updatedAt: String!
+  }
+
+  type ExamVariant {
+    id: ID!
+    jobId: ID!
+    examId: ID
+    variantNumber: Int!
+    title: String!
+    questions: [ExamVariantQuestion!]!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type ExamVariantQuestion {
+    id: ID!
+    position: Int!
+    type: String!
+    prompt: String!
+    options: [String!]
+    correctAnswer: String
+    explanation: String
+  }
+
   type RequestExamSchedulePayload {
     success: Boolean!
     message: String!
@@ -359,6 +424,7 @@ export const typeDefs = /* GraphQL */ `
   type Query {
     listNewMathExams(limit: Int = 50): [NewMathExamSummary!]!
     getNewMathExam(examId: ID!): NewMathExam
+    getExamVariantJob(jobId: ID!): ExamVariantJob
     getAiExamSchedule(examId: ID!): ExamSchedule
     listTeacherConfirmedExamSchedules(
       teacherId: ID!
@@ -386,6 +452,7 @@ export const typeDefs = /* GraphQL */ `
     generateExamQuestions(input: ExamGenerationInput!): ExamGenerationResult!
     saveExam(input: SaveExamInput!): SaveExamPayload!
     saveNewMathExam(input: SaveNewMathExamInput!): SaveNewMathExamPayload!
+    requestExamVariants(input: RequestExamVariantsInput!): RequestExamVariantsPayload!
     # AI-аар шинжлүүлэх
     analyzeQuestion(prompt: String!): QuestionAnalysisResult!
     # AI-аар үүсгэсэн загварыг хадгалах

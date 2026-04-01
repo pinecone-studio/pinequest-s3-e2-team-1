@@ -251,6 +251,71 @@ type SaveNewMathExamPayload {
   updatedAt: String!
 }
 
+enum ExamVariantJobStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+input ExamVariantQuestionInput {
+  order: Int!
+  prompt: String!
+  type: String!
+  options: [String!]
+  correctAnswer: String
+  explanation: String
+}
+
+input RequestExamVariantsInput {
+  examId: ID
+  variantCount: Int!
+  questions: [ExamVariantQuestionInput!]!
+}
+
+type RequestExamVariantsPayload {
+  success: Boolean!
+  message: String!
+  jobId: ID
+}
+
+type ExamVariantJob {
+  jobId: ID!
+  examId: ID
+  status: ExamVariantJobStatus!
+  variantCount: Int!
+  variants: [ExamVariant!]!
+  sourceQuestionsJson: String!
+  resultJson: String
+  errorMessage: String
+  requestedBy: String
+  requestedAt: String!
+  startedAt: String
+  completedAt: String
+  updatedAt: String!
+}
+
+type ExamVariant {
+  id: ID!
+  jobId: ID!
+  examId: ID
+  variantNumber: Int!
+  title: String!
+  questions: [ExamVariantQuestion!]!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type ExamVariantQuestion {
+  id: ID!
+  position: Int!
+  type: String!
+  prompt: String!
+  options: [String!]
+  correctAnswer: String
+  explanation: String
+}
+
 type ExamScheduleVariant {
   id: String!
   label: String!
@@ -408,6 +473,7 @@ type Query {
 
   """ai-scheduler-school-event: өгөгдсөн хугацааны мужид давхцах эвентүүд"""
   getSchoolEvents(startDate: String!, endDate: String!): [SchoolEvent!]!
+  getExamVariantJob(jobId: ID!): ExamVariantJob
 }
 
 type RequestExamSchedulePayload {
@@ -422,6 +488,7 @@ type Mutation {
   generateExamQuestions(input: ExamGenerationInput!): ExamGenerationResult!
   saveExam(input: SaveExamInput!): SaveExamPayload!
   saveNewMathExam(input: SaveNewMathExamInput!): SaveNewMathExamPayload!
+  requestExamVariants(input: RequestExamVariantsInput!): RequestExamVariantsPayload!
   # AI-аар шинжлүүлэх
   analyzeQuestion(prompt: String!): QuestionAnalysisResult!
   # AI-аар үүсгэсэн загварыг хадгалах

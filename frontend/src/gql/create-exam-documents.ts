@@ -37,6 +37,53 @@ export const SaveNewMathExamDocument = gql(`
 	}
 `);
 
+export const RequestExamVariantsDocument = gql(`
+	mutation RequestExamVariants($input: RequestExamVariantsInput!) {
+		requestExamVariants(input: $input) {
+			success
+			message
+			jobId
+		}
+	}
+`);
+
+export const GetExamVariantJobDocument = gql(`
+	query GetExamVariantJob($jobId: ID!) {
+		getExamVariantJob(jobId: $jobId) {
+			jobId
+			examId
+			status
+			variantCount
+			sourceQuestionsJson
+			resultJson
+			errorMessage
+			requestedBy
+			requestedAt
+			startedAt
+			completedAt
+			updatedAt
+			variants {
+				id
+				jobId
+				examId
+				variantNumber
+				title
+				createdAt
+				updatedAt
+				questions {
+					id
+					position
+					type
+					prompt
+					options
+					correctAnswer
+					explanation
+				}
+			}
+		}
+	}
+`);
+
 export const ListNewMathExamsDocument = gql(`
 	query ListNewMathExams($limit: Int = 50) {
 		listNewMathExams(limit: $limit) {

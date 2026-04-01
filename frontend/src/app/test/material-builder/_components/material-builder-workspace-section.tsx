@@ -58,11 +58,13 @@ type Props = {
   onSelectMaterialId: (id: string) => void;
   source: MaterialSourceId;
   onSourceChange: (source: MaterialSourceId) => void;
+  previewQuestions: PreviewQuestion[];
+  onPreviewQuestionsChange: (questions: PreviewQuestion[]) => void;
 };
 
 type WorkspaceSourceId = Exclude<MaterialSourceId, "textbook">;
 
-type PreviewQuestion = {
+export type PreviewQuestion = {
   id: string;
   index: number;
   question: string;
@@ -1159,10 +1161,9 @@ export function MaterialBuilderWorkspaceSection({
   onSelectMaterialId,
   source,
   onSourceChange,
+  previewQuestions,
+  onPreviewQuestionsChange,
 }: Props) {
-  const [previewQuestions, setPreviewQuestions] = useState<PreviewQuestion[]>(
-    initialPreviewQuestions,
-  );
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
   const [dragTargetQuestionId, setDragTargetQuestionId] = useState<string | null>(null);
   const activeSource = source === "textbook" ? "question-bank" : source;
@@ -1186,7 +1187,8 @@ export function MaterialBuilderWorkspaceSection({
   function handleAppendQuestion(
     question: Omit<PreviewQuestion, "id" | "index">,
   ) {
-    setPreviewQuestions((prev) => {
+    onPreviewQuestionsChange(
+      ((prev: PreviewQuestion[]) => {
       const next = [
         {
           ...question,
@@ -1200,12 +1202,13 @@ export function MaterialBuilderWorkspaceSection({
         ...item,
         index: index + 1,
       }));
-    });
+    })(previewQuestions),
+    );
   }
 
   function handleDeleteQuestion(questionId: string) {
-    setPreviewQuestions((prev) =>
-      prev
+    onPreviewQuestionsChange(
+      previewQuestions
         .filter((question) => question.id !== questionId)
         .map((question, index) => ({
           ...question,
@@ -1215,7 +1218,8 @@ export function MaterialBuilderWorkspaceSection({
   }
 
   function handleMoveQuestion(questionId: string, direction: "up" | "down") {
-    setPreviewQuestions((prev) => {
+    onPreviewQuestionsChange(
+      ((prev: PreviewQuestion[]) => {
       const currentIndex = prev.findIndex(
         (question) => question.id === questionId,
       );
@@ -1235,7 +1239,8 @@ export function MaterialBuilderWorkspaceSection({
         ...question,
         index: index + 1,
       }));
-    });
+    })(previewQuestions),
+    );
   }
 
   function reindexQuestions(questions: PreviewQuestion[]) {
@@ -1252,19 +1257,19 @@ export function MaterialBuilderWorkspaceSection({
       return;
     }
 
-    setPreviewQuestions((prev) => {
-      const draggedIndex = prev.findIndex((question) => question.id === draggedQuestionId);
-      const targetIndex = prev.findIndex((question) => question.id === targetQuestionId);
+    const draggedIndex = previewQuestions.findIndex((question) => question.id === draggedQuestionId);
+    const targetIndex = previewQuestions.findIndex((question) => question.id === targetQuestionId);
 
-      if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
-        return prev;
-      }
+    if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
+      setDraggedQuestionId(null);
+      setDragTargetQuestionId(null);
+      return;
+    }
 
-      const next = [...prev];
-      const [draggedQuestion] = next.splice(draggedIndex, 1);
-      next.splice(targetIndex, 0, draggedQuestion);
-      return reindexQuestions(next);
-    });
+    const next = [...previewQuestions];
+    const [draggedQuestion] = next.splice(draggedIndex, 1);
+    next.splice(targetIndex, 0, draggedQuestion);
+    onPreviewQuestionsChange(reindexQuestions(next));
 
     setDraggedQuestionId(null);
     setDragTargetQuestionId(null);

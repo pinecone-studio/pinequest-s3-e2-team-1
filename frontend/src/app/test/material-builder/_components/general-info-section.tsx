@@ -15,7 +15,20 @@ import {
   fieldWrapperClassName,
 } from "./material-builder-config";
 
-export function GeneralInfoSection() {
+export type GeneralInfoValues = {
+  subject: string;
+  grade: string;
+  examType: string;
+  examName: string;
+  durationMinutes: string;
+};
+
+type Props = {
+  values: GeneralInfoValues;
+  onChange: (next: GeneralInfoValues) => void;
+};
+
+export function GeneralInfoSection({ values, onChange }: Props) {
   return (
     <section className="rounded-[18px] border border-[#e3e9f4] bg-white px-5 py-5 shadow-[0_8px_18px_rgba(15,23,42,0.04)] sm:px-6">
       <div className="mb-5 flex items-center gap-2 text-[15px] font-semibold text-slate-900">
@@ -33,7 +46,10 @@ export function GeneralInfoSection() {
           >
             Хичээл
           </Label>
-          <Select defaultValue="math">
+          <Select
+            value={values.subject}
+            onValueChange={(value) => onChange({ ...values, subject: value })}
+          >
             <SelectTrigger
               id="subject"
               className={`${fieldClassName} cursor-pointer`}
@@ -55,7 +71,10 @@ export function GeneralInfoSection() {
           >
             Анги
           </Label>
-          <Select defaultValue="10">
+          <Select
+            value={values.grade}
+            onValueChange={(value) => onChange({ ...values, grade: value })}
+          >
             <SelectTrigger
               id="classroom"
               className={`${fieldClassName} cursor-pointer`}
@@ -78,7 +97,10 @@ export function GeneralInfoSection() {
           >
             Төрөл
           </Label>
-          <Select defaultValue="progress">
+          <Select
+            value={values.examType}
+            onValueChange={(value) => onChange({ ...values, examType: value })}
+          >
             <SelectTrigger
               id="exam-type"
               className={`${fieldClassName} cursor-pointer`}
@@ -102,7 +124,10 @@ export function GeneralInfoSection() {
           </Label>
           <Input
             id="exam-name"
-            defaultValue="Явц-1 Алгебр"
+            value={values.examName}
+            onChange={(event) =>
+              onChange({ ...values, examName: event.target.value })
+            }
             className={fieldClassName}
           />
         </div>
@@ -114,7 +139,12 @@ export function GeneralInfoSection() {
           >
             Үргэлжлэх минут
           </Label>
-          <Select defaultValue="30">
+          <Select
+            value={values.durationMinutes}
+            onValueChange={(value) =>
+              onChange({ ...values, durationMinutes: value })
+            }
+          >
             <SelectTrigger
               id="duration-left"
               className={`${fieldClassName} cursor-pointer`}
