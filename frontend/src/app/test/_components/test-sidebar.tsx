@@ -60,18 +60,18 @@ export function TestSidebar() {
   const pathname = usePathname();
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <SidebarHeader className="px-3 py-4">
-        <div className="flex items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-accent/70 px-3 py-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+    <Sidebar
+      collapsible="icon"
+      className="border-r border-slate-200/80 bg-white"
+    >
+      <SidebarHeader className="border-b border-slate-200/80 px-4 py-4">
+        <div className="flex items-center gap-3 rounded-2xl bg-white px-1 py-1">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0b5cad] text-white shadow-[0_10px_24px_-18px_rgba(11,92,173,0.9)]">
             <GraduationCap className="h-5 w-5" />
           </div>
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-sm font-semibold text-sidebar-foreground">
+            <p className="truncate text-base font-semibold text-slate-900">
               Шалгалт систем
-            </p>
-            <p className="truncate text-xs text-sidebar-foreground/70">
-              Teacher workspace
             </p>
           </div>
         </div>

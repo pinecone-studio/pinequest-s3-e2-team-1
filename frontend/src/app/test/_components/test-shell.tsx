@@ -31,26 +31,26 @@ export function TestShell({
     <TooltipProvider delayDuration={150}>
       <SidebarProvider defaultOpen>
         <TestSidebar />
-        <SidebarInset className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(37,99,235,0.08),_transparent_28%),linear-gradient(180deg,_rgba(248,250,252,0.98)_0%,_rgba(241,245,249,0.96)_100%)]">
-          <header className="sticky top-0 z-20 border-b border-border/80 bg-background/90 backdrop-blur">
-            <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <SidebarInset className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f4f7fb_100%)]">
+          <header className="sticky top-0 z-20 bg-[rgba(248,251,255,0.92)] backdrop-blur">
+            <div className="px-4 pb-3 pt-6 sm:px-6 lg:px-8">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <div className="flex items-start gap-3">
-                    <SidebarTrigger className="mt-1 shrink-0" />
+                    <SidebarTrigger className="mt-1 shrink-0 lg:hidden" />
                     <div className="min-w-0">
-                      <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+                      <h1 className="truncate text-3xl font-semibold tracking-tight text-slate-900">
                         {title}
                       </h1>
                       {description ? (
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="mt-1 text-sm text-slate-500">
                           {description}
                         </p>
                       ) : null}
                     </div>
                   </div>
                   {meta ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 pl-11 text-xs text-muted-foreground">
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 pl-11 text-xs text-slate-500 lg:pl-0">
                       {meta}
                     </div>
                   ) : null}
