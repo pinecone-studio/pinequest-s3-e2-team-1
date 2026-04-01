@@ -43,7 +43,7 @@ import {
   type CreateAiExamFormValues,
 } from "@/lib/ai-exam-form-validation";
 
-import { AiExamAnalyzePromptField } from "./AiExamAnalyzePromptField";
+import { AiExamAnalyzePromptField } from "@/app/ai-scheduler/_components/AiExamAnalyzePromptField";
 
 const BLOOM_SKILL_LEVELS = [
   "Мэдлэг",
