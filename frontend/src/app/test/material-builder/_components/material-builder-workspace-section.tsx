@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@apollo/client/react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type DragEvent } from "react";
 import {
   BookOpen,
   ChevronDown,
@@ -65,48 +65,12 @@ type PreviewQuestion = {
   source: string;
 };
 
-const initialPreviewQuestions: PreviewQuestion[] = [
-  {
-    id: "q1",
-    index: 1,
-    question: "Монгол улсын нийслэл хот юу вэ?",
-    answers: ["Дархан", "Эрдэнэт", "Улаанбаатар", "Дорнод"],
-    correct: 2,
-    source: "БШ_MAT_VIII.docx",
-  },
-  {
-    id: "q2",
-    index: 2,
-    question: "2 + 2 = ?",
-    answers: ["3", "4", "5", "6"],
-    correct: 1,
-    source: "БШ_MAT_VIII.docx",
-  },
-  {
-    id: "q3",
-    index: 3,
-    question: "H2O гэж юу вэ?",
-    answers: ["Ус", "Хүчил", "Давс", "Агаар"],
-    correct: 0,
-    source: "БШ_MAT_VIII.docx",
-  },
-  {
-    id: "q4",
-    index: 4,
-    question: "Дэлхийн хамгийн том далай юу вэ?",
-    answers: [
-      "Атлантын далай",
-      "Энэтхэгийн далай",
-      "Номхон далай",
-      "Хойд мөсөн далай",
-    ],
-    correct: 2,
-    source: "БШ_MAT_VIII.docx",
-  },
-];
+const initialPreviewQuestions: PreviewQuestion[] = [];
 
 const workspaceSourceOptions = sourceOptions.filter(
-  (option): option is (typeof sourceOptions)[number] & { id: WorkspaceSourceId } =>
+  (
+    option,
+  ): option is (typeof sourceOptions)[number] & { id: WorkspaceSourceId } =>
     option.id !== "textbook",
 );
 
@@ -219,6 +183,7 @@ function QuestionBankPanel({
     null,
   );
   const [questionText, setQuestionText] = useState("");
+  const [showQuestionError, setShowQuestionError] = useState(false);
   const [showCorrectAnswerError, setShowCorrectAnswerError] = useState(false);
   const [generatedExplanation, setGeneratedExplanation] = useState("");
   const [scoreValue, setScoreValue] = useState("1");
@@ -282,11 +247,7 @@ function QuestionBankPanel({
     setShowCorrectAnswerError(false);
     setScoreValue(String(payload.points ?? 1));
     setQuestionTypeValue(
-      payload.format === QuestionFormat.Written
-        ? "written"
-        : payload.format === QuestionFormat.MultipleChoice
-          ? "multiple-choice"
-          : "single-choice",
+      payload.format === QuestionFormat.Written ? "written" : "single-choice",
     );
     setDifficultyValue(
       payload.difficulty === Difficulty.Easy
@@ -321,11 +282,9 @@ function QuestionBankPanel({
             format:
               questionTypeValue === "written"
                 ? QuestionFormat.Written
-                : questionTypeValue === "multiple-choice"
-                  ? QuestionFormat.MultipleChoice
-                  : questionTypeValue === "single-choice"
-                    ? QuestionFormat.SingleChoice
-                    : undefined,
+                : questionTypeValue === "single-choice"
+                  ? QuestionFormat.SingleChoice
+                  : undefined,
           },
         },
       });
@@ -385,9 +344,7 @@ function QuestionBankPanel({
             format:
               questionTypeValue === "written"
                 ? QuestionFormat.Written
-                : questionTypeValue === "multiple-choice"
-                  ? QuestionFormat.MultipleChoice
-                  : QuestionFormat.SingleChoice,
+                : QuestionFormat.SingleChoice,
             previousOptions: answers
               .map((answer) => answer.trim())
               .filter(Boolean),
@@ -438,7 +395,11 @@ function QuestionBankPanel({
     const normalizedAnswers = answers
       .map((answer) => answer.trim())
       .filter(Boolean);
-    if (!trimmedQuestion || normalizedAnswers.length === 0) return;
+    if (!trimmedQuestion) {
+      setShowQuestionError(true);
+      return;
+    }
+    if (normalizedAnswers.length === 0) return;
     if (selectedAnswerIndex === null || !answers[selectedAnswerIndex]?.trim()) {
       setShowCorrectAnswerError(true);
       return;
@@ -452,6 +413,7 @@ function QuestionBankPanel({
     });
 
     setQuestionText("");
+    setShowQuestionError(false);
     setAnswers(["", "", "", ""]);
     setSelectedAnswerIndex(null);
     setShowCorrectAnswerError(false);
@@ -467,7 +429,7 @@ function QuestionBankPanel({
         <label className="mb-2 block text-[14px] font-medium text-slate-800">
           Асуулт
         </label>
-        <div className="flex flex-col gap-1 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="w-full lg:w-[50px] lg:shrink-0">
             <Select value={scoreValue} onValueChange={setScoreValue}>
               <SelectTrigger
@@ -485,7 +447,7 @@ function QuestionBankPanel({
             </Select>
           </div>
 
-          <div className="min-w-0 flex-1 lg:min-w-[157px]">
+          <div className="min-w-0 flex-1 lg:min-w-[120px]">
             <Select
               value={questionTypeValue}
               onValueChange={setQuestionTypeValue}
@@ -498,8 +460,7 @@ function QuestionBankPanel({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="single-choice">Нэг сонголттой</SelectItem>
-                <SelectItem value="multiple-choice">Олон сонголттой</SelectItem>
-                <SelectItem value="written">Задгай</SelectItem>
+                <SelectItem value="written">Нээлттэй</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -525,7 +486,12 @@ function QuestionBankPanel({
       <div>
         <Textarea
           value={questionText}
-          onChange={(event) => setQuestionText(event.target.value)}
+          onChange={(event) => {
+            setQuestionText(event.target.value);
+            if (event.target.value.trim()) {
+              setShowQuestionError(false);
+            }
+          }}
           placeholder="Асуултаа энд бичнэ үү..."
           className="min-h-[110px] rounded-[12px] border-[#e2e8f0] bg-[#f3f6fb]"
         />
@@ -590,15 +556,17 @@ function QuestionBankPanel({
             </button>
           </div>
         ))}
-        <p
-          className={cn(
-            "text-[12px]",
-            showCorrectAnswerError ? "text-red-500" : "text-slate-500",
-          )}
-        >
-          Зөв хариултыг сонгоно уу
-        </p>
-        {generatedExplanation ? (
+        {showCorrectAnswerError ? (
+          <p
+            className={cn(
+              "text-[12px]",
+              showCorrectAnswerError ? "text-red-500" : "text-slate-500",
+            )}
+          >
+            Зөв хариултыг сонгоно уу
+          </p>
+        ) : null}
+        {questionTypeValue === "written" && generatedExplanation ? (
           <div className="space-y-2">
             <p className="text-[14px] font-semibold text-slate-900">
               Бодолт / Тайлбар
@@ -622,6 +590,9 @@ function QuestionBankPanel({
               {regenerating ? "Дахин үүсгэж байна..." : "Дахин үүсгүүлэх"}
             </button>
           </div>
+        ) : null}
+        {showQuestionError ? (
+          <p className="text-[12px] text-red-500">Асуултаа оруулна уу</p>
         ) : null}
         <Button
           type="button"
@@ -866,21 +837,76 @@ function getQuestionSourceBadge(source: string) {
   };
 }
 
-function PreviewQuestionCard({ question }: { question: PreviewQuestion }) {
+function PreviewQuestionCard({
+  question,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
+  isDragging,
+  isDragTarget,
+  onDragHandleStart,
+  onDragHandleEnd,
+  onDragTargetEnter,
+  onDragTargetOver,
+  onDropOnTarget,
+}: {
+  question: PreviewQuestion;
+  onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  isDragging: boolean;
+  isDragTarget: boolean;
+  onDragHandleStart: (event: DragEvent<HTMLButtonElement>) => void;
+  onDragHandleEnd: () => void;
+  onDragTargetEnter: () => void;
+  onDragTargetOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDropOnTarget: () => void;
+}) {
   const sourceBadge = getQuestionSourceBadge(question.source);
 
   return (
-    <div className="group rounded-[20px] border border-[#e3e9f4] bg-white p-5 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
+    <div
+      className={cn(
+        "group rounded-[20px] border bg-white p-5 transition-all duration-200",
+        isDragging &&
+          "scale-[1.015] -rotate-1 border-sky-300 bg-sky-50/60 shadow-[0_24px_50px_-20px_rgba(14,116,144,0.35)] opacity-70",
+        isDragTarget
+          ? "border-[#0f74e7] ring-2 ring-[#0f74e7]/20 shadow-[0_0_0_1px_rgba(15,116,231,0.08)]"
+          : "border-[#e3e9f4] shadow-[0_8px_20px_rgba(15,23,42,0.04)]",
+      )}
+      onDragEnter={onDragTargetEnter}
+      onDragOver={onDragTargetOver}
+      onDrop={onDropOnTarget}
+    >
       <div className="flex items-start gap-3">
         <div className="flex w-8 shrink-0 flex-col items-center gap-2">
           <button
             type="button"
-            className="text-slate-400 transition-opacity group-hover:opacity-100 md:opacity-0"
+            draggable
+            onDragStart={onDragHandleStart}
+            onDragEnd={onDragHandleEnd}
+            className={cn(
+              "cursor-grab rounded-md p-1 transition-all active:cursor-grabbing",
+              isDragging
+                ? "bg-sky-100 text-sky-700 shadow-sm"
+                : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
+            )}
             aria-label="Асуултын байрлал өөрчлөх"
           >
             <GripVertical className="h-4 w-4" />
           </button>
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#0f74e7] text-[12px] font-semibold text-white">
+          <span
+            className={cn(
+              "inline-flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-semibold text-white transition-all",
+              isDragging
+                ? "bg-sky-600 shadow-[0_10px_20px_-12px_rgba(2,132,199,0.8)]"
+                : "bg-[#0f74e7]",
+            )}
+          >
             {question.index}
           </span>
         </div>
@@ -889,23 +915,33 @@ function PreviewQuestionCard({ question }: { question: PreviewQuestion }) {
             <p className="text-[18px] font-semibold text-slate-900">
               {question.question}
             </p>
-            <div className="flex items-center gap-1 transition-opacity group-hover:opacity-100 md:opacity-0">
+            <div
+              className={cn(
+                "flex items-center gap-1 transition-opacity group-hover:opacity-100 md:opacity-0",
+                isDragging && "opacity-40",
+              )}
+            >
               <button
                 type="button"
-                className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                onClick={onMoveUp}
+                disabled={!canMoveUp}
+                className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-400"
                 aria-label="Дээш зөөх"
               >
                 <ChevronUp className="h-4 w-4" />
               </button>
               <button
                 type="button"
-                className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                onClick={onMoveDown}
+                disabled={!canMoveDown}
+                className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-400"
                 aria-label="Доош зөөх"
               >
                 <ChevronDown className="h-4 w-4" />
               </button>
               <button
                 type="button"
+                onClick={onDelete}
                 className="rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
                 aria-label="Устгах"
               >
@@ -954,6 +990,8 @@ export function MaterialBuilderWorkspaceSection({
   const [previewQuestions, setPreviewQuestions] = useState<PreviewQuestion[]>(
     initialPreviewQuestions,
   );
+  const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
+  const [dragTargetQuestionId, setDragTargetQuestionId] = useState<string | null>(null);
   const activeSource = source === "textbook" ? "question-bank" : source;
   const sourceCounts = useMemo(
     () => ({
@@ -990,6 +1028,73 @@ export function MaterialBuilderWorkspaceSection({
         index: index + 1,
       }));
     });
+  }
+
+  function handleDeleteQuestion(questionId: string) {
+    setPreviewQuestions((prev) =>
+      prev
+        .filter((question) => question.id !== questionId)
+        .map((question, index) => ({
+          ...question,
+          index: index + 1,
+        })),
+    );
+  }
+
+  function handleMoveQuestion(questionId: string, direction: "up" | "down") {
+    setPreviewQuestions((prev) => {
+      const currentIndex = prev.findIndex(
+        (question) => question.id === questionId,
+      );
+      if (currentIndex === -1) return prev;
+
+      const targetIndex =
+        direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+
+      const next = [...prev];
+      [next[currentIndex], next[targetIndex]] = [
+        next[targetIndex],
+        next[currentIndex],
+      ];
+
+      return next.map((question, index) => ({
+        ...question,
+        index: index + 1,
+      }));
+    });
+  }
+
+  function reindexQuestions(questions: PreviewQuestion[]) {
+    return questions.map((question, index) => ({
+      ...question,
+      index: index + 1,
+    }));
+  }
+
+  function handleDropQuestion(targetQuestionId: string) {
+    if (!draggedQuestionId || draggedQuestionId === targetQuestionId) {
+      setDraggedQuestionId(null);
+      setDragTargetQuestionId(null);
+      return;
+    }
+
+    setPreviewQuestions((prev) => {
+      const draggedIndex = prev.findIndex((question) => question.id === draggedQuestionId);
+      const targetIndex = prev.findIndex((question) => question.id === targetQuestionId);
+
+      if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
+        return prev;
+      }
+
+      const next = [...prev];
+      const [draggedQuestion] = next.splice(draggedIndex, 1);
+      next.splice(targetIndex, 0, draggedQuestion);
+      return reindexQuestions(next);
+    });
+
+    setDraggedQuestionId(null);
+    setDragTargetQuestionId(null);
   }
 
   return (
@@ -1038,22 +1143,72 @@ export function MaterialBuilderWorkspaceSection({
             <div className="flex items-center gap-2">
               <div className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-[14px] font-semibold text-blue-700">
                 <PenSquare className="h-4 w-4" />
-                {previewQuestions.length}
+                {sourceCounts["question-bank"]}
               </div>
               <div className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-[14px] font-semibold text-amber-700">
-                <FileUp className="h-4 w-4" />1
+                <FileUp className="h-4 w-4" />
+                {sourceCounts.import}
               </div>
               <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[14px] font-semibold text-slate-600">
-                <Database className="h-4 w-4" />1
+                <Database className="h-4 w-4" />
+                {sourceCounts["shared-library"]}
               </div>
             </div>
           </div>
 
-          <div className="space-y-4">
-            {previewQuestions.map((question) => (
-              <PreviewQuestionCard key={question.id} question={question} />
-            ))}
-          </div>
+          {previewQuestions.length === 0 ? (
+            <div className="flex min-h-[340px] flex-col items-center justify-center rounded-[20px] border border-dashed border-[#dbe4f3] bg-[#fcfdff] px-6 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#eef3f9] text-slate-500">
+                <FileText className="h-9 w-9" />
+              </div>
+              <p className="mt-6 text-[18px] font-semibold text-slate-900">
+                Асуулт байхгүй байна
+              </p>
+              <div className="mt-3 space-y-1 text-[14px] leading-7 text-slate-500">
+                <p>Зүүн талын 4 аргын аль нэгийг ашиглан асуулт нэмнэ үү.</p>
+                <p>Та олон аргыг хольж ашиглаж болно.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {previewQuestions.map((question) => (
+                <PreviewQuestionCard
+                  key={question.id}
+                  question={question}
+                  onDelete={() => handleDeleteQuestion(question.id)}
+                  onMoveUp={() => handleMoveQuestion(question.id, "up")}
+                  onMoveDown={() => handleMoveQuestion(question.id, "down")}
+                  canMoveUp={question.index > 1}
+                  canMoveDown={question.index < previewQuestions.length}
+                  isDragging={draggedQuestionId === question.id}
+                  isDragTarget={
+                    dragTargetQuestionId === question.id &&
+                    draggedQuestionId !== question.id
+                  }
+                  onDragHandleStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    setDraggedQuestionId(question.id);
+                    setDragTargetQuestionId(question.id);
+                  }}
+                  onDragHandleEnd={() => {
+                    setDraggedQuestionId(null);
+                    setDragTargetQuestionId(null);
+                  }}
+                  onDragTargetEnter={() => {
+                    if (!draggedQuestionId) return;
+                    setDragTargetQuestionId(question.id);
+                  }}
+                  onDragTargetOver={(event) => {
+                    event.preventDefault();
+                    if (!draggedQuestionId) return;
+                    event.dataTransfer.dropEffect = "move";
+                    setDragTargetQuestionId(question.id);
+                  }}
+                  onDropOnTarget={() => handleDropQuestion(question.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>
