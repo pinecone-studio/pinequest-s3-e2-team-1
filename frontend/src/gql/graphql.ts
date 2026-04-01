@@ -38,6 +38,21 @@ export type AiQuestionTemplateInput = {
   type: Scalars['String']['input'];
 };
 
+export type BatchConfirmExamVariantPayload = {
+  __typename?: 'BatchConfirmExamVariantPayload';
+  message: Scalars['String']['output'];
+  success: Scalars['Boolean']['output'];
+  variants: Array<ExamVariant>;
+};
+
+export type BatchSaveExamVariantPayload = {
+  __typename?: 'BatchSaveExamVariantPayload';
+  examIds: Array<Scalars['ID']['output']>;
+  message: Scalars['String']['output'];
+  success: Scalars['Boolean']['output'];
+  variants: Array<ExamVariant>;
+};
+
 export type ConfirmExamVariantInput = {
   questions: Array<ExamVariantQuestionInput>;
   variantId: Scalars['ID']['input'];
@@ -267,6 +282,7 @@ export type Mutation = {
   /** Багш AI-ийн саналуудаас нэгийг сонгож батална (human-in-the-loop) */
   approveAiExamSchedule: ExamSchedule;
   confirmExamVariant: ConfirmExamVariantPayload;
+  confirmExamVariants: BatchConfirmExamVariantPayload;
   createAiExamTemplate: AiExamTemplatePayload;
   generateExamQuestions: ExamGenerationResult;
   generateQuestionAnswer: GenerateQuestionAnswerResult;
@@ -280,6 +296,7 @@ export type Mutation = {
   requestExamVariants: RequestExamVariantsPayload;
   saveExam: SaveExamPayload;
   saveExamVariant: SaveExamVariantPayload;
+  saveExamVariants: BatchSaveExamVariantPayload;
   saveNewMathExam: SaveNewMathExamPayload;
 };
 
@@ -297,6 +314,11 @@ export type MutationApproveAiExamScheduleArgs = {
 
 export type MutationConfirmExamVariantArgs = {
   input: ConfirmExamVariantInput;
+};
+
+
+export type MutationConfirmExamVariantsArgs = {
+  inputs: Array<ConfirmExamVariantInput>;
 };
 
 
@@ -346,6 +368,11 @@ export type MutationSaveExamArgs = {
 
 export type MutationSaveExamVariantArgs = {
   input: SaveExamVariantInput;
+};
+
+
+export type MutationSaveExamVariantsArgs = {
+  inputs: Array<SaveExamVariantInput>;
 };
 
 

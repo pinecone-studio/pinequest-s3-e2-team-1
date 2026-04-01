@@ -298,6 +298,12 @@ export const typeDefs = /* GraphQL */ `
     variant: ExamVariant
   }
 
+  type BatchConfirmExamVariantPayload {
+    success: Boolean!
+    message: String!
+    variants: [ExamVariant!]!
+  }
+
   input ConfirmExamVariantInput {
     variantId: ID!
     questions: [ExamVariantQuestionInput!]!
@@ -308,6 +314,13 @@ export const typeDefs = /* GraphQL */ `
     message: String!
     examId: ID
     variant: ExamVariant
+  }
+
+  type BatchSaveExamVariantPayload {
+    success: Boolean!
+    message: String!
+    examIds: [ID!]!
+    variants: [ExamVariant!]!
   }
 
   type ExamVariantJob {
@@ -493,7 +506,9 @@ export const typeDefs = /* GraphQL */ `
     saveNewMathExam(input: SaveNewMathExamInput!): SaveNewMathExamPayload!
     requestExamVariants(input: RequestExamVariantsInput!): RequestExamVariantsPayload!
     confirmExamVariant(input: ConfirmExamVariantInput!): ConfirmExamVariantPayload!
+    confirmExamVariants(inputs: [ConfirmExamVariantInput!]!): BatchConfirmExamVariantPayload!
     saveExamVariant(input: SaveExamVariantInput!): SaveExamVariantPayload!
+    saveExamVariants(inputs: [SaveExamVariantInput!]!): BatchSaveExamVariantPayload!
     # AI-аар шинжлүүлэх
     analyzeQuestion(prompt: String!): QuestionAnalysisResult!
     # AI-аар үүсгэсэн загварыг хадгалах

@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -26,10 +27,10 @@ import { MathAssistField } from "@/components/exam/math-exam-assist-field";
 import MathPreviewText from "@/components/math-preview-text";
 import { normalizeBackendMathText } from "@/lib/normalize-math-text";
 import {
-  ConfirmExamVariantDocument,
+  ConfirmExamVariantsDocument,
   GetExamVariantJobDocument,
   SaveNewMathExamDocument,
-  SaveExamVariantDocument,
+  SaveExamVariantsDocument,
   RequestExamVariantsDocument,
 } from "@/gql/create-exam-documents";
 import { MathExamQuestionType } from "@/gql/graphql";
@@ -166,6 +167,29 @@ function getCorrectOptionIndex(
   );
 }
 
+function buildVariantMutationInput(
+  variant: GeneratedVariant,
+  generalInfo: GeneralInfoValues,
+) {
+  return {
+    variantId: variant.id,
+    examId: undefined,
+    title: `${generalInfo.examName || "Шалгалт"} · ${variant.title}`,
+    grade: Number(generalInfo.grade) || undefined,
+    examType: generalInfo.examType || undefined,
+    subject: generalInfo.subject || undefined,
+    durationMinutes: Number(generalInfo.durationMinutes) || undefined,
+    questions: variant.questions.map((question) => ({
+      order: question.position,
+      prompt: question.prompt,
+      type: question.type,
+      options: question.options ?? [],
+      correctAnswer: question.correctAnswer ?? null,
+      explanation: question.explanation ?? null,
+    })),
+  };
+}
+
 export default function MaterialBuilderPageContent() {
   const [source, setSource] = useState<MaterialSourceId>("question-bank");
   const [selectedSharedMaterialId, setSelectedSharedMaterialId] =
@@ -185,6 +209,7 @@ export default function MaterialBuilderPageContent() {
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
     null,
   );
+  const [checkedVariantIds, setCheckedVariantIds] = useState<string[]>([]);
   const [confirmedVariantIds, setConfirmedVariantIds] = useState<string[]>([]);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(
     null,
@@ -193,10 +218,11 @@ export default function MaterialBuilderPageContent() {
     questionId: string;
     variantId: string;
   } | null>(null);
-  const [dragTargetConfirmedQuestion, setDragTargetConfirmedQuestion] = useState<{
-    questionId: string;
-    variantId: string;
-  } | null>(null);
+  const [dragTargetConfirmedQuestion, setDragTargetConfirmedQuestion] =
+    useState<{
+      questionId: string;
+      variantId: string;
+    } | null>(null);
   const [savingExam, setSavingExam] = useState(false);
   const [savingVariantAsExam, setSavingVariantAsExam] = useState(false);
   const [savedExamId, setSavedExamId] = useState<string | null>(null);
@@ -205,10 +231,10 @@ export default function MaterialBuilderPageContent() {
   const [requestExamVariants, { loading: requestingVariants }] = useMutation(
     RequestExamVariantsDocument,
   );
-  const [confirmExamVariant, { loading: confirmingVariant }] = useMutation(
-    ConfirmExamVariantDocument,
+  const [confirmExamVariants, { loading: confirmingVariants }] = useMutation(
+    ConfirmExamVariantsDocument,
   );
-  const [saveExamVariant] = useMutation(SaveExamVariantDocument);
+  const [saveExamVariants] = useMutation(SaveExamVariantsDocument);
   const [saveNewMathExam] = useMutation(SaveNewMathExamDocument);
   const [fetchVariantJob] = useLazyQuery(GetExamVariantJobDocument, {
     fetchPolicy: "no-cache",
@@ -226,7 +252,7 @@ export default function MaterialBuilderPageContent() {
   );
   const isGeneratingVariants = requestingVariants || Boolean(variantJobId);
   const isPersistingVariant =
-    confirmingVariant || savingExam || savingVariantAsExam;
+    confirmingVariants || savingExam || savingVariantAsExam;
   const hasGeneratedVariants = generatedVariants.length > 0;
   const confirmedVariants = useMemo(
     () =>
@@ -238,6 +264,11 @@ export default function MaterialBuilderPageContent() {
     [confirmedVariantIds, generatedVariants],
   );
   const shouldShowVariantViewerButton = hasGeneratedVariants;
+  const checkedVariants = useMemo(
+    () =>
+      generatedVariants.filter((variant) => checkedVariantIds.includes(variant.id)),
+    [checkedVariantIds, generatedVariants],
+  );
 
   useEffect(() => {
     if (!variantJobId) return;
@@ -270,6 +301,7 @@ export default function MaterialBuilderPageContent() {
         }));
         setGeneratedVariants(nextVariants);
         setSelectedVariantId(nextVariants[0]?.id ?? null);
+        setCheckedVariantIds([]);
         setVariantJobId(null);
         if (variantToastIdRef.current) {
           toast.dismiss(variantToastIdRef.current);
@@ -388,6 +420,7 @@ export default function MaterialBuilderPageContent() {
       setVariantJobId(payload.jobId);
       setGeneratedVariants([]);
       setSelectedVariantId(null);
+      setCheckedVariantIds([]);
       setConfirmedVariantIds([]);
       setVariantDialogOpen(false);
       variantToastIdRef.current = toast.loading(
@@ -498,7 +531,10 @@ export default function MaterialBuilderPageContent() {
     reorderVariantQuestions(variantId, next);
   }
 
-  function deleteConfirmedVariantQuestion(variantId: string, questionId: string) {
+  function deleteConfirmedVariantQuestion(
+    variantId: string,
+    questionId: string,
+  ) {
     const variant = generatedVariants.find((item) => item.id === variantId);
     if (!variant) return;
 
@@ -508,7 +544,10 @@ export default function MaterialBuilderPageContent() {
     );
   }
 
-  function dropConfirmedVariantQuestion(variantId: string, targetQuestionId: string) {
+  function dropConfirmedVariantQuestion(
+    variantId: string,
+    targetQuestionId: string,
+  ) {
     if (
       !draggedConfirmedQuestion ||
       draggedConfirmedQuestion.variantId !== variantId ||
@@ -528,7 +567,11 @@ export default function MaterialBuilderPageContent() {
     const targetIndex = variant.questions.findIndex(
       (question) => question.id === targetQuestionId,
     );
-    if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
+    if (
+      draggedIndex === -1 ||
+      targetIndex === -1 ||
+      draggedIndex === targetIndex
+    ) {
       setDraggedConfirmedQuestion(null);
       setDragTargetConfirmedQuestion(null);
       return;
@@ -546,6 +589,9 @@ export default function MaterialBuilderPageContent() {
     setGeneratedVariants((prev) => {
       const next = prev.filter((variant) => variant.id !== variantId);
       setEditingQuestionId(null);
+      setCheckedVariantIds((current) =>
+        current.filter((checkedId) => checkedId !== variantId),
+      );
       if (selectedVariantId === variantId) {
         setSelectedVariantId(next[0]?.id ?? null);
       }
@@ -556,18 +602,25 @@ export default function MaterialBuilderPageContent() {
     });
   }
 
+  function toggleCheckedVariant(variantId: string, checked: boolean) {
+    setCheckedVariantIds((prev) =>
+      checked ? [...new Set([...prev, variantId])] : prev.filter((id) => id !== variantId),
+    );
+  }
+
   function handleConfirmVariant() {
-    if (!selectedVariant) {
-      toast.error("Батлах хувилбар олдсонгүй.");
+    if (checkedVariants.length === 0) {
+      toast.error("Батлах AI хувилбаруудаа checkbox-оор сонгоно уу.");
       return;
     }
+
     void (async () => {
       try {
-        const result = await confirmExamVariant({
+        const result = await confirmExamVariants({
           variables: {
-            input: {
-              variantId: selectedVariant.id,
-              questions: selectedVariant.questions.map((question) => ({
+            inputs: checkedVariants.map((variant) => ({
+              variantId: variant.id,
+              questions: variant.questions.map((question) => ({
                 order: question.position,
                 prompt: question.prompt,
                 type: question.type,
@@ -575,55 +628,139 @@ export default function MaterialBuilderPageContent() {
                 correctAnswer: question.correctAnswer ?? null,
                 explanation: question.explanation ?? null,
               })),
-            },
+            })),
           },
         });
 
         const payload = (
           result.data as
             | {
-                confirmExamVariant?: {
+                confirmExamVariants?: {
                   success?: boolean;
                   message?: string;
-                  variant?: {
+                  variants?: Array<{
                     id: string;
                     status?: string | null;
                     confirmedAt?: string | null;
-                  } | null;
+                  } | null> | null;
                 } | null;
               }
             | undefined
-        )?.confirmExamVariant;
+        )?.confirmExamVariants;
 
-        if (!payload?.success || !payload.variant) {
+        if (!payload?.success || !payload.variants?.length) {
           toast.error(payload?.message || "AI хувилбар батлахад алдаа гарлаа.");
           return;
         }
 
+        const confirmedMap = new Map(
+          payload.variants
+            .filter(Boolean)
+            .map((variant) => [variant!.id, variant!]),
+        );
         setGeneratedVariants((prev) =>
           prev.map((variant) =>
-            variant.id === payload.variant?.id
+            confirmedMap.has(variant.id)
               ? {
                   ...variant,
-                  status: payload.variant.status ?? "confirmed",
-                  confirmedAt: payload.variant.confirmedAt ?? null,
+                  status: confirmedMap.get(variant.id)?.status ?? "confirmed",
+                  confirmedAt:
+                    confirmedMap.get(variant.id)?.confirmedAt ?? null,
                 }
               : variant,
           ),
         );
         setConfirmedVariantIds((prev) =>
-          prev.includes(selectedVariant.id)
-            ? prev
-            : [...prev, selectedVariant.id],
+          Array.from(new Set([...prev, ...confirmedMap.keys()])),
         );
-        setVariantViewerOpen(false);
-        toast.success(payload.message || "Сонгосон AI хувилбарыг баталлаа.");
+        setCheckedVariantIds([]);
+        toast.success(
+          payload.message ||
+            `${confirmedMap.size} AI хувилбарыг амжилттай баталлаа.`,
+        );
       } catch (error) {
         toast.error(
           error instanceof Error
             ? error.message
             : "AI хувилбар батлахад алдаа гарлаа.",
         );
+      }
+    })();
+  }
+
+  function handleSaveVariantsAsNewExams() {
+    if (checkedVariants.length === 0) {
+      toast.error(
+        "Шинэ шалгалт болгох AI хувилбаруудаа checkbox-оор сонгоно уу.",
+      );
+      return;
+    }
+
+    void (async () => {
+      try {
+        setSavingVariantAsExam(true);
+        const result = await saveExamVariants({
+          variables: {
+            inputs: checkedVariants.map((variant) =>
+              buildVariantMutationInput(variant, generalInfo),
+            ),
+          },
+        });
+
+        const payload = (
+          result.data as
+            | {
+                saveExamVariants?: {
+                  success?: boolean;
+                  message?: string;
+                  examIds?: Array<string | null> | null;
+                  variants?: Array<{
+                    id: string;
+                    status?: string | null;
+                    savedAt?: string | null;
+                    savedExamId?: string | null;
+                    confirmedAt?: string | null;
+                  } | null> | null;
+                } | null;
+              }
+            | undefined
+        )?.saveExamVariants;
+
+        if (!payload?.success || !payload.variants?.length) {
+          throw new Error(
+            payload?.message || "Шинэ шалгалт болгож хадгалж чадсангүй.",
+          );
+        }
+
+        const savedMap = new Map(
+          payload.variants.filter(Boolean).map((variant) => [variant!.id, variant!]),
+        );
+        setGeneratedVariants((prev) =>
+          prev.map((variant) =>
+            savedMap.has(variant.id)
+              ? {
+                  ...variant,
+                  status: savedMap.get(variant.id)?.status ?? "saved",
+                  confirmedAt: savedMap.get(variant.id)?.confirmedAt ?? null,
+                  savedAt: savedMap.get(variant.id)?.savedAt ?? null,
+                  savedExamId: savedMap.get(variant.id)?.savedExamId ?? null,
+                }
+              : variant,
+          ),
+        );
+        setCheckedVariantIds([]);
+        toast.success(
+          payload.message ||
+            `${savedMap.size} AI хувилбарыг шинэ шалгалт болгож хадгаллаа.`,
+        );
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Шинэ шалгалт болгож хадгалахад алдаа гарлаа.",
+        );
+      } finally {
+        setSavingVariantAsExam(false);
       }
     })();
   }
@@ -727,14 +864,19 @@ export default function MaterialBuilderPageContent() {
                           className={`group rounded-[20px] border bg-white p-5 transition-all duration-200 ${
                             draggedConfirmedQuestion?.questionId === question.id
                               ? "scale-[1.015] -rotate-1 border-sky-300 bg-sky-50/60 shadow-[0_24px_50px_-20px_rgba(14,116,144,0.35)] opacity-70"
-                              : dragTargetConfirmedQuestion?.questionId === question.id &&
-                                  dragTargetConfirmedQuestion.variantId === variant.id
+                              : dragTargetConfirmedQuestion?.questionId ===
+                                    question.id &&
+                                  dragTargetConfirmedQuestion.variantId ===
+                                    variant.id
                                 ? "border-[#0f74e7] ring-2 ring-[#0f74e7]/20 shadow-[0_0_0_1px_rgba(15,116,231,0.08)]"
                                 : "border-[#e3e9f4] shadow-[0_8px_20px_rgba(15,23,42,0.04)] hover:-translate-y-0.5 hover:border-[#b8ccef] hover:bg-[#fbfdff] hover:shadow-[0_10px_22px_rgba(148,163,184,0.14)]"
                           }`}
                           onDragEnter={() => {
                             if (!draggedConfirmedQuestion) return;
-                            if (draggedConfirmedQuestion.variantId !== variant.id) return;
+                            if (
+                              draggedConfirmedQuestion.variantId !== variant.id
+                            )
+                              return;
                             setDragTargetConfirmedQuestion({
                               variantId: variant.id,
                               questionId: question.id,
@@ -743,7 +885,10 @@ export default function MaterialBuilderPageContent() {
                           onDragOver={(event) => {
                             event.preventDefault();
                             if (!draggedConfirmedQuestion) return;
-                            if (draggedConfirmedQuestion.variantId !== variant.id) return;
+                            if (
+                              draggedConfirmedQuestion.variantId !== variant.id
+                            )
+                              return;
                             event.dataTransfer.dropEffect = "move";
                             setDragTargetConfirmedQuestion({
                               variantId: variant.id,
@@ -751,7 +896,10 @@ export default function MaterialBuilderPageContent() {
                             });
                           }}
                           onDrop={() =>
-                            dropConfirmedVariantQuestion(variant.id, question.id)
+                            dropConfirmedVariantQuestion(
+                              variant.id,
+                              question.id,
+                            )
                           }
                         >
                           <div className="flex items-start gap-3">
@@ -818,7 +966,8 @@ export default function MaterialBuilderPageContent() {
                                       )
                                     }
                                     disabled={
-                                      question.position === variant.questions.length
+                                      question.position ===
+                                      variant.questions.length
                                     }
                                     className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
                                     aria-label="Доош зөөх"
@@ -840,43 +989,45 @@ export default function MaterialBuilderPageContent() {
                                   </button>
                                 </div>
                               </div>
-                          {(question.options ?? []).length > 0 ? (
-                            <div className="mt-3 grid gap-3 md:grid-cols-2">
-                              {(question.options ?? []).map((option, index) => {
-                                const isCorrect =
-                                  option.trim() ===
-                                  (question.correctAnswer ?? "").trim();
+                              {(question.options ?? []).length > 0 ? (
+                                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                  {(question.options ?? []).map(
+                                    (option, index) => {
+                                      const isCorrect =
+                                        option.trim() ===
+                                        (question.correctAnswer ?? "").trim();
 
-                                return (
-                                  <div
-                                    key={`${question.id}-${index}`}
-                                    className={`rounded-[14px] px-4 py-3 text-[14px] ${
-                                      isCorrect
-                                        ? "border border-[#a8ddd0] bg-[#d8f2ea] text-[#167e61]"
-                                        : "bg-[#eef2f6] text-slate-700"
-                                    }`}
-                                  >
-                                    <span className="mr-1">
-                                      {String.fromCharCode(65 + index)}.
-                                    </span>
-                                    <MathPreviewText
-                                      content={option}
-                                      contentSource="backend"
-                                      className="inline text-[14px] leading-relaxed"
-                                    />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : null}
+                                      return (
+                                        <div
+                                          key={`${question.id}-${index}`}
+                                          className={`rounded-[14px] px-4 py-3 text-[14px] ${
+                                            isCorrect
+                                              ? "border border-[#a8ddd0] bg-[#d8f2ea] text-[#167e61]"
+                                              : "bg-[#eef2f6] text-slate-700"
+                                          }`}
+                                        >
+                                          <span className="mr-1">
+                                            {String.fromCharCode(65 + index)}.
+                                          </span>
+                                          <MathPreviewText
+                                            content={option}
+                                            contentSource="backend"
+                                            className="inline text-[14px] leading-relaxed"
+                                          />
+                                        </div>
+                                      );
+                                    },
+                                  )}
+                                </div>
+                              ) : null}
                               <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <Badge className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-100">
-                              AI
-                            </Badge>
-                            <Badge className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                              1 оноо
-                            </Badge>
-                          </div>
+                                <Badge className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-100">
+                                  AI
+                                </Badge>
+                                <Badge className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                  1 оноо
+                                </Badge>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -985,7 +1136,7 @@ export default function MaterialBuilderPageContent() {
         </Dialog>
 
         <Dialog open={variantViewerOpen} onOpenChange={setVariantViewerOpen}>
-          <DialogContent className="flex h-[min(92vh,52rem)] w-[min(100vw-1.5rem,55rem)]! max-w-none! flex-col gap-0 overflow-hidden rounded-[24px] border border-[#dfe7f3] bg-white p-0 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.28)]">
+          <DialogContent className="flex h-[min(92vh,52rem)] w-[min(100vw-1.5rem,56rem)]! max-w-none! flex-col gap-0 overflow-hidden rounded-[24px] border border-[#dfe7f3] bg-white p-0 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.28)]">
             <DialogHeader className="border-b border-[#e9eef6] px-5 py-4">
               <DialogTitle className="text-[18px] font-semibold text-slate-900">
                 AI үүсгэсэн хувилбарууд
@@ -997,41 +1148,51 @@ export default function MaterialBuilderPageContent() {
                 <div className="space-y-3">
                   {generatedVariants.map((variant) => {
                     const isActive = variant.id === selectedVariantId;
+                    const isChecked = checkedVariantIds.includes(variant.id);
                     const isConfirmed =
                       variant.status === "confirmed" ||
                       confirmedVariantIds.includes(variant.id);
 
                     return (
-                      <button
-                        key={variant.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedVariantId(variant.id);
-                          setEditingQuestionId(null);
-                        }}
-                        className={`w-full cursor-pointer rounded-[16px] border px-4 py-3 text-left transition-all duration-200 ${
-                          isActive
-                            ? "border-[#0b5cab] bg-white shadow-[0_10px_20px_rgba(11,92,171,0.12)]"
-                            : "border-[#dbe4f3] bg-white hover:-translate-y-0.5 hover:border-[#a9c8f3] hover:bg-[#f8fbff] hover:shadow-[0_10px_22px_rgba(148,163,184,0.16)]"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-[14px] font-semibold text-slate-900">
-                              {variant.title}
-                            </p>
-                            <p className="mt-1 text-[12px] text-slate-500">
-                              {variant.questions.length} асуулт
-                            </p>
+                      <div key={variant.id} className="flex items-center gap-3">
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={(checked) =>
+                            toggleCheckedVariant(variant.id, checked === true)
+                          }
+                          className="h-5 w-5 cursor-pointer rounded-[6px] border-[#b9cbe4] data-[state=checked]:border-[#0b5cab] data-[state=checked]:bg-[#0b5cab]"
+                          aria-label={`${variant.title}-ийг action-д сонгох`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedVariantId(variant.id);
+                            setEditingQuestionId(null);
+                          }}
+                          className={`w-full cursor-pointer rounded-[16px] border px-4 py-3 text-left transition-all duration-200 ${
+                            isActive
+                              ? "border-[#0b5cab] bg-white shadow-[0_10px_20px_rgba(11,92,171,0.12)]"
+                              : "border-[#dbe4f3] bg-white hover:-translate-y-0.5 hover:border-[#a9c8f3] hover:bg-[#f8fbff] hover:shadow-[0_10px_22px_rgba(148,163,184,0.16)]"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[16px] font-semibold text-slate-900">
+                                {variant.title}
+                              </p>
+                              <p className="mt-1 text-[12px] text-slate-500">
+                                {variant.questions.length} асуулт
+                              </p>
+                            </div>
+                            {isConfirmed ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[#e4f7ee] px-2.5 py-1 text-[11px] font-semibold text-[#167e61]">
+                                <Check className="h-3.5 w-3.5" />
+                                Баталсан
+                              </span>
+                            ) : null}
                           </div>
-                          {isConfirmed ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-[#e4f7ee] px-2.5 py-1 text-[11px] font-semibold text-[#167e61]">
-                              <Check className="h-3.5 w-3.5" />
-                              Баталсан
-                            </span>
-                          ) : null}
-                        </div>
-                      </button>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -1288,96 +1449,8 @@ export default function MaterialBuilderPageContent() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() =>
-                  selectedVariant
-                    ? void (async () => {
-                        try {
-                          setSavingVariantAsExam(true);
-                          const result = await saveExamVariant({
-                            variables: {
-                              input: {
-                                variantId: selectedVariant.id,
-                                examId: undefined,
-                                title: `${generalInfo.examName || "Шалгалт"} · ${selectedVariant.title}`,
-                                grade: Number(generalInfo.grade) || undefined,
-                                examType: generalInfo.examType || undefined,
-                                subject: generalInfo.subject || undefined,
-                                durationMinutes:
-                                  Number(generalInfo.durationMinutes) ||
-                                  undefined,
-                                questions: selectedVariant.questions.map(
-                                  (question) => ({
-                                    order: question.position,
-                                    prompt: question.prompt,
-                                    type: question.type,
-                                    options: question.options ?? [],
-                                    correctAnswer:
-                                      question.correctAnswer ?? null,
-                                    explanation: question.explanation ?? null,
-                                  }),
-                                ),
-                              },
-                            },
-                          });
-
-                          const payload = (
-                            result.data as
-                              | {
-                                  saveExamVariant?: {
-                                    success?: boolean;
-                                    message?: string;
-                                    examId?: string | null;
-                                    variant?: {
-                                      id: string;
-                                      status?: string | null;
-                                      savedAt?: string | null;
-                                      savedExamId?: string | null;
-                                      confirmedAt?: string | null;
-                                    } | null;
-                                  } | null;
-                                }
-                              | undefined
-                          )?.saveExamVariant;
-
-                          if (!payload?.success || !payload.variant) {
-                            throw new Error(
-                              payload?.message ||
-                                "Шинэ шалгалт болгож хадгалж чадсангүй.",
-                            );
-                          }
-
-                          setGeneratedVariants((prev) =>
-                            prev.map((variant) =>
-                              variant.id === payload.variant?.id
-                                ? {
-                                    ...variant,
-                                    status: payload.variant.status ?? "saved",
-                                    confirmedAt:
-                                      payload.variant.confirmedAt ?? null,
-                                    savedAt: payload.variant.savedAt ?? null,
-                                    savedExamId:
-                                      payload.variant.savedExamId ?? null,
-                                  }
-                                : variant,
-                            ),
-                          );
-                          toast.success(
-                            payload.message ||
-                              "Variant-ийг шинэ шалгалт болгож хадгаллаа.",
-                          );
-                        } catch (error) {
-                          toast.error(
-                            error instanceof Error
-                              ? error.message
-                              : "Шинэ шалгалт болгож хадгалахад алдаа гарлаа.",
-                          );
-                        } finally {
-                          setSavingVariantAsExam(false);
-                        }
-                      })()
-                    : undefined
-                }
-                disabled={!selectedVariant || isPersistingVariant}
+                onClick={handleSaveVariantsAsNewExams}
+                disabled={checkedVariants.length === 0 || isPersistingVariant}
                 className="cursor-pointer rounded-[12px] border-sky-200 bg-sky-50 px-5 text-sky-700 hover:bg-sky-100 hover:text-sky-800"
               >
                 {savingVariantAsExam ? (
@@ -1386,26 +1459,29 @@ export default function MaterialBuilderPageContent() {
                     Шинэ шалгалт болгож хадгалж байна...
                   </>
                 ) : (
-                  "Шинэ шалгалт болгож хадгалах"
+                  checkedVariants.length > 1
+                    ? `${checkedVariants.length} хувилбарыг шинэ шалгалт болгох`
+                    : "Шинэ шалгалт болгож хадгалах"
                 )}
               </Button>
               <Button
                 type="button"
                 onClick={handleConfirmVariant}
                 disabled={
-                  !selectedVariant ||
-                  selectedVariant.questions.length === 0 ||
+                  checkedVariants.length === 0 ||
                   isPersistingVariant
                 }
                 className="cursor-pointer rounded-[12px] bg-[#0b5cab] px-5 hover:bg-[#0a4f96]"
               >
-                {confirmingVariant ? (
+                {confirmingVariants ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Баталж байна...
                   </>
                 ) : (
-                  "Хувилбар батлах"
+                  checkedVariants.length > 1
+                    ? `${checkedVariants.length} хувилбар батлах`
+                    : "Хувилбар батлах"
                 )}
               </Button>
             </DialogFooter>

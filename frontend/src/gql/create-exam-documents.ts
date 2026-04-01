@@ -63,6 +63,22 @@ export const ConfirmExamVariantDocument = gql(`
 	}
 `);
 
+export const ConfirmExamVariantsDocument = gql(`
+	mutation ConfirmExamVariants($inputs: [ConfirmExamVariantInput!]!) {
+		confirmExamVariants(inputs: $inputs) {
+			success
+			message
+			variants {
+				id
+				status
+				confirmedAt
+				savedAt
+				savedExamId
+			}
+		}
+	}
+`);
+
 export const SaveExamVariantDocument = gql(`
 	mutation SaveExamVariant($input: SaveExamVariantInput!) {
 		saveExamVariant(input: $input) {
@@ -70,6 +86,23 @@ export const SaveExamVariantDocument = gql(`
 			message
 			examId
 			variant {
+				id
+				status
+				confirmedAt
+				savedAt
+				savedExamId
+			}
+		}
+	}
+`);
+
+export const SaveExamVariantsDocument = gql(`
+	mutation SaveExamVariants($inputs: [SaveExamVariantInput!]!) {
+		saveExamVariants(inputs: $inputs) {
+			success
+			message
+			examIds
+			variants {
 				id
 				status
 				confirmedAt
