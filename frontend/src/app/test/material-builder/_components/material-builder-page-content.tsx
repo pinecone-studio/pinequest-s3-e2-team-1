@@ -1,6 +1,6 @@
 "use client";
 
-import { useLazyQuery, useMutation } from "@apollo/client/react";
+import { useApolloClient, useLazyQuery, useMutation } from "@apollo/client/react";
 import {
   Check,
   ChevronDown,
@@ -32,6 +32,7 @@ import {
   ConfirmExamVariantsDocument,
   GetExamVariantJobDocument,
   GetNewMathExamDocument,
+  ListNewMathExamsDocument,
   SaveNewMathExamDocument,
   SaveExamVariantsDocument,
   RequestExamVariantsDocument,
@@ -45,8 +46,8 @@ import {
 } from "./general-info-section";
 import {
   MaterialBuilderWorkspaceSection,
-  type PreviewQuestion,
 } from "./material-builder-workspace-section";
+import type { PreviewQuestion } from "./material-builder-types";
 import {
   sharedLibraryMaterials,
   type MaterialSourceId,
@@ -206,6 +207,7 @@ function mapExistingExamToPreviewQuestions(
           : 0,
       points: question.points ?? 1,
       source: exam.title,
+      sourceType: "question-bank",
       explanation: question.responseGuide ?? undefined,
     };
   });
@@ -217,6 +219,7 @@ function buildBaseExamInput(args: {
   previewQuestions: PreviewQuestion[];
   hasGeneratedVariants: boolean;
   generatedVariantsCount: number;
+  title: string;
 }) {
   const mcqQuestions = args.previewQuestions.filter(
     (question) => question.questionType !== "written",
@@ -224,13 +227,17 @@ function buildBaseExamInput(args: {
   const writtenQuestions = args.previewQuestions.filter(
     (question) => question.questionType === "written",
   );
+  const totalPoints = args.previewQuestions.reduce(
+    (sum, question) => sum + (Number(question.points) || 0),
+    0,
+  );
 
   return {
     examId: args.examId,
-    title: args.generalInfo.examName.trim(),
+    title: args.title,
     mcqCount: mcqQuestions.length,
     mathCount: writtenQuestions.length,
-    totalPoints: args.previewQuestions.length,
+    totalPoints,
     sessionMeta: {
       grade: Number(args.generalInfo.grade),
       examType: args.generalInfo.examType,
@@ -260,6 +267,30 @@ function buildBaseExamInput(args: {
           : undefined,
     })),
   };
+}
+
+function resolveMaterialBuilderExamTitle(args: {
+  generalInfo: GeneralInfoValues;
+  previewQuestions: PreviewQuestion[];
+}) {
+  const explicitTitle = args.generalInfo.examName.trim();
+  if (explicitTitle) {
+    return explicitTitle;
+  }
+
+  const textbookQuestion = args.previewQuestions.find(
+    (question) => question.sourceType === "textbook",
+  );
+  if (textbookQuestion?.source?.trim()) {
+    return `${textbookQuestion.source.trim()} шалгалт`;
+  }
+
+  const firstSource = args.previewQuestions[0]?.source?.trim();
+  if (firstSource) {
+    return `${firstSource} шалгалт`;
+  }
+
+  return "Нэргүй шалгалт";
 }
 
 function getCorrectOptionIndex(
@@ -296,6 +327,7 @@ function buildVariantMutationInput(
 }
 
 export default function MaterialBuilderPageContent() {
+  const apolloClient = useApolloClient();
   const searchParams = useSearchParams();
   const editingExamId = searchParams.get("examId")?.trim() ?? "";
   const isDashboardCreateMode =
@@ -575,11 +607,10 @@ export default function MaterialBuilderPageContent() {
     }
 
     try {
-      const title = generalInfo.examName.trim();
-      if (!title) {
-        toast.error("Шалгалтын нэрээ оруулна уу.");
-        return;
-      }
+      const title = resolveMaterialBuilderExamTitle({
+        generalInfo,
+        previewQuestions,
+      });
 
       let baseExamId = savedExamId;
       if (!baseExamId) {
@@ -591,9 +622,14 @@ export default function MaterialBuilderPageContent() {
               previewQuestions,
               hasGeneratedVariants: resolvedVariantCount > 0,
               generatedVariantsCount: resolvedVariantCount,
+              title,
             }),
           },
         });
+
+        if (saveResult.error) {
+          throw new Error(saveResult.error.message);
+        }
 
         baseExamId =
           (
@@ -613,6 +649,9 @@ export default function MaterialBuilderPageContent() {
         }
 
         setSavedExamId(baseExamId);
+        await apolloClient.refetchQueries({
+          include: [ListNewMathExamsDocument],
+        });
       }
 
       const result = await requestExamVariants({
@@ -951,6 +990,10 @@ export default function MaterialBuilderPageContent() {
           },
         });
 
+        if (result.error) {
+          throw new Error(result.error.message);
+        }
+
         const payload = (
           result.data as
             | {
@@ -995,6 +1038,9 @@ export default function MaterialBuilderPageContent() {
           ),
         );
         setCheckedVariantIds([]);
+        void apolloClient.refetchQueries({
+          include: [ListNewMathExamsDocument],
+        });
         toast.success(
           payload.message ||
             `${savedMap.size} AI хувилбарыг шинэ шалгалт болгож хадгаллаа.`,
@@ -1017,11 +1063,10 @@ export default function MaterialBuilderPageContent() {
       return;
     }
 
-    const title = generalInfo.examName.trim();
-    if (!title) {
-      toast.error("Шалгалтын нэрээ оруулна уу.");
-      return;
-    }
+    const title = resolveMaterialBuilderExamTitle({
+      generalInfo,
+      previewQuestions,
+    });
 
     try {
       setSavingExam(true);
@@ -1033,10 +1078,14 @@ export default function MaterialBuilderPageContent() {
           previewQuestions,
           hasGeneratedVariants: resolvedVariantCount > 0,
           generatedVariantsCount: resolvedVariantCount,
+          title,
         }),
       };
 
       const result = await saveNewMathExam({ variables: { input } });
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
       const examId = (
         result.data as
           | {
@@ -1053,6 +1102,9 @@ export default function MaterialBuilderPageContent() {
 
       setSavedExamId(examId);
       setPersistedVariantCount(resolvedVariantCount);
+      await apolloClient.refetchQueries({
+        include: [ListNewMathExamsDocument],
+      });
       toast.success("Шалгалт өгөгдлийн санд амжилттай хадгалагдлаа.");
     } catch (error) {
       toast.error(
