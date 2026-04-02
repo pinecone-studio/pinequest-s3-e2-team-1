@@ -78,6 +78,20 @@ export const GenerateQuestionAnswerDocument = gql(`
 	}
 `);
 
+export const RegenerateQuestionAnswerDocument = gql(`
+	mutation RegenerateQuestionAnswer($input: RegenerateQuestionAnswerInput!) {
+		regenerateQuestionAnswer(input: $input) {
+			questionText
+			format
+			difficulty
+			points
+			options
+			correctAnswer
+			explanation
+		}
+	}
+`);
+
 export const CreateAiExamTemplateDocument = gql(`
 	mutation CreateAiExamTemplate($input: CreateAiExamTemplateInput!) {
 		createAiExamTemplate(input: $input) {
@@ -99,6 +113,38 @@ export const CREATE_AI_EXAM_TEMPLATE = CreateAiExamTemplateDocument;
 export const GetAiExamScheduleDocument = gql(`
 	query GetAiExamSchedule($examId: ID!) {
 		getAiExamSchedule(examId: $examId) {
+			id
+			testId
+			classId
+			startTime
+			endTime
+			roomId
+			status
+			aiReasoning
+			aiVariants {
+				id
+				label
+				startTime
+				roomId
+				reason
+			}
+			createdAt
+			updatedAt
+		}
+	}
+`);
+
+export const ListTeacherConfirmedExamSchedulesDocument = gql(`
+	query ListTeacherConfirmedExamSchedules(
+		$teacherId: ID!
+		$startDate: String!
+		$endDate: String!
+	) {
+		listTeacherConfirmedExamSchedules(
+			teacherId: $teacherId
+			startDate: $startDate
+			endDate: $endDate
+		) {
 			id
 			testId
 			classId

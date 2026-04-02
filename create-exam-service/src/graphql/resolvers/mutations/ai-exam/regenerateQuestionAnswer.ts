@@ -11,6 +11,9 @@ type Args = {
     points?: number | null;
     difficulty?: Difficulty | null;
     format?: QuestionFormat | null;
+    previousOptions?: string[] | null;
+    previousCorrectAnswer?: string | null;
+    previousExplanation?: string | null;
   };
 };
 
@@ -30,8 +33,8 @@ function parseFormat(v: unknown): QuestionFormat {
   return QuestionFormat.SingleChoice;
 }
 
-export const generateQuestionAnswerMutation = {
-  generateQuestionAnswer: async (_: unknown, args: Args, ctx: GraphQLContext) => {
+export const regenerateQuestionAnswerMutation = {
+  regenerateQuestionAnswer: async (_: unknown, args: Args, ctx: GraphQLContext) => {
     const input = args.input;
     const prompt = input.prompt?.trim();
     if (!prompt) {
@@ -65,10 +68,7 @@ export const generateQuestionAnswerMutation = {
           prompt,
           points,
           difficulty: input.difficulty
-            ? (String(input.difficulty) as
-                | "EASY"
-                | "MEDIUM"
-                | "HARD")
+            ? (String(input.difficulty) as "EASY" | "MEDIUM" | "HARD")
             : null,
           format: input.format
             ? (String(input.format) as
@@ -78,6 +78,10 @@ export const generateQuestionAnswerMutation = {
                 | "FILL_IN"
                 | "WRITTEN")
             : null,
+          previousOptions: input.previousOptions ?? [],
+          previousCorrectAnswer: input.previousCorrectAnswer ?? null,
+          previousExplanation: input.previousExplanation ?? null,
+          mode: "regenerate",
         },
         {
           model: ctx.env.GEMINI_ANALYZE_MODEL?.trim() || ctx.env.GEMINI_MODEL?.trim(),
@@ -121,7 +125,7 @@ export const generateQuestionAnswerMutation = {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Тодорхойгүй алдаа";
-      throw new GraphQLError(`AI хариулт үүсгэхэд алдаа: ${msg}`);
+      throw new GraphQLError(`AI хариултыг дахин үүсгэхэд алдаа: ${msg}`);
     }
   },
 };

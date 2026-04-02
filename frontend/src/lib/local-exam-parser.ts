@@ -951,6 +951,27 @@ function looksLikeStandaloneAnswerKeyLine(line: string) {
 
 function extractAnswerEntriesFromLine(line: string) {
   const entries: Array<{ answer: string; number: number }> = [];
+  const repeatedCompactEntries = Array.from(
+    line.matchAll(
+      /Q?\s*(\d+)\s*(?:[\.\)]|:|=|=>|->|-)\s*([^]+?)(?=(?:\s+Q?\s*\d+\s*(?:[\.\)]|:|=|=>|->|-))|$)/giu,
+    ),
+  )
+    .map((match) => ({
+      answer: (match[2] ?? "").trim(),
+      number: Number.parseInt(match[1] ?? "0", 10),
+    }))
+    .filter(
+      (entry) =>
+        Number.isFinite(entry.number) &&
+        Boolean(entry.answer) &&
+        entry.answer.length <= 140 &&
+        !/[?؟]/u.test(entry.answer),
+    );
+
+  if (repeatedCompactEntries.length >= 2) {
+    return repeatedCompactEntries;
+  }
+
   const pipeTokens = line.split("|").map((token) => token.trim()).filter(Boolean);
 
   if (pipeTokens.length >= 2 && pipeTokens.length % 2 === 0) {

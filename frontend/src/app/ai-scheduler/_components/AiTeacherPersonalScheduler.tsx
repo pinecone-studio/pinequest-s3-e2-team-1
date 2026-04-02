@@ -45,6 +45,7 @@ import {
   GetSchoolEventsDocument,
   GetTeachersListDocument,
   GetTeacherMainLessonsListDocument,
+  ListTeacherConfirmedExamSchedulesDocument,
   ListNewMathExamsDocument,
   RejectAiExamScheduleVariantDocument,
   RequestAiExamScheduleDocument,
@@ -359,6 +360,16 @@ type GetAiExamScheduleData = {
 
 type GetAiExamScheduleVars = {
   examId: string;
+};
+
+type ListTeacherConfirmedExamSchedulesData = {
+  listTeacherConfirmedExamSchedules: ExamSchedule[];
+};
+
+type ListTeacherConfirmedExamSchedulesVars = {
+  teacherId: string;
+  startDate: string;
+  endDate: string;
 };
 
 type ApproveAiExamScheduleData = {
@@ -1057,6 +1068,7 @@ export function AiTeacherPersonalScheduler({
       const next = data?.approveAiExamSchedule;
       if (next) {
         setLiveSchedule(next);
+        void refetchConfirmedSchedules();
         toastKeyRef.current = `${next.id}:confirmed`;
         toast.success("Сонгосон хувилбар баталгаажлаа.");
       }
@@ -1164,6 +1176,24 @@ export function AiTeacherPersonalScheduler({
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart],
   );
+  const weekQueryEnd = useMemo(
+    () => new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1),
+    [weekStart],
+  );
+  const { data: confirmedSchedulesData, refetch: refetchConfirmedSchedules } =
+    useQuery<
+      ListTeacherConfirmedExamSchedulesData,
+      ListTeacherConfirmedExamSchedulesVars
+    >(ListTeacherConfirmedExamSchedulesDocument, {
+      variables: {
+        teacherId: selectedTeacherId,
+        startDate: weekStart.toISOString(),
+        endDate: weekQueryEnd.toISOString(),
+      },
+      skip: !selectedTeacherId,
+      fetchPolicy: "network-only",
+      notifyOnNetworkStatusChange: true,
+    });
 
   const { data: teacherSchoolEventData } = useQuery<
     GetSchoolEventsData,
@@ -1330,6 +1360,43 @@ export function AiTeacherPersonalScheduler({
   const suggested = liveSchedule?.status === "suggested";
   const showJob =
     liveSchedule && liveSchedule.id === lastQueuedExamId ? liveSchedule : null;
+  const confirmedExamSchedules = useMemo(() => {
+    const persisted =
+      confirmedSchedulesData?.listTeacherConfirmedExamSchedules ?? [];
+    const merged = new Map<string, ExamSchedule>();
+
+    for (const row of persisted) {
+      merged.set(row.id, row);
+    }
+
+    if (liveSchedule?.status === "confirmed") {
+      merged.set(liveSchedule.id, liveSchedule);
+    }
+
+    return Array.from(merged.values());
+  }, [confirmedSchedulesData?.listTeacherConfirmedExamSchedules, liveSchedule]);
+  const confirmedExamBlocks = useMemo(
+    () =>
+      confirmedExamSchedules
+        .map((row) => {
+          const startAt = parseStart(row.startTime);
+          const endAt = row.endTime ? parseStart(row.endTime) : null;
+          if (!startAt || !endAt) return null;
+          const colIdx = weekDays.findIndex((d) => isSameDay(startAt, d));
+          if (colIdx < 0) return null;
+
+          return {
+            id: row.id,
+            classId: row.classId,
+            roomId: row.roomId,
+            startAt,
+            endAt,
+            colIdx,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row)),
+    [confirmedExamSchedules, weekDays],
+  );
   const aiVariantLayouts = useMemo(
     () =>
       showJob?.status === "suggested" && showJob.aiVariants?.length
@@ -2078,46 +2145,45 @@ export function AiTeacherPersonalScheduler({
                           ) : null}
 
                           {layerOn.confirmed_exam &&
-                          aiDraftIntent === "exam_intent" &&
-                          showJob &&
-                          sameDay &&
-                          !suggested &&
-                          showJob.status === "confirmed" &&
-                          scheduleStart &&
-                          scheduleEnd ? (
-                            <div
-                              className={cn(
-                                "absolute left-1 right-1 rounded-xl border px-2 py-1.5 text-[10px] font-medium leading-tight shadow-sm",
-                                "border-emerald-200 bg-emerald-50 text-emerald-950",
-                              )}
-                              style={{
-                                top: `${blockTopPercent(scheduleStart)}%`,
-                                height: `${blockHeightPercent(
-                                  scheduleStart.getHours(),
-                                  scheduleStart.getMinutes(),
-                                  scheduleEnd.getHours(),
-                                  scheduleEnd.getMinutes(),
-                                )}%`,
-                                minHeight: "56px",
-                              }}
-                            >
-                              Баталгаажсан шалгалт
-                              <span className="mt-0.5 block font-normal text-emerald-700">
-                                {formatBlockDuration(
-                                  scheduleStart.getHours(),
-                                  scheduleStart.getMinutes(),
-                                  scheduleEnd.getHours(),
-                                  scheduleEnd.getMinutes(),
-                                )}
-                                {showJob.roomId
-                                  ? ` · Өрөө ${showJob.roomId}`
-                                  : ""}
-                              </span>
-                              <span className="mt-0.5 block text-[9px] font-normal text-emerald-600/90">
-                                {showJob.classId} · Баталгаажсан
-                              </span>
-                            </div>
-                          ) : null}
+                          aiDraftIntent === "exam_intent"
+                            ? confirmedExamBlocks
+                                .filter((row) => row.colIdx === colIdx)
+                                .map((row) => (
+                                  <div
+                                    key={`confirmed-exam-${row.id}`}
+                                    className={cn(
+                                      "absolute left-1 right-1 rounded-xl border px-2 py-1.5 text-[10px] font-medium leading-tight shadow-sm",
+                                      "border-emerald-200 bg-emerald-50 text-emerald-950",
+                                    )}
+                                    style={{
+                                      top: `${blockTopPercent(row.startAt)}%`,
+                                      height: `${blockHeightPercent(
+                                        row.startAt.getHours(),
+                                        row.startAt.getMinutes(),
+                                        row.endAt.getHours(),
+                                        row.endAt.getMinutes(),
+                                      )}%`,
+                                      minHeight: "56px",
+                                    }}
+                                  >
+                                    Баталгаажсан шалгалт
+                                    <span className="mt-0.5 block font-normal text-emerald-700">
+                                      {formatBlockDuration(
+                                        row.startAt.getHours(),
+                                        row.startAt.getMinutes(),
+                                        row.endAt.getHours(),
+                                        row.endAt.getMinutes(),
+                                      )}
+                                      {row.roomId
+                                        ? ` · Өрөө ${row.roomId}`
+                                        : ""}
+                                    </span>
+                                    <span className="mt-0.5 block text-[9px] font-normal text-emerald-600/90">
+                                      {row.classId} · Баталгаажсан
+                                    </span>
+                                  </div>
+                                ))
+                            : null}
 
                           {layerOn.ancillary_confirmed &&
                           aiDraftIntent !== "exam_intent" &&

@@ -141,6 +141,16 @@ export const typeDefs = /* GraphQL */ `
     format: QuestionFormat
   }
 
+  input RegenerateQuestionAnswerInput {
+    prompt: String!
+    points: Int
+    difficulty: Difficulty
+    format: QuestionFormat
+    previousOptions: [String!]
+    previousCorrectAnswer: String
+    previousExplanation: String
+  }
+
   type GenerateQuestionAnswerResult {
     questionText: String!
     format: QuestionFormat!
@@ -350,6 +360,11 @@ export const typeDefs = /* GraphQL */ `
     listNewMathExams(limit: Int = 50): [NewMathExamSummary!]!
     getNewMathExam(examId: ID!): NewMathExam
     getAiExamSchedule(examId: ID!): ExamSchedule
+    listTeacherConfirmedExamSchedules(
+      teacherId: ID!
+      startDate: String!
+      endDate: String!
+    ): [ExamSchedule!]!
     getTeachersList(grades: [Int!] = [9, 10, 11, 12]): [Teacher!]!
     getStudentsList(grade: Int!, group: String!): [Student!]!
     getStudentMainLessonsList(
@@ -367,6 +382,7 @@ export const typeDefs = /* GraphQL */ `
 
   type Mutation {
     generateQuestionAnswer(input: GenerateQuestionAnswerInput!): GenerateQuestionAnswerResult!
+    regenerateQuestionAnswer(input: RegenerateQuestionAnswerInput!): GenerateQuestionAnswerResult!
     generateExamQuestions(input: ExamGenerationInput!): ExamGenerationResult!
     saveExam(input: SaveExamInput!): SaveExamPayload!
     saveNewMathExam(input: SaveNewMathExamInput!): SaveNewMathExamPayload!
