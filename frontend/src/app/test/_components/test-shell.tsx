@@ -74,6 +74,7 @@ export function TestShell({
                 isTeacherRefreshing={isTeacherRefreshing}
                 meta={meta}
                 onTeacherRefresh={onTeacherRefresh}
+                rightSlot={headerRightSlot}
                 teacherVariant={teacherVariant}
                 title={title}
               />

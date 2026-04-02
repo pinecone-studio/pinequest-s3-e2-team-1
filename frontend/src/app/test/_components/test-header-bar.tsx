@@ -41,6 +41,7 @@ type TestHeaderBarProps = {
   isTeacherRefreshing?: boolean;
   meta?: ReactNode;
   onTeacherRefresh?: (() => void) | null;
+  rightSlot?: ReactNode;
   teacherVariant?: TeacherVariant;
   title: string;
 };
@@ -73,6 +74,7 @@ export function TestHeaderBar({
   isTeacherRefreshing = false,
   meta,
   onTeacherRefresh = null,
+  rightSlot,
   teacherVariant = "default",
   title,
 }: TestHeaderBarProps) {

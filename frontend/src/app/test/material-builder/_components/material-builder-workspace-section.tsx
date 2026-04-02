@@ -1,7 +1,7 @@
 "use client";
 
 import { useApolloClient, useMutation, useQuery } from "@apollo/client/react";
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import {
   forwardRef,
   useEffect,
@@ -16,7 +16,6 @@ import {
   ChevronDown,
   ChevronUp,
   Database,
-  Eye,
   FileUp,
   FileText,
   Filter,
@@ -28,7 +27,6 @@ import {
   Plus,
   RefreshCcw,
   Search,
-  Sparkles,
   Trash2,
   Upload,
   WandSparkles,
@@ -70,7 +68,23 @@ import {
 import { Difficulty, QuestionFormat } from "@/gql/graphql";
 import { cn } from "@/lib/utils";
 import {
-  explanationClassName,
+  fetchR2TextbookCandidates,
+  getExpectedR2FileName,
+  type MaterialBuilderSubject,
+  type R2TextbookCandidate,
+} from "@/features/textbook-processing/api";
+import {
+} from "@/features/textbook-processing/status";
+import {
+  loadPersistedImportedTextbookCards,
+  persistImportedTextbookCards,
+  type PersistedImportedTextbookCard,
+} from "@/features/textbook-processing/persisted-material-cache";
+import type {
+  TextbookMaterial,
+  TextbookUploadedAsset,
+} from "@/features/textbook-processing/types";
+import {
   sourceOptions,
   type MaterialSourceId,
 } from "./material-builder-config";
@@ -79,10 +93,18 @@ import {
   materialBuilderDemoQuestions,
   type MaterialBuilderDemoQuestion,
 } from "./material-builder-demo-questions";
+import {
+  type PreviewQuestion,
+  type PreviewQuestionSourceType,
+} from "./material-builder-types";
+import { TextbookSection, type TextbookGeneratedState } from "./textbook-section";
+import { mergeTextbookQuestionsIntoPreview } from "./textbook-preview-merge";
+import { mapGeneratedTextbookTestToPreviewQuestions } from "./textbook-preview-adapter";
 
 type Props = {
   generalInfo: {
     durationMinutes: string;
+    examName: string;
     examType: string;
     grade: string;
     subject: string;
@@ -95,22 +117,6 @@ type Props = {
   onPreviewQuestionsChange: (questions: PreviewQuestion[]) => void;
   appendedContent?: ReactNode;
 };
-
-type WorkspaceSourceId = Exclude<MaterialSourceId, "textbook">;
-
-export type PreviewQuestion = {
-  id: string;
-  index: number;
-  question: string;
-  questionType: "single-choice" | "written";
-  answers: string[];
-  correct: number;
-  points: number;
-  source: string;
-  explanation?: string;
-};
-
-const initialPreviewQuestions: PreviewQuestion[] = [];
 const mathAssistFieldClassName =
   "rounded-[20px]! border-[#dbe4f3]! bg-[#F1F4FA]! px-3! py-2.5! hover:border-[#c7d5ea]! focus-visible:border-[#b8c8e0]! focus-visible:ring-[#b8c8e0]/20";
 const answerMathAssistFieldClassName = `${mathAssistFieldClassName} h-11! min-h-11! bg-white!`;
@@ -133,12 +139,300 @@ function normalizeGeneratedExplanationText(value: string) {
     .trim();
 }
 
-const workspaceSourceOptions = sourceOptions.filter(
-  (
-    option,
-  ): option is (typeof sourceOptions)[number] & { id: WorkspaceSourceId } =>
-    option.id !== "textbook",
-);
+const workspaceSourceOptions = sourceOptions;
+
+function normalizeTextbookSubject(value: string): MaterialBuilderSubject | null {
+  const normalized = value.trim().toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === "math" || normalized.includes("мат")) {
+    return "math";
+  }
+
+  if (normalized === "physics" || normalized.includes("физ")) {
+    return "physics";
+  }
+
+  if (normalized === "chemistry" || normalized.includes("хим")) {
+    return "chemistry";
+  }
+
+  return null;
+}
+
+function normalizeTextbookGrade(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function getTextbookSubjectLabel(subject: MaterialBuilderSubject | null) {
+  switch (subject) {
+    case "math":
+      return "Математик";
+    case "physics":
+      return "Физик";
+    case "chemistry":
+      return "Хими";
+    default:
+      return "";
+  }
+}
+
+function resolvePreviewQuestionSourceType(
+  question: PreviewQuestion,
+): PreviewQuestionSourceType {
+  if (question.sourceType) {
+    return question.sourceType;
+  }
+
+  if (question.source === "Гараар") {
+    return "question-bank";
+  }
+
+  if (/\.(pdf|doc|docx|xls|xlsx)$/i.test(question.source)) {
+    return "import";
+  }
+
+  return "shared-library";
+}
+
+type QueuedTextbookImport = {
+  file?: File | null;
+  fileName: string;
+  id: string;
+  materialId?: string | null;
+  title: string;
+  uploadedAsset?: PersistedImportedTextbookCard["uploadedAsset"];
+};
+
+function createTextbookImportId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `textbook-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function buildTextbookAssetIdentity(input?: {
+  bucketName?: string | null;
+  key?: string | null;
+} | null) {
+  if (!input?.bucketName || !input?.key) {
+    return "";
+  }
+
+  return `${input.bucketName}:${input.key}`;
+}
+
+function createTextbookImportIdFromUploadedAsset(asset: {
+  bucketName: string;
+  key: string;
+}) {
+  return `textbook-r2:${asset.bucketName}:${asset.key}`;
+}
+
+function createUploadedAssetFromR2Candidate(
+  candidate: R2TextbookCandidate,
+): TextbookUploadedAsset {
+  return {
+    bucketName: candidate.bucketName,
+    contentType: "application/pdf",
+    fileName: candidate.fileName,
+    key: candidate.key,
+    size: candidate.size,
+    uploadedAt: candidate.lastModified || new Date().toISOString(),
+  };
+}
+
+function getTextbookFileTitle(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "").trim() || "Сурах бичиг";
+}
+
+function findTextbookCardByAsset(
+  cards: PersistedImportedTextbookCard[],
+  asset?: {
+    bucketName?: string | null;
+    key?: string | null;
+  } | null,
+) {
+  const identity = buildTextbookAssetIdentity(asset);
+  if (!identity) {
+    return null;
+  }
+
+  return (
+    cards.find(
+      (card) =>
+        buildTextbookAssetIdentity(card.uploadedAsset) === identity,
+    ) ?? null
+  );
+}
+
+function upsertTextbookCard(
+  cards: PersistedImportedTextbookCard[],
+  nextCard: PersistedImportedTextbookCard,
+) {
+  const nextIdentity = buildTextbookAssetIdentity(nextCard.uploadedAsset);
+  const existingIndex = cards.findIndex((card) => {
+    if (card.id === nextCard.id) {
+      return true;
+    }
+
+    return (
+      Boolean(nextIdentity) &&
+      buildTextbookAssetIdentity(card.uploadedAsset) === nextIdentity
+    );
+  });
+
+  if (existingIndex < 0) {
+    return [nextCard, ...cards];
+  }
+
+  const current = cards[existingIndex];
+  const mergedCard: PersistedImportedTextbookCard = {
+    ...current,
+    ...nextCard,
+    createdAt: current.createdAt || nextCard.createdAt,
+  };
+  const nextCards = [...cards];
+  nextCards[existingIndex] = mergedCard;
+  return nextCards;
+}
+
+function getTextbookCardTitle(card: PersistedImportedTextbookCard) {
+  return card.title?.trim() || card.fileName || "Сурах бичиг";
+}
+
+function formatTextbookUpdatedAt(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("mn-MN", {
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+}
+
+type TextbookLibraryGridItem =
+  | {
+      createdAt?: string | null;
+      fileName: string;
+      id: string;
+      kind: "r2";
+      title: string;
+      candidate: R2TextbookCandidate;
+    }
+  | {
+      createdAt?: string | null;
+      fileName: string;
+      id: string;
+      kind: "saved";
+      title: string;
+      card: PersistedImportedTextbookCard;
+    };
+
+const TEXTBOOK_CARD_COVER_THEMES = [
+  {
+    backgroundImage:
+      "radial-gradient(circle at 12% 12%, rgba(255,255,255,0.24), transparent 24%), linear-gradient(145deg, rgba(8,43,10,0) 26%, rgba(8,43,10,0.62) 27%, rgba(8,43,10,0.62) 50%, rgba(8,43,10,0) 51%), linear-gradient(135deg, #8CFF00 0%, #53F20C 58%, #1DB400 100%)",
+  },
+  {
+    backgroundImage:
+      "radial-gradient(circle at 50% 40%, rgba(255,255,255,0.28), transparent 32%), linear-gradient(180deg, rgba(255,255,255,0.05), rgba(8,43,10,0.18)), linear-gradient(135deg, #74FF2A 0%, #64F640 52%, #B3FF63 100%)",
+  },
+  {
+    backgroundImage:
+      "radial-gradient(circle at 85% 12%, rgba(255,255,255,0.2), transparent 24%), linear-gradient(168deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.24) 24%, rgba(255,255,255,0) 25%), linear-gradient(140deg, #7CFF57 0%, #63F644 45%, #D6FF8A 100%)",
+  },
+] as const;
+
+function getTextbookCardCoverTheme(seed: string) {
+  let hash = 0;
+  for (const char of String(seed || "")) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 2147483647;
+  }
+
+  return TEXTBOOK_CARD_COVER_THEMES[Math.abs(hash) % TEXTBOOK_CARD_COVER_THEMES.length];
+}
+
+function toRomanGrade(value: number) {
+  const romanMap: Record<number, string> = {
+    1: "I",
+    2: "II",
+    3: "III",
+    4: "IV",
+    5: "V",
+    6: "VI",
+    7: "VII",
+    8: "VIII",
+    9: "IX",
+    10: "X",
+    11: "XI",
+    12: "XII",
+  };
+
+  return romanMap[value] || String(value);
+}
+
+function getTextbookCoverSubjectLabel(
+  value: string,
+  fallbackSubject: MaterialBuilderSubject | null,
+) {
+  if (fallbackSubject) {
+    return getTextbookSubjectLabel(fallbackSubject).toUpperCase();
+  }
+
+  const normalized = String(value || "").toLowerCase();
+  if (normalized.includes("мат")) {
+    return "МАТЕМАТИК";
+  }
+  if (normalized.includes("физ")) {
+    return "ФИЗИК";
+  }
+  if (normalized.includes("хим")) {
+    return "ХИМИ";
+  }
+
+  return getTextbookSubjectLabel(fallbackSubject).toUpperCase() || "СУРАХ БИЧИГ";
+}
+
+function getTextbookCoverGradeLabel(fallbackGrade: number | null) {
+  const gradeNumber = fallbackGrade || null;
+
+  if (!gradeNumber || !Number.isFinite(gradeNumber)) {
+    return "";
+  }
+
+  return toRomanGrade(gradeNumber);
+}
+
+function getTextbookDisplayTitle(
+  value: string,
+  fallbackSubject: MaterialBuilderSubject | null,
+  fallbackGrade: number | null,
+) {
+  const subjectLabel = getTextbookSubjectLabel(fallbackSubject);
+
+  if (subjectLabel && fallbackGrade) {
+    return `${subjectLabel} - ${fallbackGrade}`;
+  }
+
+  if (subjectLabel) {
+    return subjectLabel;
+  }
+
+  return value.trim() || "Сурах бичиг";
+}
 
 type SharedLibraryExamQuestion = {
   answerLatex?: string | null;
@@ -201,6 +495,7 @@ function mapLibraryExamToPreviewQuestions(
       correct: question.correctOption ?? 0,
       points: question.points ?? 1,
       source: exam.title,
+      sourceType: "shared-library",
       explanation: question.responseGuide ?? undefined,
     } satisfies PreviewQuestion;
   });
@@ -213,13 +508,11 @@ function WorkspaceTabs({
   source: MaterialSourceId;
   onSourceChange: (source: MaterialSourceId) => void;
 }) {
-  const activeSource = source === "textbook" ? "question-bank" : source;
-
   return (
     <div className="mx-auto max-w-[148px] space-y-1.5 rounded-[17px] border border-[#d9e2ed] bg-white p-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       {workspaceSourceOptions.map((option) => {
         const Icon = option.icon;
-        const active = option.id === activeSource;
+        const active = option.id === source;
 
         return (
           <button
@@ -248,34 +541,34 @@ function WorkspaceTabs({
 
 function FilePanel() {
   return (
-    <div className="min-w-0 space-y-4 overflow-x-hidden">
-      <div className="rounded-[20px] p-4">
-        <div className="relative rounded-[20px] border border-dashed border-[#cfd8e3] bg-transparent px-6 py-8 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#eef2f7] text-slate-600">
-            <Upload className="h-4 w-4" />
-          </div>
-          <p className="mt-4 text-[16px] font-semibold text-slate-900">
-            Файл чирж оруулах эсвэл сонгох
-          </p>
-          <p className="mt-2 text-[14px] text-slate-500">
-            PDF, DOC, DOCX форматууд
-          </p>
+    <div className="min-w-0 overflow-x-hidden">
+      <div className="relative rounded-[20px] border border-dashed border-[#cfd8e3] bg-transparent px-5 py-7 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#eef2f7] text-slate-600">
+          <Upload className="h-4 w-4" />
         </div>
+        <p className="mt-4 text-[16px] font-semibold text-slate-900">
+          Файл чирж оруулах эсвэл сонгох
+        </p>
+        <p className="mt-2 text-[14px] text-slate-500">
+          PDF, DOC, DOCX форматууд
+        </p>
+      </div>
 
-        <div className="mt-4 grid grid-cols-[minmax(0,1.15fr)_minmax(0,0.82fr)_minmax(0,1fr)] gap-2">
-          <button className="flex min-w-0 h-[44px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] px-2 text-[12px] font-medium leading-none text-slate-700 transition hover:bg-[#eef3f9] sm:text-[13px]">
-            <BookOpen className="h-4 w-4 shrink-0 text-emerald-700" />
-            Сурах бичиг
-          </button>
-          <button className="flex min-w-0 h-[44px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] px-2 text-[12px] font-medium leading-none text-slate-700 transition hover:bg-[#eef3f9] sm:text-[13px]">
-            <FileText className="h-4 w-4 text-rose-500" />
-            PDF
-          </button>
-          <button className="flex min-w-0 h-[44px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] px-2 text-[12px] font-medium leading-none text-slate-700 transition hover:bg-[#eef3f9] sm:text-[13px]">
-            <FileText className="h-4 w-4 text-blue-500" />
-            DOC/DOCX
-          </button>
-        </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className="flex min-w-0 h-[42px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] px-2 text-[12px] font-medium leading-none text-slate-700 transition hover:bg-[#eef3f9] sm:text-[13px]"
+        >
+          <FileText className="h-4 w-4 text-rose-500" />
+          PDF
+        </button>
+        <button
+          type="button"
+          className="flex min-w-0 h-[42px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] px-2 text-[12px] font-medium leading-none text-slate-700 transition hover:bg-[#eef3f9] sm:text-[13px]"
+        >
+          <FileText className="h-4 w-4 text-blue-500" />
+          DOC/DOCX
+        </button>
       </div>
     </div>
   );
@@ -573,6 +866,7 @@ const QuestionBankPanel = forwardRef<
         : normalizedAnswers.indexOf(answers[selectedAnswerIndex!].trim()),
       points: scoreValue ? Number(scoreValue) : 1,
       source: "Гараар",
+      sourceType: "question-bank",
       explanation: isWrittenQuestion
         ? generatedExplanation.trim() || undefined
         : undefined,
@@ -911,113 +1205,6 @@ const QuestionBankPanel = forwardRef<
     </div>
   );
 });
-
-function TextbookPanel() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-[16px] border border-[#dbe4f3] bg-white p-4">
-        <div className="relative">
-          <Input
-            placeholder="Ном хайх..."
-            className="rounded-[12px] border-[#dbe4f3] bg-[#f3f6fb] pl-10"
-          />
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        </div>
-
-        <div className="mt-4 rounded-[14px] border border-[#0b5cab]/25">
-          <div className="flex items-start justify-between gap-3 border-b border-[#e5edf8] p-4">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-[10px] bg-[#eef4ff] p-2 text-[#0b5cab]">
-                <BookOpen className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[16px] font-semibold text-slate-900">
-                  Математик 10-р анги
-                </p>
-                <p className="text-[13px] text-slate-500">БСШУС | 4 сэдэв</p>
-              </div>
-            </div>
-            <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
-              156
-            </Badge>
-          </div>
-
-          <div className="space-y-4 p-4">
-            <div>
-              <p className="mb-3 text-[14px] font-medium text-slate-800">
-                Дэд сэдвүүд сонгох
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  ["Алгебр", "45", true],
-                  ["Геометр", "38", false],
-                  ["Тригонометр", "32", false],
-                  ["Функц", "41", false],
-                ].map(([label, count, active]) => (
-                  <button
-                    key={`${label}-${count}`}
-                    className={cn(
-                      "flex items-center justify-between rounded-[12px] border px-3 py-2 text-[13px]",
-                      active
-                        ? "border-[#bcd2f7] bg-[#eef4ff] text-[#0b5cab]"
-                        : "border-[#e1e8f2] bg-white text-slate-700",
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Checkbox checked={Boolean(active)} />
-                      {label}
-                    </span>
-                    <span>{count}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="mb-2 text-[13px] text-slate-600">Тестийн тоо</p>
-                <Input
-                  defaultValue="5"
-                  className="rounded-[12px] border-[#dbe4f3] bg-[#f7faff]"
-                />
-              </div>
-              <div>
-                <p className="mb-2 text-[13px] text-slate-600">Олон сонголт</p>
-                <Select defaultValue="no">
-                  <SelectTrigger className="cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no">Үгүй</SelectItem>
-                    <SelectItem value="yes">Тийм</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <p className="mb-2 text-[13px] text-slate-600">Хүндрэлийн</p>
-                <Select defaultValue="medium">
-                  <SelectTrigger className="cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="easy">Энгийн</SelectItem>
-                    <SelectItem value="medium">Дунд</SelectItem>
-                    <SelectItem value="hard">Хүнд</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <Button className="w-full rounded-[12px] bg-[#0b5cab] text-white hover:bg-[#0a4f96]">
-              <Sparkles className="h-4 w-4" />
-              AI Generate (5 тест)
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function SharedLibraryPanel({
   dialogOpen,
@@ -1876,8 +2063,10 @@ function SharedLibraryPanel({
   );
 }
 
-function getQuestionSourceBadge(source: string) {
-  if (source === "Гараар") {
+function getQuestionSourceBadge(question: PreviewQuestion) {
+  const sourceType = resolvePreviewQuestionSourceType(question);
+
+  if (sourceType === "question-bank") {
     return {
       icon: Keyboard,
       label: "Гараар оруулсан",
@@ -1886,10 +2075,19 @@ function getQuestionSourceBadge(source: string) {
     };
   }
 
-  if (!/\.(pdf|doc|docx|xls|xlsx)$/i.test(source)) {
+  if (sourceType === "textbook") {
+    return {
+      icon: BookOpen,
+      label: question.source,
+      className:
+        "rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50",
+    };
+  }
+
+  if (sourceType === "shared-library") {
     return {
       icon: Database,
-      label: source,
+      label: question.source,
       className:
         "rounded-full border border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-100",
     };
@@ -1897,7 +2095,7 @@ function getQuestionSourceBadge(source: string) {
 
   return {
     icon: FileText,
-    label: source,
+    label: question.source,
     className:
       "rounded-full border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50",
   };
@@ -1932,7 +2130,7 @@ function PreviewQuestionCard({
   onDragTargetOver: (event: DragEvent<HTMLDivElement>) => void;
   onDropOnTarget: () => void;
 }) {
-  const sourceBadge = getQuestionSourceBadge(question.source);
+  const sourceBadge = getQuestionSourceBadge(question);
   const isWrittenQuestion = question.questionType === "written";
   const [isExplanationExpanded, setIsExplanationExpanded] = useState(false);
 
@@ -1962,14 +2160,44 @@ function PreviewQuestionCard({
               />
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-            aria-label="Устгах"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              draggable
+              onDragStart={onDragHandleStart}
+              onDragEnd={onDragHandleEnd}
+              className="cursor-grab rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing"
+              aria-label="Асуултын байрлал өөрчлөх"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="Дээш зөөх"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="Доош зөөх"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+              aria-label="Устгах"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="mt-3">
           {isWrittenQuestion ? (
@@ -2074,27 +2302,205 @@ export function MaterialBuilderWorkspaceSection({
   const [fileDialogOpen, setFileDialogOpen] = useState(false);
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [sharedLibraryDialogOpen, setSharedLibraryDialogOpen] = useState(false);
+  const [textbookDialogOpen, setTextbookDialogOpen] = useState(false);
+  const [textbookDetailDialogOpen, setTextbookDetailDialogOpen] = useState(false);
+  const [textbookQuestionDialogOpen, setTextbookQuestionDialogOpen] =
+    useState(false);
+  const [textbookCards, setTextbookCards] = useState<
+    PersistedImportedTextbookCard[]
+  >([]);
+  const [textbookR2Candidates, setTextbookR2Candidates] = useState<
+    R2TextbookCandidate[]
+  >([]);
+  const [textbookR2Error, setTextbookR2Error] = useState("");
+  const [textbookR2Loading, setTextbookR2Loading] = useState(false);
+  const [selectedTextbookId, setSelectedTextbookId] = useState<string | null>(
+    null,
+  );
+  const [selectedTextbookQuestionIds, setSelectedTextbookQuestionIds] =
+    useState<string[]>([]);
+  const [queuedTextbookImport, setQueuedTextbookImport] =
+    useState<QueuedTextbookImport | null>(null);
+  const [textbookGeneratedState, setTextbookGeneratedState] =
+    useState<TextbookGeneratedState | null>(null);
   const manualQuestionPanelRef = useRef<QuestionBankPanelHandle | null>(null);
+  const textbookUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const lastGeneratedTextbookStateRef = useRef("");
   const [dragTargetQuestionId, setDragTargetQuestionId] = useState<
     string | null
   >(null);
-  const activeSource = source === "textbook" ? "question-bank" : source;
+  const textbookSubject = useMemo(
+    () => normalizeTextbookSubject(generalInfo.subject),
+    [generalInfo.subject],
+  );
+  const textbookGrade = useMemo(
+    () => normalizeTextbookGrade(generalInfo.grade),
+    [generalInfo.grade],
+  );
+  const textbookExpectedR2FileName = useMemo(
+    () =>
+      textbookSubject && textbookGrade
+        ? getExpectedR2FileName(textbookGrade, textbookSubject)
+        : "",
+    [textbookGrade, textbookSubject],
+  );
+  const textbookPreviewQuestions = useMemo(
+    () =>
+      textbookGeneratedState
+        ? mapGeneratedTextbookTestToPreviewQuestions({
+            bookTitle: textbookGeneratedState.bookTitle,
+            generatedTest: textbookGeneratedState.generatedTest,
+          })
+        : [],
+    [textbookGeneratedState],
+  );
+  const textbookLibraryItems = useMemo<TextbookLibraryGridItem[]>(() => {
+    const savedItems = textbookCards.map((card) => ({
+      card,
+      createdAt: card.createdAt,
+      fileName: card.fileName,
+      id: card.id,
+      kind: "saved" as const,
+      title: getTextbookCardTitle(card),
+    }));
+    const r2Items = textbookR2Candidates
+      .filter((candidate) => {
+        const uploadedAsset = createUploadedAssetFromR2Candidate(candidate);
+        return !findTextbookCardByAsset(textbookCards, uploadedAsset);
+      })
+      .map((candidate) => ({
+        candidate,
+        createdAt: candidate.lastModified,
+        fileName: candidate.fileName,
+        id: `${candidate.bucketName}:${candidate.key}`,
+        kind: "r2" as const,
+        title: getTextbookFileTitle(candidate.fileName),
+      }));
+
+    return [...savedItems, ...r2Items].sort((left, right) => {
+      const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+      const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+  }, [textbookCards, textbookR2Candidates]);
   const sourceCounts = useMemo(
     () => ({
       "question-bank": previewQuestions.filter(
-        (question) => question.source === "Гараар",
+        (question) => resolvePreviewQuestionSourceType(question) === "question-bank",
       ).length,
-      import: previewQuestions.filter((question) =>
-        /\.(pdf|doc|docx|xls|xlsx)$/i.test(question.source),
+      textbook: previewQuestions.filter(
+        (question) => resolvePreviewQuestionSourceType(question) === "textbook",
+      ).length,
+      import: previewQuestions.filter(
+        (question) => resolvePreviewQuestionSourceType(question) === "import",
       ).length,
       "shared-library": previewQuestions.filter(
-        (question) =>
-          question.source !== "Гараар" &&
-          !/\.(pdf|doc|docx|xls|xlsx)$/i.test(question.source),
+        (question) => resolvePreviewQuestionSourceType(question) === "shared-library",
       ).length,
     }),
     [previewQuestions],
   );
+
+  useEffect(() => {
+    if (!textbookDialogOpen) {
+      return;
+    }
+
+    setTextbookCards((current) =>
+      current.length > 0 ? current : loadPersistedImportedTextbookCards(),
+    );
+  }, [textbookDialogOpen]);
+
+  useEffect(() => {
+    if (!textbookDialogOpen) {
+      return;
+    }
+
+    if (!textbookSubject || !textbookGrade) {
+      setTextbookR2Candidates([]);
+      setTextbookR2Error("");
+      setTextbookR2Loading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTextbookR2Loading(true);
+    setTextbookR2Error("");
+
+    void (async () => {
+      try {
+        const payload = await fetchR2TextbookCandidates(
+          textbookGrade,
+          textbookSubject,
+        );
+        if (cancelled) {
+          return;
+        }
+
+        setTextbookR2Candidates(payload.items);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setTextbookR2Candidates([]);
+        setTextbookR2Error(
+          error instanceof Error
+            ? error.message
+            : "R2-оос сурах бичгийн жагсаалт татаж чадсангүй.",
+        );
+      } finally {
+        if (!cancelled) {
+          setTextbookR2Loading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    textbookDialogOpen,
+    textbookGrade,
+    textbookSubject,
+  ]);
+
+  useEffect(() => {
+    setSelectedTextbookQuestionIds(
+      textbookPreviewQuestions.map((question) => question.id),
+    );
+  }, [textbookPreviewQuestions]);
+
+  useEffect(() => {
+    if (!textbookGeneratedState) {
+      lastGeneratedTextbookStateRef.current = "";
+      return;
+    }
+
+    if (!textbookDetailDialogOpen || textbookPreviewQuestions.length === 0) {
+      return;
+    }
+
+    const generationKey = JSON.stringify({
+      bookTitle: textbookGeneratedState.bookTitle,
+      materialId: textbookGeneratedState.materialId || "",
+      openQuestionCount:
+        textbookGeneratedState.generatedTest.openQuestionCountGenerated,
+      questionCount: textbookGeneratedState.generatedTest.questionCountGenerated,
+      selectedSectionIds: textbookGeneratedState.selectedSectionIds,
+    });
+
+    if (lastGeneratedTextbookStateRef.current === generationKey) {
+      return;
+    }
+
+    lastGeneratedTextbookStateRef.current = generationKey;
+    setTextbookQuestionDialogOpen(true);
+  }, [
+    textbookDetailDialogOpen,
+    textbookGeneratedState,
+    textbookPreviewQuestions.length,
+  ]);
 
   function handleSourceSelect(nextSource: MaterialSourceId) {
     onSourceChange(nextSource);
@@ -2109,9 +2515,181 @@ export function MaterialBuilderWorkspaceSection({
       return;
     }
 
+    if (nextSource === "textbook") {
+      setTextbookDialogOpen(true);
+      return;
+    }
+
     if (nextSource === "shared-library") {
       setSharedLibraryDialogOpen(true);
     }
+  }
+
+  function handleAddTextbook() {
+    textbookUploadInputRef.current?.click();
+  }
+
+  function handleTextbookFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      return;
+    }
+
+    const importId = createTextbookImportId();
+    const title = file.name.replace(/\.[^.]+$/, "").trim() || "Сурах бичиг";
+    const nextCard: PersistedImportedTextbookCard = {
+      createdAt: new Date().toISOString(),
+      fileName: file.name,
+      id: importId,
+      materialStage: "uploading",
+      materialStatus: "uploaded",
+      title,
+      uploadedAsset: null,
+    };
+
+    setTextbookCards((current) => [nextCard, ...current]);
+    setSelectedTextbookId(importId);
+    setQueuedTextbookImport({
+      file,
+      fileName: file.name,
+      id: importId,
+      title,
+    });
+    setTextbookGeneratedState(null);
+    setTextbookDetailDialogOpen(true);
+    event.currentTarget.value = "";
+  }
+
+  function handleOpenTextbookDetail(cardId: string) {
+    const card = textbookCards.find((item) => item.id === cardId) ?? null;
+    if (!card) {
+      return;
+    }
+
+    setSelectedTextbookId(cardId);
+    setQueuedTextbookImport({
+      fileName: card.fileName,
+      id: card.id,
+      materialId: card.materialId ?? null,
+      title: getTextbookCardTitle(card),
+      uploadedAsset: card.uploadedAsset ?? null,
+    });
+    setTextbookGeneratedState(null);
+    setTextbookDetailDialogOpen(true);
+  }
+
+  function handleOpenTextbookR2Candidate(candidate: R2TextbookCandidate) {
+    const uploadedAsset = createUploadedAssetFromR2Candidate(candidate);
+    const existingCard = findTextbookCardByAsset(textbookCards, uploadedAsset);
+    const importId =
+      existingCard?.id || createTextbookImportIdFromUploadedAsset(uploadedAsset);
+    const nextCard: PersistedImportedTextbookCard = {
+      createdAt:
+        existingCard?.createdAt ||
+        uploadedAsset.uploadedAt ||
+        new Date().toISOString(),
+      fileName: candidate.fileName,
+      id: importId,
+      materialId: existingCard?.materialId ?? null,
+      materialStage: existingCard?.materialStage ?? null,
+      materialStatus: existingCard?.materialStatus ?? "idle",
+      pageCount: existingCard?.pageCount ?? 0,
+      sectionCount: existingCard?.sectionCount ?? 0,
+      subchapterCount: existingCard?.subchapterCount ?? 0,
+      title: existingCard?.title || getTextbookFileTitle(candidate.fileName),
+      uploadedAsset,
+    };
+
+    setTextbookCards((current) => upsertTextbookCard(current, nextCard));
+    setSelectedTextbookId(importId);
+    setQueuedTextbookImport({
+      fileName: candidate.fileName,
+      id: importId,
+      materialId: existingCard?.materialId ?? null,
+      title: nextCard.title,
+      uploadedAsset,
+    });
+    setTextbookGeneratedState(null);
+    setTextbookDetailDialogOpen(true);
+  }
+
+  function handleTextbookMaterialStateChange(next: {
+    importId: string;
+    material: TextbookMaterial | null;
+    uploadedAsset: TextbookUploadedAsset | null;
+  }) {
+    setTextbookCards((current) => {
+      const existing =
+        current.find((card) => card.id === next.importId) ?? null;
+      const updatedCard: PersistedImportedTextbookCard = {
+        createdAt:
+          existing?.createdAt ||
+          next.uploadedAsset?.uploadedAt ||
+          new Date().toISOString(),
+        errorMessage: next.material?.errorMessage ?? existing?.errorMessage ?? null,
+        fileName:
+          next.material?.fileName?.trim() ||
+          next.uploadedAsset?.fileName ||
+          existing?.fileName ||
+          queuedTextbookImport?.fileName ||
+          "textbook.pdf",
+        id: next.importId,
+        materialId: next.material?.id ?? existing?.materialId ?? null,
+        materialStage: next.material?.stage ?? existing?.materialStage ?? null,
+        materialStatus:
+          next.material?.status ?? existing?.materialStatus ?? "uploaded",
+        pageCount: next.material?.pageCount ?? existing?.pageCount ?? 0,
+        sectionCount: next.material?.sectionCount ?? existing?.sectionCount ?? 0,
+        subchapterCount:
+          next.material?.subchapterCount ?? existing?.subchapterCount ?? 0,
+        title:
+          next.material?.title?.trim() ||
+          existing?.title ||
+          queuedTextbookImport?.title ||
+          "Сурах бичиг",
+        uploadedAsset: next.uploadedAsset ?? existing?.uploadedAsset ?? null,
+      };
+
+      const nextCards = upsertTextbookCard(current, updatedCard);
+
+      persistImportedTextbookCards(nextCards);
+      return nextCards;
+    });
+  }
+
+  function handleToggleTextbookQuestion(questionId: string, checked: boolean) {
+    setSelectedTextbookQuestionIds((current) =>
+      checked
+        ? current.includes(questionId)
+          ? current
+          : [...current, questionId]
+        : current.filter((id) => id !== questionId),
+    );
+  }
+
+  function handleSaveTextbookQuestions() {
+    const questionsToAppend = textbookPreviewQuestions.filter((question) =>
+      selectedTextbookQuestionIds.includes(question.id),
+    );
+
+    if (questionsToAppend.length === 0) {
+      toast.error("Нэмэх асуултаа сонгоно уу.");
+      return;
+    }
+
+    onPreviewQuestionsChange(
+      mergeTextbookQuestionsIntoPreview({
+        idPrefix: `textbook-${Date.now()}`,
+        previewQuestions,
+        textbookQuestions: questionsToAppend,
+      }),
+    );
+    setTextbookQuestionDialogOpen(false);
+    setTextbookDetailDialogOpen(false);
+    setTextbookGeneratedState(null);
+    onSourceChange("textbook");
+    toast.success(`${questionsToAppend.length} асуулт шалгалтад нэмэгдлээ.`);
   }
 
   function handleAppendQuestion(
@@ -2227,6 +2805,13 @@ export function MaterialBuilderWorkspaceSection({
 
   return (
     <section className="mt-5 rounded-[22px] border border-[#D5D7DB] bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.05)] sm:p-6">
+      <input
+        ref={textbookUploadInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="hidden"
+        onChange={handleTextbookFileSelected}
+      />
       <div className="grid gap-5 xl:grid-cols-[206px_minmax(0,1fr)]">
         <div className="w-full rounded-[20px] bg-[#f4f7fb] p-3 xl:max-w-[196px]">
           <div className="mb-3.5">
@@ -2236,7 +2821,7 @@ export function MaterialBuilderWorkspaceSection({
           </div>
 
           <WorkspaceTabs
-            source={activeSource}
+            source={source}
             onSourceChange={handleSourceSelect}
           />
         </div>
@@ -2258,6 +2843,10 @@ export function MaterialBuilderWorkspaceSection({
               <div className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-[14px] font-semibold text-blue-700">
                 <Keyboard className="h-4 w-4" />
                 {sourceCounts["question-bank"]}
+              </div>
+              <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-[14px] font-semibold text-emerald-700">
+                <BookOpen className="h-4 w-4" />
+                {sourceCounts.textbook}
               </div>
               <div className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-[14px] font-semibold text-amber-700">
                 <FileUp className="h-4 w-4" />
@@ -2285,7 +2874,7 @@ export function MaterialBuilderWorkspaceSection({
                   Асуулт байхгүй байна
                 </p>
                 <div className="mt-3 space-y-0 text-[14px] leading-6 text-slate-500">
-                  <p>Зүүн талын 3 аргын аль нэгийг ашиглан асуулт нэмнэ үү.</p>
+                  <p>Зүүн талын аргуудын аль нэгийг ашиглан асуулт нэмнэ үү.</p>
                   <p>Олон арга хольж ашиглаж болно.</p>
                 </div>
               </div>
@@ -2385,15 +2974,323 @@ export function MaterialBuilderWorkspaceSection({
       </Dialog>
 
       <Dialog open={fileDialogOpen} onOpenChange={setFileDialogOpen}>
-        <DialogContent className="flex h-[min(92vh,42rem)] w-[min(100vw-1.5rem,56rem)]! max-w-none! flex-col gap-0 overflow-hidden rounded-[28px] border border-[#dfe7f3] bg-white p-0 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.28)]">
-          <DialogHeader className="border-b border-[#e6edf7] px-6 py-5">
+        <DialogContent className="w-[min(100vw-1.5rem,38rem)]! max-w-none! gap-0 overflow-hidden rounded-[24px] border border-[#dfe7f3] bg-white p-0 shadow-[0_26px_72px_-30px_rgba(15,23,42,0.26)]">
+          <DialogHeader className="border-b border-[#e6edf7] px-5 py-4">
             <DialogTitle className="text-[20px] font-semibold text-slate-900">
               Файлаас асуулт оруулах
             </DialogTitle>
           </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto bg-white px-6 py-6">
+          <div className="bg-white px-5 py-5">
             <FilePanel />
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={textbookDialogOpen}
+        onOpenChange={(open) => {
+          setTextbookDialogOpen(open);
+          if (!open) {
+            setTextbookDetailDialogOpen(false);
+            setQueuedTextbookImport(null);
+          }
+        }}
+      >
+        <DialogContent
+          className={cn(
+            "max-w-none! gap-0 overflow-hidden rounded-[28px] border border-[#dfe7f3] bg-white p-0 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.28)]",
+            textbookDetailDialogOpen
+              ? "w-[min(100vw-1.5rem,86rem)]!"
+              : "w-[min(100vw-1.5rem,52rem)]!",
+          )}
+        >
+          {textbookDetailDialogOpen ? (
+            <div className="max-h-[min(86vh,46rem)] overflow-y-auto px-6 py-6">
+              {!textbookSubject || !textbookGrade ? (
+                <div className="rounded-[20px] border border-dashed border-[#dbe4f3] bg-[#fcfdff] px-6 py-10 text-center">
+                  <BookOpen className="mx-auto h-10 w-10 text-slate-400" />
+                  <p className="mt-4 text-[18px] font-semibold text-slate-900">
+                    Эхлээд анги, хичээлээ сонгоно уу
+                  </p>
+                  <p className="mx-auto mt-2 max-w-[34rem] text-[14px] leading-6 text-slate-500">
+                    Сурах бичгийн PDF-г зөв ангилж, зөв бүтэцтэй ачаалахын тулд
+                    `Ерөнхий мэдээлэл` хэсэгт анги болон хичээлийн төрлийг
+                    бөглөсний дараа энэ урсгал ажиллана.
+                  </p>
+                </div>
+              ) : (
+                <TextbookSection
+                  activeImportId={selectedTextbookId}
+                  embedded
+                  grade={textbookGrade}
+                  hideImportTools
+                  onGeneratedStateChange={setTextbookGeneratedState}
+                  onMaterialStateChange={handleTextbookMaterialStateChange}
+                  onQueuedImportConsumed={(importId) => {
+                    if (queuedTextbookImport?.id === importId) {
+                      setQueuedTextbookImport(null);
+                    }
+                  }}
+                  queuedImport={queuedTextbookImport}
+                  subject={textbookSubject}
+                />
+              )}
+            </div>
+          ) : (
+            <>
+              <DialogHeader className="border-b border-[#e6edf7] px-7 py-5">
+                <DialogTitle className="text-[20px] font-semibold text-slate-900">
+                  Сурах бичиг
+                </DialogTitle>
+              </DialogHeader>
+              <div className="max-h-[min(82vh,48rem)] overflow-y-auto px-6 py-6">
+              <div className="space-y-5">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-[15px] font-medium text-slate-900">
+                    Миний сурах бичгүүд
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={handleAddTextbook}
+                    disabled={!textbookSubject || !textbookGrade}
+                    className="h-12 rounded-[12px] bg-[#0B5CAB] px-6 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(11,92,171,0.22)] hover:bg-[#0a4f96] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Сурах бичиг нэмэх
+                  </Button>
+                </div>
+
+                {!textbookSubject || !textbookGrade ? (
+                  <div className="rounded-[18px] border border-dashed border-[#dbe4f3] bg-[#f8fbff] px-5 py-5 text-[14px] leading-6 text-slate-500">
+                    Сурах бичгийн логик ашиглахын өмнө `Ерөнхий мэдээлэл` хэсэгт
+                    анги болон хичээлээ бөглөнө үү.
+                  </div>
+                ) : textbookLibraryItems.length === 0 ? (
+                  <div className="rounded-[18px] border border-dashed border-[#dbe4f3] bg-[#fcfdff] px-6 py-10 text-center">
+                    <BookOpen className="mx-auto h-10 w-10 text-slate-400" />
+                    <p className="mt-4 text-[18px] font-semibold text-slate-900">
+                      Сурах бичиг алга байна
+                    </p>
+                    <p className="mx-auto mt-2 max-w-[34rem] text-[14px] leading-6 text-slate-500">
+                      {textbookR2Loading
+                        ? "Сурах бичгийн санг ачаалж байна..."
+                        : textbookR2Error
+                          ? textbookR2Error
+                          : `Шинэ PDF нэмж болно. Хүлээгдэж буй файл: ${textbookExpectedR2FileName}`}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {textbookLibraryItems.map((item) => {
+                      const theme = getTextbookCardCoverTheme(`${item.id}:${item.title}`);
+                      const coverSubject = getTextbookCoverSubjectLabel(
+                        `${item.title} ${item.fileName}`,
+                        textbookSubject,
+                      );
+                      const coverGrade = getTextbookCoverGradeLabel(textbookGrade);
+                      const displayTitle = getTextbookDisplayTitle(
+                        item.title,
+                        textbookSubject,
+                        textbookGrade,
+                      );
+
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            if (item.kind === "saved") {
+                              handleOpenTextbookDetail(item.card.id);
+                              return;
+                            }
+
+                            handleOpenTextbookR2Candidate(item.candidate);
+                          }}
+                          className="overflow-hidden rounded-[18px] border border-[#dfe5ee] bg-white text-left shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_28px_rgba(15,23,42,0.08)]"
+                        >
+                          <div
+                            className="relative h-[144px] overflow-hidden"
+                            style={theme}
+                          >
+                            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(15,23,42,0.08))]" />
+                            <div className="absolute -left-8 bottom-0 h-20 w-44 rounded-[999px] bg-white/16" />
+                            <div className="absolute -right-8 top-3 h-24 w-40 rounded-[999px] bg-white/12" />
+                            <div className="absolute inset-x-0 top-6 px-5 text-center text-white [text-shadow:0_2px_8px_rgba(15,23,42,0.35)]">
+                              <p className="text-[15px] font-semibold tracking-[0.08em]">
+                                {coverSubject}
+                              </p>
+                              {coverGrade ? (
+                                <p className="mt-1 text-[16px] font-semibold">
+                                  {coverGrade}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="px-5 py-4">
+                            <p className="truncate text-[16px] font-semibold text-slate-900">
+                              {displayTitle}
+                            </p>
+                            <p className="mt-1 text-[13px] text-slate-500">
+                              Үүсгэсэн: {formatTextbookUpdatedAt(item.createdAt) || "-"}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={textbookQuestionDialogOpen}
+        onOpenChange={setTextbookQuestionDialogOpen}
+      >
+        <DialogContent className="flex h-[min(92vh,56rem)] w-[min(100vw-1.5rem,66rem)]! max-w-none! flex-col gap-0 overflow-hidden rounded-[28px] border border-[#dfe7f3] bg-white p-0 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.28)]">
+          <DialogHeader className="border-b border-[#e6edf7] px-5 py-4">
+            <DialogTitle className="text-[18px] font-semibold text-slate-900">
+              {textbookGeneratedState?.bookTitle || "Сурах бичгийн асуултууд"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[16px] font-medium text-slate-900">
+                Нэмэх асуултуудаа сонгоно уу.
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setSelectedTextbookQuestionIds(
+                      textbookPreviewQuestions.map((question) => question.id),
+                    )
+                  }
+                  className="rounded-[12px] border-[#0b5cab] bg-white px-4 text-[#0b5cab] hover:bg-[#f7faff]"
+                >
+                  Бүгдийг сонгох
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelectedTextbookQuestionIds([])}
+                  className="rounded-[12px] border-[#dbe4f3] bg-white px-4 text-slate-700 hover:bg-slate-50"
+                >
+                  Цэвэрлэх
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-5">
+              {textbookPreviewQuestions.map((question, index) => {
+                const isSelected = selectedTextbookQuestionIds.includes(question.id);
+                const isWrittenQuestion = question.questionType === "written";
+
+                return (
+                  <div
+                    key={question.id}
+                    className="rounded-[22px] border border-[#dfe7f3] bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="flex items-center gap-3 text-[15px] font-semibold text-slate-900">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) =>
+                            handleToggleTextbookQuestion(question.id, checked === true)
+                          }
+                        />
+                        <span>Асуулт {index + 1}</span>
+                      </label>
+                      <Badge className="rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50">
+                        {question.points} оноо
+                      </Badge>
+                    </div>
+
+                    <div className="mt-4 rounded-[14px] bg-[#f3f6fb] px-4 py-3 text-[16px] text-slate-900">
+                      <MathPreviewText
+                        content={question.question}
+                        contentSource="preview"
+                        className="text-[15px] leading-relaxed text-slate-900"
+                      />
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {isWrittenQuestion ? (
+                        <div className="rounded-[12px] border border-[#b6e2ca] bg-[#eefaf4] px-3 py-3 text-[15px] text-[#245d44]">
+                          <MathPreviewText
+                            content={question.answers[0] ?? "-"}
+                            contentSource="preview"
+                            className="text-[14px] leading-relaxed"
+                          />
+                        </div>
+                      ) : (
+                        question.answers.map((answer, optionIndex) => {
+                          const isCorrect = optionIndex === question.correct;
+
+                          return (
+                            <div
+                              key={`${question.id}-option-${optionIndex}`}
+                              className={cn(
+                                "grid grid-cols-[24px_minmax(0,1fr)] items-center gap-3 rounded-[12px] border px-3 py-3 text-[15px]",
+                                isCorrect
+                                  ? "border-[#b6e2ca] bg-[#eefaf4] text-[#245d44]"
+                                  : "border-[#dfe7f3] bg-white text-slate-700",
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  "flex h-5 w-5 items-center justify-center rounded-full border",
+                                  isCorrect
+                                    ? "border-[#0b5cab] bg-[#e8f1ff]"
+                                    : "border-[#d7dfec] bg-white",
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    "h-2.5 w-2.5 rounded-full",
+                                    isCorrect ? "bg-[#0b5cab]" : "bg-transparent",
+                                  )}
+                                />
+                              </div>
+                              <MathPreviewText
+                                content={answer}
+                                contentSource="preview"
+                                className="text-[14px] leading-relaxed text-inherit"
+                              />
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-[#e6edf7] px-5 py-4 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setTextbookQuestionDialogOpen(false)}
+              className="rounded-[12px] border-[#d7e3f5] bg-white px-5 hover:bg-slate-50"
+            >
+              Хаах
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveTextbookQuestions}
+              disabled={selectedTextbookQuestionIds.length === 0}
+              className="rounded-[12px] bg-[#0b5cab] px-5 hover:bg-[#0a4f96]"
+            >
+              Хадгалах
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
