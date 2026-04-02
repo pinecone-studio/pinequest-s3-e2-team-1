@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { fetchRuntimeJson } from "@/lib/runtime-api";
 import { TestShell } from "../_components/test-shell";
 import {
   buildExamList,
@@ -342,7 +343,11 @@ export default function ExamReportPage() {
 
   if (dataSource === "real" && isLoading && !payload) {
     return (
-      <TestShell title={headerTitle} actions={headerActions}>
+      <TestShell
+        title={headerTitle}
+        actions={headerActions}
+        sidebarCollapsible
+      >
         <div className="flex min-h-[60vh] items-center justify-center rounded-3xl border border-dashed border-border bg-card/70 px-6 text-sm text-muted-foreground">
           Exam report өгөгдөл ачаалж байна...
         </div>
@@ -355,8 +360,9 @@ export default function ExamReportPage() {
       title={headerTitle}
       actions={headerActions}
       contentClassName="pb-10"
+      sidebarCollapsible
     >
-      <div className="mx-auto w-full ">
+      <div className="w-full">
         {dataSource === "real" && error ? (
           <div className="mb-6 rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             {error}
@@ -381,7 +387,7 @@ export default function ExamReportPage() {
 }
 
 function pickLatestExamIdsByClass(exams: Exam[]): string[] {
-  return [...new Set(exams.map((exam) => exam.class))]
+  return [...new Set(exams.map((exam) => normalizeClassValue(exam.class)))]
     .map((className) => pickLatestExamForClass(exams, className)?.id ?? null)
     .filter((examId): examId is string => Boolean(examId));
 }
@@ -389,7 +395,7 @@ function pickLatestExamIdsByClass(exams: Exam[]): string[] {
 function pickLatestExamForClass(exams: Exam[], className: string): Exam | null {
   return (
     exams
-      .filter((exam) => exam.class === className)
+      .filter((exam) => normalizeClassValue(exam.class) === className)
       .sort((left, right) => {
         return getExamSortTime(right) - getExamSortTime(left);
       })[0] ?? null
@@ -398,4 +404,13 @@ function pickLatestExamForClass(exams: Exam[], className: string): Exam | null {
 
 function getExamSortTime(exam: Exam): number {
   return exam.endTime?.getTime() ?? exam.startTime.getTime();
+}
+
+function normalizeClassValue(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : UNKNOWN_CLASS_VALUE;
+}
+
+function formatClassLabel(value: string) {
+  return value === UNKNOWN_CLASS_VALUE ? "Тодорхойгүй анги" : value;
 }
