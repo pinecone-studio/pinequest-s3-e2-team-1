@@ -11,10 +11,12 @@ import {
   Eye,
   FileUp,
   FileText,
+  Filter,
   GripVertical,
   Keyboard,
   Lightbulb,
   Loader2,
+  Pencil,
   Plus,
   RefreshCcw,
   Search,
@@ -38,6 +40,11 @@ import { MathAssistField } from "@/components/exam/math-exam-assist-field";
 import MathPreviewText from "@/components/math-preview-text";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -97,7 +104,7 @@ export type PreviewQuestion = {
 
 const initialPreviewQuestions: PreviewQuestion[] = [];
 const mathAssistFieldClassName =
-  "rounded-[20px]! border-[#b8e5d7]! bg-[#edf8f4]! px-3! py-2.5! hover:border-[#98d4c3]! focus-visible:border-[#89cab8]! focus-visible:ring-[#89cab8]/20";
+  "rounded-[20px]! border-[#dbe4f3]! bg-[#F1F4FA]! px-3! py-2.5! hover:border-[#c7d5ea]! focus-visible:border-[#b8c8e0]! focus-visible:ring-[#b8c8e0]/20";
 const answerMathAssistFieldClassName = `${mathAssistFieldClassName} h-11! min-h-11!`;
 const mathAssistFieldContentClassName =
   "pl-3 font-sans text-[14px] leading-[1.6] font-normal tracking-normal text-slate-800 [&_.katex]:text-inherit";
@@ -168,7 +175,9 @@ type SharedLibraryExamSummary = {
   withVariants?: boolean | null;
 };
 
-function mapLibraryExamToPreviewQuestions(exam: SharedLibraryExam): PreviewQuestion[] {
+function mapLibraryExamToPreviewQuestions(
+  exam: SharedLibraryExam,
+): PreviewQuestion[] {
   return exam.questions.map((question, index) => {
     const answers =
       question.type === "Math"
@@ -201,7 +210,7 @@ function WorkspaceTabs({
   const activeSource = source === "textbook" ? "question-bank" : source;
 
   return (
-    <div className="grid grid-cols-3 gap-2 rounded-[16px] bg-[#eef3f9] p-2">
+    <div className="grid grid-cols-3 gap-2 rounded-[18px] border border-[#D5D7DB] bg-white p-2">
       {workspaceSourceOptions.map((option) => {
         const Icon = option.icon;
         const active = option.id === activeSource;
@@ -212,10 +221,10 @@ function WorkspaceTabs({
             type="button"
             onClick={() => onSourceChange(option.id)}
             className={cn(
-              "relative flex h-[72px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[12px] border text-[13px] font-medium transition-all",
+              "relative flex h-[72px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border text-[13px] font-medium transition-all",
               active
-                ? "border-[#0b5cab] bg-[#0b5cab] text-white shadow-[0_10px_24px_rgba(11,92,171,0.22)]"
-                : "border-transparent bg-transparent text-slate-700 hover:bg-white hover:text-slate-900",
+                ? "border-[#01478D] bg-[#00478D] text-white shadow-[0_10px_24px_rgba(0,71,141,0.22)] hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(0,71,141,0.26)]"
+                : "border-transparent bg-white text-slate-800 hover:-translate-y-0.5 hover:bg-[#f8fbff] hover:text-slate-900 hover:shadow-[0_8px_18px_rgba(15,23,42,0.08)]",
             )}
           >
             <Icon className="h-4 w-4" />
@@ -238,44 +247,33 @@ function WorkspaceTabs({
 
 function FilePanel() {
   return (
-    <div className="space-y-4">
-      <div className="rounded-[16px] border border-dashed border-[#d8e2ef] bg-white p-5 text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#eef3ff] text-[#0b5cab]">
-          <Upload className="h-6 w-6" />
-        </div>
-        <p className="mt-4 text-[18px] font-semibold text-slate-900">
-          Файл чирж оруулах эсвэл сонгох
-        </p>
-        <p className="mt-2 text-[14px] text-slate-500">
-          PDF, DOC, DOCX форматууд
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <button className="flex h-[48px] cursor-pointer items-center justify-center gap-2 rounded-[12px] border border-[#e0e7f1] bg-white text-[14px] font-medium text-slate-700">
-          <FileText className="h-4 w-4 text-rose-500" />
-          PDF
-        </button>
-        <button className="flex h-[48px] cursor-pointer items-center justify-center gap-2 rounded-[12px] border border-[#e0e7f1] bg-white text-[14px] font-medium text-slate-700">
-          <FileText className="h-4 w-4 text-blue-500" />
-          DOC/DOCX
-        </button>
-      </div>
-
-      <div className="rounded-[16px] border border-[#d7e7de] bg-[#effaf4] p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[15px] font-semibold text-slate-900">
-              БШ_MAT_VIII.docx
-            </p>
-            <p className="text-[13px] text-slate-500">4 асуулт олдлоо</p>
+    <div className="min-w-0 space-y-4 overflow-x-hidden">
+      <div className="rounded-[20px] bg-white p-4">
+        <div className="relative rounded-[20px] border border-dashed border-[#cfd8e3] bg-white px-6 py-8 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#eef2f7] text-slate-600">
+            <Upload className="h-4 w-4" />
           </div>
-          <Button
-            size="sm"
-            className="rounded-[10px] bg-[#0b5cab] px-3 text-white"
-          >
-            Бүгдийг оруулах
-          </Button>
+          <p className="mt-4 text-[16px] font-semibold text-slate-900">
+            Файл чирж оруулах эсвэл сонгох
+          </p>
+          <p className="mt-2 text-[14px] text-slate-500">
+            PDF, DOC, DOCX форматууд
+          </p>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <button className="flex h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] text-[14px] font-medium text-slate-700 transition hover:bg-[#eef3f9]">
+            <FileText className="h-4 w-4 text-emerald-600" />
+            Сурах бичиг
+          </button>
+          <button className="flex h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] text-[14px] font-medium text-slate-700 transition hover:bg-[#eef3f9]">
+            <FileText className="h-4 w-4 text-rose-500" />
+            PDF
+          </button>
+          <button className="flex h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] text-[14px] font-medium text-slate-700 transition hover:bg-[#eef3f9]">
+            <FileText className="h-4 w-4 text-blue-500" />
+            DOC/DOCX
+          </button>
         </div>
       </div>
     </div>
@@ -369,7 +367,9 @@ function QuestionBankPanel({
     setSelectedAnswerIndex(
       matchedCorrectAnswerIndex >= 0 ? matchedCorrectAnswerIndex : null,
     );
-    setGeneratedExplanation(normalizeGeneratedExplanationText(payload.explanation));
+    setGeneratedExplanation(
+      normalizeGeneratedExplanationText(payload.explanation),
+    );
     setShowCorrectAnswerError(false);
     setShowAnswerCountError(false);
     setScoreValue(String(payload.points ?? 1));
@@ -561,7 +561,9 @@ function QuestionBankPanel({
         : normalizedAnswers.indexOf(answers[selectedAnswerIndex!].trim()),
       points: scoreValue ? Number(scoreValue) : 1,
       source: "Гараар",
-      explanation: isWrittenQuestion ? generatedExplanation.trim() || undefined : undefined,
+      explanation: isWrittenQuestion
+        ? generatedExplanation.trim() || undefined
+        : undefined,
     });
 
     setQuestionText("");
@@ -1050,12 +1052,22 @@ function SharedLibraryPanel({
   const [teacherFilter, setTeacherFilter] = useState("all");
   const [variantFilter, setVariantFilter] = useState("all");
   const [questionCountFilter, setQuestionCountFilter] = useState("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [listOffset] = useState(0);
-  const [libraryExamDetailLoading, setLibraryExamDetailLoading] = useState(false);
+  const [libraryDialogOpen, setLibraryDialogOpen] = useState(true);
+  const [libraryExamDetailLoading, setLibraryExamDetailLoading] =
+    useState(false);
   const [previewExamId, setPreviewExamId] = useState<string | null>(null);
-  const [editingExamQuestionId, setEditingExamQuestionId] = useState<string | null>(null);
-  const [editingExam, setEditingExam] = useState<SharedLibraryExam | null>(null);
-  const [examDetailCache, setExamDetailCache] = useState<Record<string, SharedLibraryExam>>({});
+  const [editingExamQuestionId, setEditingExamQuestionId] = useState<
+    string | null
+  >(null);
+  const [editingExam, setEditingExam] = useState<SharedLibraryExam | null>(
+    null,
+  );
+  const [examDetailCache, setExamDetailCache] = useState<
+    Record<string, SharedLibraryExam>
+  >({});
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1067,20 +1079,25 @@ function SharedLibraryPanel({
     };
   }, [searchValue]);
 
+  useEffect(() => {
+    setLibraryDialogOpen(true);
+  }, []);
+
   const { data, loading } = useQuery(ListNewMathExamsDocument, {
     variables: {
       limit: listPageSize,
       offset: listOffset,
       filters: {
-        durationMinutes: durationFilter !== "all" ? Number(durationFilter) : null,
+        durationMinutes:
+          durationFilter !== "all" ? Number(durationFilter) : null,
         examType: generalInfo.examType || null,
         grade: generalInfo.grade ? Number(generalInfo.grade) : null,
-        questionCount: questionCountFilter !== "all" ? Number(questionCountFilter) : null,
+        questionCount:
+          questionCountFilter !== "all" ? Number(questionCountFilter) : null,
         search: debouncedSearchValue || null,
         subject: generalInfo.subject || null,
         teacherId: teacherFilter !== "all" ? teacherFilter : null,
-        withVariants:
-          variantFilter === "all" ? null : variantFilter === "with",
+        withVariants: variantFilter === "all" ? null : variantFilter === "with",
       },
     },
   });
@@ -1088,11 +1105,58 @@ function SharedLibraryPanel({
   const libraryExamSummaries = useMemo(
     () =>
       (
-        (data as { listNewMathExams?: SharedLibraryExamSummary[] | null } | undefined)
-          ?.listNewMathExams ?? []
-      ),
+        data as
+          | { listNewMathExams?: SharedLibraryExamSummary[] | null }
+          | undefined
+      )?.listNewMathExams ?? [],
     [data],
   );
+
+  useEffect(() => {
+    if (!libraryDialogOpen || libraryExamSummaries.length === 0) {
+      return;
+    }
+
+    const examsToPrefetch = libraryExamSummaries
+      .slice(0, 12)
+      .filter((exam) => !examDetailCache[exam.examId]);
+
+    if (examsToPrefetch.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void Promise.all(
+      examsToPrefetch.map(async (exam) => {
+        const result = await client.query({
+          query: GetNewMathExamDocument,
+          variables: { examId: exam.examId },
+          fetchPolicy: "no-cache",
+        });
+
+        return (
+          (
+            result.data as
+              | { getNewMathExam?: SharedLibraryExam | null }
+              | undefined
+          )?.getNewMathExam ?? null
+        );
+      }),
+    ).then((fetchedExams) => {
+      if (cancelled) return;
+      const nextEntries = fetchedExams.filter(Boolean) as SharedLibraryExam[];
+      if (nextEntries.length === 0) return;
+      setExamDetailCache((prev) => ({
+        ...prev,
+        ...Object.fromEntries(nextEntries.map((exam) => [exam.examId, exam])),
+      }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, examDetailCache, libraryDialogOpen, libraryExamSummaries]);
 
   const teacherOptions = useMemo(() => {
     const values = Array.from(
@@ -1119,6 +1183,55 @@ function SharedLibraryPanel({
     return values.sort((a, b) => a - b);
   }, [libraryExamSummaries]);
 
+  const activeFilterChips = useMemo(
+    () =>
+      [
+        durationFilter !== "all"
+          ? {
+              key: "duration",
+              label: `${durationFilter} мин`,
+              onRemove: () => setDurationFilter("all"),
+            }
+          : null,
+        teacherFilter !== "all"
+          ? {
+              key: "teacher",
+              label:
+                teacherFilter === "unknown"
+                  ? "Тодорхойгүй багш"
+                  : teacherFilter,
+              onRemove: () => setTeacherFilter("all"),
+            }
+          : null,
+        variantFilter !== "all"
+          ? {
+              key: "variant",
+              label: variantFilter === "with" ? "Хувилбартай" : "Хувилбаргүй",
+              onRemove: () => setVariantFilter("all"),
+            }
+          : null,
+        questionCountFilter !== "all"
+          ? {
+              key: "count",
+              label: `${questionCountFilter} асуулт`,
+              onRemove: () => setQuestionCountFilter("all"),
+            }
+          : null,
+      ].filter(Boolean) as Array<{
+        key: string;
+        label: string;
+        onRemove: () => void;
+      }>,
+    [durationFilter, questionCountFilter, teacherFilter, variantFilter],
+  );
+
+  function resetAdvancedFilters() {
+    setDurationFilter("all");
+    setTeacherFilter("all");
+    setVariantFilter("all");
+    setQuestionCountFilter("all");
+  }
+
   async function openExamPreview(exam: SharedLibraryExamSummary) {
     onSelectMaterialId(exam.examId);
     const cachedExam = examDetailCache[exam.examId];
@@ -1126,6 +1239,9 @@ function SharedLibraryPanel({
       setPreviewExamId(exam.examId);
       setEditingExamQuestionId(null);
       setEditingExam(structuredClone(cachedExam));
+      setSelectedQuestionIds(
+        cachedExam.questions.map((question) => question.id),
+      );
       return;
     }
     setLibraryExamDetailLoading(true);
@@ -1146,9 +1262,43 @@ function SharedLibraryPanel({
       setPreviewExamId(exam.examId);
       setEditingExamQuestionId(null);
       setEditingExam(structuredClone(fullExam));
+      setSelectedQuestionIds(fullExam.questions.map((question) => question.id));
     } finally {
       setLibraryExamDetailLoading(false);
     }
+  }
+
+  function appendSelectedExam() {
+    if (!editingExam) return;
+    const selectedQuestions = editingExam.questions.filter((question) =>
+      selectedQuestionIds.includes(question.id),
+    );
+    if (!selectedQuestions.length) {
+      toast.error("Дор хаяж нэг асуулт сонгоно уу.");
+      return;
+    }
+    onAppendExamQuestions(
+      mapLibraryExamToPreviewQuestions({
+        ...editingExam,
+        questions: selectedQuestions,
+      }),
+    );
+    setPreviewExamId(null);
+    setEditingExamQuestionId(null);
+    setEditingExam(null);
+    setSelectedQuestionIds([]);
+    setLibraryDialogOpen(false);
+    toast.success(`${selectedQuestions.length} асуулт нэмэгдлээ.`);
+  }
+
+  function toggleQuestionSelection(questionId: string, checked: boolean) {
+    setSelectedQuestionIds((current) =>
+      checked
+        ? current.includes(questionId)
+          ? current
+          : [...current, questionId]
+        : current.filter((id) => id !== questionId),
+    );
   }
 
   function updateEditingExamQuestion(
@@ -1172,136 +1322,273 @@ function SharedLibraryPanel({
       prev
         ? {
             ...prev,
-            questions: prev.questions.filter((question) => question.id !== questionId),
+            questions: prev.questions.filter(
+              (question) => question.id !== questionId,
+            ),
           }
         : prev,
     );
-    setEditingExamQuestionId((current) => (current === questionId ? null : current));
-  }
-
-  function appendSelectedExam() {
-    if (!editingExam) return;
-    onAppendExamQuestions(mapLibraryExamToPreviewQuestions(editingExam));
-    setPreviewExamId(null);
-    setEditingExamQuestionId(null);
-    setEditingExam(null);
-    toast.success("Сонгосон шалгалтын материал нэмэгдлээ.");
+    setSelectedQuestionIds((current) =>
+      current.filter((id) => id !== questionId),
+    );
+    setEditingExamQuestionId((current) =>
+      current === questionId ? null : current,
+    );
   }
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Input
-          value={searchValue}
-          onChange={(event) => setSearchValue(event.target.value)}
-          placeholder="Шалгалтын материал хайх..."
-          className="rounded-[12px] border-[#dbe4f3] bg-[#f3f6fb] pl-10"
-        />
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-        <Select value={durationFilter} onValueChange={setDurationFilter}>
-          <SelectTrigger className="cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
-            <SelectValue placeholder="Хугацаа" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Бүх хугацаа</SelectItem>
-            {durationOptions.map((value) => (
-              <SelectItem key={`duration-${value}`} value={String(value)}>
-                {value} мин
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={teacherFilter} onValueChange={setTeacherFilter}>
-          <SelectTrigger className="cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
-            <SelectValue placeholder="Багш" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Бүх багш</SelectItem>
-            {teacherOptions.map((value) => (
-              <SelectItem key={`teacher-${value}`} value={value}>
-                {value === "unknown" ? "Тодорхойгүй" : value}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={variantFilter} onValueChange={setVariantFilter}>
-          <SelectTrigger className="cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
-            <SelectValue placeholder="Хувилбар" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Бүгд</SelectItem>
-            <SelectItem value="with">Хувилбартай</SelectItem>
-            <SelectItem value="without">Хувилбаргүй</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={questionCountFilter} onValueChange={setQuestionCountFilter}>
-          <SelectTrigger className="cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
-            <SelectValue placeholder="Асуултын тоо" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Бүгд</SelectItem>
-            {questionCountOptions.map((value) => (
-              <SelectItem key={`count-${value}`} value={String(value)}>
-                {value} асуулт
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {loading ? (
-        <div className="rounded-[16px] border border-[#dbe4f3] bg-white p-6 text-center text-[14px] text-slate-500">
-          Материалуудыг ачаалж байна...
+      <div className="rounded-[18px] border border-[#dbe4f3] bg-white p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[15px] font-semibold text-slate-900">
+              Сангаас шалгалт сонгох
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => setLibraryDialogOpen(true)}
+            className="cursor-pointer rounded-[12px] bg-[#0b5cab] px-4 text-white hover:bg-[#0a4f96]"
+          >
+            <Database className="h-4 w-4" />
+            Сан нээх
+          </Button>
         </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {libraryExamSummaries.map((exam) => (
-            <button
-              key={exam.examId}
-              type="button"
-              onClick={() => openExamPreview(exam)}
-              className="rounded-[16px] border border-[#dbe4f3] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-[#b8ccef] hover:bg-[#fbfdff] hover:shadow-[0_10px_22px_rgba(148,163,184,0.14)]"
-            >
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[15px] font-semibold text-slate-900">
-                    {exam.title}
-                  </p>
-                  <p className="mt-1 text-[12px] text-slate-500">
-                    {exam.subject || "Хичээлгүй"} ·{" "}
-                    {exam.updatedAt?.slice(0, 10) || "Огноо байхгүй"}
-                  </p>
+        <div className="mt-3 rounded-[14px] border border-dashed border-[#dbe4f3] bg-[#f8fbff] px-4 py-3 text-[13px] text-slate-500">
+          {selectedSharedMaterialId
+            ? "Сонгосон шалгалтын дэлгэрэнгүйг дахин харах эсвэл өөр шалгалт сонгож болно."
+            : "Сонгосон анги, хичээл, шалгалтын төрөлд таарах сангийн материалууд dialog дотор харагдана."}
+        </div>
+      </div>
+
+      <Dialog open={libraryDialogOpen} onOpenChange={setLibraryDialogOpen}>
+        <DialogContent className="flex h-[min(92vh,56rem)] w-[min(100vw-1.5rem,82rem)]! max-w-none! flex-col gap-0 overflow-hidden rounded-[24px] border border-[#dfe7f3] bg-white p-0">
+          <DialogHeader className="border-b border-[#e6edf7] px-5 py-4">
+            <DialogTitle className="text-[18px] font-semibold text-slate-900">
+              Сангийн шалгалтууд
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            <div className="relative">
+              <Input
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
+                placeholder="Шалгалтын материал хайх..."
+                className="rounded-[12px] border-[#dbe4f3] bg-[#f3f6fb] pl-10"
+              />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[12px] text-slate-400">
+                  {activeFilterChips.length > 0
+                    ? `${activeFilterChips.length} filter идэвхтэй`
+                    : "Нэмэлт filter сонгоогүй байна"}
                 </div>
-                <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
-                  {exam.questionCount}
-                </Badge>
+                <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0 cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff] text-slate-700 hover:border-[#c9d9ef] hover:bg-[#f2f7ff]"
+                    >
+                      <Filter className="mr-2 h-4 w-4" />
+                      Filters
+                      {activeFilterChips.length > 0 ? (
+                        <span className="ml-2 rounded-full bg-[#0b5cab] px-1.5 py-0.5 text-[11px] text-white">
+                          {activeFilterChips.length}
+                        </span>
+                      ) : null}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    className="w-[min(92vw,24rem)] rounded-[18px] border border-[#dbe4f3] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.12)]"
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[14px] font-semibold text-slate-900">
+                          Нэмэлт filter
+                        </p>
+                        <p className="text-[12px] text-slate-500">
+                          Жагсаалтыг нарийвчлан шүүнэ
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={resetAdvancedFilters}
+                        className="h-8 cursor-pointer px-2 text-[12px] text-slate-500 hover:bg-transparent hover:text-slate-800"
+                      >
+                        Цэвэрлэх
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-wrap items-start gap-3">
+                      <Select
+                        value={durationFilter}
+                        onValueChange={setDurationFilter}
+                      >
+                        <SelectTrigger className="w-[180px] cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
+                          <SelectValue placeholder="Хугацаа" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Бүх хугацаа</SelectItem>
+                          {durationOptions.map((value) => (
+                            <SelectItem
+                              key={`duration-${value}`}
+                              value={String(value)}
+                            >
+                              {value} мин
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        value={teacherFilter}
+                        onValueChange={setTeacherFilter}
+                      >
+                        <SelectTrigger className="w-[180px] cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
+                          <SelectValue placeholder="Багш" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Бүх багш</SelectItem>
+                          {teacherOptions.map((value) => (
+                            <SelectItem key={`teacher-${value}`} value={value}>
+                              {value === "unknown" ? "Тодорхойгүй" : value}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        value={variantFilter}
+                        onValueChange={setVariantFilter}
+                      >
+                        <SelectTrigger className="w-[180px] cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
+                          <SelectValue placeholder="Хувилбар" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Бүгд</SelectItem>
+                          <SelectItem value="with">Хувилбартай</SelectItem>
+                          <SelectItem value="without">Хувилбаргүй</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        value={questionCountFilter}
+                        onValueChange={setQuestionCountFilter}
+                      >
+                        <SelectTrigger className="w-[180px] cursor-pointer rounded-[12px] border-[#dbe4f3] bg-[#f7faff]">
+                          <SelectValue placeholder="Асуултын тоо" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Бүгд</SelectItem>
+                          {questionCountOptions.map((value) => (
+                            <SelectItem
+                              key={`count-${value}`}
+                              value={String(value)}
+                            >
+                              {value} асуулт
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
-              <div className="mb-3 flex flex-wrap gap-2 text-[12px] text-slate-500">
-                <span>{exam.grade ?? "-"}-р анги</span>
-                <span>·</span>
-                <span>{exam.examType ?? "Төрөлгүй"}</span>
-                <span>·</span>
-                <span>{exam.durationMinutes ?? "-"} мин</span>
-              </div>
-              <div className="rounded-[12px] border border-[#e3e9f4] bg-[#f9fbff] p-3 text-[13px] text-slate-500">
-                Preview нээж дэлгэрэнгүй харна
-              </div>
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-[12px] text-slate-500">
-                  {exam.withVariants ? "Хувилбартай" : "Хувилбаргүй"}
-                </span>
-                <span className="inline-flex items-center gap-1 text-[12px] font-medium text-[#0b5cab]">
-                  <Eye className="h-3.5 w-3.5" />
-                  Preview
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+
+              {activeFilterChips.length > 0 ? (
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {activeFilterChips.map((chip) => (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      onClick={chip.onRemove}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[#cfe0f6] bg-[#f5f9ff] px-3 py-1 text-[12px] font-medium text-[#3b5b86] transition hover:border-[#b9d0f0] hover:bg-[#edf5ff]"
+                    >
+                      {chip.label}
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-4">
+              {loading ? (
+                <div className="rounded-[16px] border border-[#dbe4f3] bg-white p-6 text-center text-[14px] text-slate-500">
+                  Материалуудыг ачаалж байна...
+                </div>
+              ) : libraryExamSummaries.length === 0 ? (
+                <div className="rounded-[16px] border border-dashed border-[#dbe4f3] bg-[#fcfdff] p-10 text-center text-[14px] text-slate-500">
+                  Таарсан сангийн шалгалт олдсонгүй.
+                </div>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                  {libraryExamSummaries.map((exam) => (
+                    <button
+                      key={exam.examId}
+                      type="button"
+                      onClick={() => openExamPreview(exam)}
+                      className="rounded-[16px] border border-[#dbe4f3] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-[#b8ccef] hover:bg-[#fbfdff] hover:shadow-[0_10px_22px_rgba(148,163,184,0.14)]"
+                    >
+                      {(() => {
+                        const cachedExam = examDetailCache[exam.examId];
+                        const previewQuestions =
+                          cachedExam?.questions.slice(0, 2) ?? [];
+
+                        return (
+                          <>
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-[15px] font-semibold text-slate-900">
+                                  {exam.title}
+                                </p>
+                                <p className="mt-1 text-[12px] text-slate-500">
+                                  {exam.updatedAt?.slice(0, 10) ||
+                                    "Огноо байхгүй"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="space-y-2 rounded-[12px] border border-[#e3e9f4] bg-[#f9fbff] p-3">
+                              {previewQuestions.length > 0 ? (
+                                previewQuestions.map((question, index) => (
+                                  <div
+                                    key={`${exam.examId}-snippet-${question.id}`}
+                                    className="rounded-[10px] bg-white/70 px-3 py-2"
+                                  >
+                                    <p className="mb-1 text-[11px] font-medium text-slate-500">
+                                      Асуулт {index + 1}
+                                    </p>
+                                    <MathPreviewText
+                                      content={question.prompt}
+                                      contentSource="backend"
+                                      className="line-clamp-2 text-[13px] leading-relaxed text-slate-700"
+                                    />
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-[13px] text-slate-500">
+                                  Асуултуудыг ачаалж байна...
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(previewExamId && editingExam)}
@@ -1310,6 +1597,7 @@ function SharedLibraryPanel({
             setPreviewExamId(null);
             setEditingExamQuestionId(null);
             setEditingExam(null);
+            setSelectedQuestionIds([]);
           }
         }}
       >
@@ -1325,29 +1613,63 @@ function SharedLibraryPanel({
                 Preview ачаалж байна...
               </div>
             ) : null}
-            <div className="mb-4 flex flex-wrap gap-2">
-              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-                {editingExam?.sessionMeta?.examType ?? "Төрөлгүй"}
-              </Badge>
-              <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
-                {editingExam?.questions.length ?? 0} асуулт
-              </Badge>
-              <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
-                {editingExam?.sessionMeta?.durationMinutes ?? "-"} мин
-              </Badge>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#dbe4f3] bg-[#f8fbff] px-4 py-3">
+              <p className="text-[13px] text-slate-600">
+                Нэмэх асуултуудаа сонгоод дараа нь доорх товчоор оруулна.
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() =>
+                    setSelectedQuestionIds(
+                      editingExam?.questions.map((question) => question.id) ??
+                        [],
+                    )
+                  }
+                  className="h-8 cursor-pointer px-2 text-[12px] text-slate-500 hover:bg-transparent hover:text-slate-800"
+                >
+                  Бүгдийг сонгох
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setSelectedQuestionIds([])}
+                  className="h-8 cursor-pointer px-2 text-[12px] text-slate-500 hover:bg-transparent hover:text-slate-800"
+                >
+                  Цэвэрлэх
+                </Button>
+              </div>
             </div>
             <div className="space-y-4">
               {editingExam?.questions.map((question, questionIndex) => {
                 const isEditing = editingExamQuestionId === question.id;
+                const isSelected = selectedQuestionIds.includes(question.id);
                 return (
                   <div
                     key={question.id}
-                    className="rounded-[16px] border border-[#dbe4f3] bg-[#fcfdff] p-4"
+                    className={cn(
+                      "rounded-[16px] border p-4",
+                      isSelected
+                        ? "border-[#b7d0f7] bg-[#fcfdff]"
+                        : "border-[#e5ebf5] bg-[#f8fafc] opacity-80",
+                    )}
                   >
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-[14px] font-semibold text-slate-900">
-                        Асуулт {questionIndex + 1}
-                      </p>
+                      <label className="flex cursor-pointer items-center gap-3">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) =>
+                            toggleQuestionSelection(
+                              question.id,
+                              checked === true,
+                            )
+                          }
+                        />
+                        <p className="text-[14px] font-semibold text-slate-900">
+                          Асуулт {questionIndex + 1}
+                        </p>
+                      </label>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -1359,7 +1681,7 @@ function SharedLibraryPanel({
                           className="cursor-pointer text-slate-400 transition hover:text-slate-700"
                           aria-label="Засах"
                         >
-                          <Eye className="h-4 w-4" />
+                          <Pencil className="h-4 w-4" />
                         </button>
                         <button
                           type="button"
@@ -1377,29 +1699,87 @@ function SharedLibraryPanel({
                           multiline
                           value={question.prompt}
                           onChange={(nextValue) =>
-                            updateEditingExamQuestion(question.id, (current) => ({
-                              ...current,
-                              prompt: nextValue,
-                            }))
+                            updateEditingExamQuestion(
+                              question.id,
+                              (current) => ({
+                                ...current,
+                                prompt: nextValue,
+                              }),
+                            )
                           }
-                          className="min-h-[120px]! rounded-[14px]! border-[#d7e3f5]! bg-white!"
-                          contentClassName="text-[14px] leading-6 text-slate-900 [&_.katex]:text-inherit"
+                          className={`${mathAssistFieldClassName} min-h-[120px]!`}
+                          contentClassName={mathAssistFieldContentClassName}
                         />
-                        {(question.options ?? []).map((option, optionIndex) => (
+                        {(question.options ?? []).length > 0 ? (
+                          <div className="grid gap-3">
+                            {(question.options ?? []).map(
+                              (option, optionIndex) => (
+                                <div
+                                  key={`${question.id}-edit-${optionIndex}`}
+                                  className="grid grid-cols-[24px_minmax(0,1fr)] items-center gap-3"
+                                >
+                                  <div
+                                    className={cn(
+                                      "flex h-6 w-6 items-center justify-center rounded-full border",
+                                      optionIndex ===
+                                        (question.correctOption ?? 0)
+                                        ? "border-[#0b5cab] bg-[#e8f1ff]"
+                                        : "border-[#cbd9ee] bg-white",
+                                    )}
+                                  >
+                                    <span
+                                      className={cn(
+                                        "h-2.5 w-2.5 rounded-full",
+                                        optionIndex ===
+                                          (question.correctOption ?? 0)
+                                          ? "bg-[#0b5cab]"
+                                          : "bg-transparent",
+                                      )}
+                                    />
+                                  </div>
+                                  <MathAssistField
+                                    value={option}
+                                    onChange={(nextValue) =>
+                                      updateEditingExamQuestion(
+                                        question.id,
+                                        (current) => {
+                                          const nextOptions = [
+                                            ...(current.options ?? []),
+                                          ];
+                                          nextOptions[optionIndex] = nextValue;
+                                          return {
+                                            ...current,
+                                            options: nextOptions,
+                                          };
+                                        },
+                                      )
+                                    }
+                                    className={answerMathAssistFieldClassName}
+                                    contentClassName={
+                                      mathAssistFieldContentClassName
+                                    }
+                                  />
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        ) : (
                           <MathAssistField
-                            key={`${question.id}-${optionIndex}`}
-                            value={option}
+                            multiline
+                            value={question.answerLatex ?? ""}
                             onChange={(nextValue) =>
-                              updateEditingExamQuestion(question.id, (current) => {
-                                const nextOptions = [...(current.options ?? [])];
-                                nextOptions[optionIndex] = nextValue;
-                                return { ...current, options: nextOptions };
-                              })
+                              updateEditingExamQuestion(
+                                question.id,
+                                (current) => ({
+                                  ...current,
+                                  answerLatex: nextValue,
+                                }),
+                              )
                             }
-                            className="rounded-[12px]! border-[#d7e3f5]! bg-white!"
-                            contentClassName="text-[14px] leading-6 text-slate-900 [&_.katex]:text-inherit"
+                            className={`${mathAssistFieldClassName} min-h-[88px]!`}
+                            contentClassName={mathAssistFieldContentClassName}
                           />
-                        ))}
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -1412,40 +1792,45 @@ function SharedLibraryPanel({
                         </div>
                         {(question.options ?? []).length > 0 ? (
                           <div className="grid gap-3">
-                            {(question.options ?? []).map((option, optionIndex) => (
-                              <div
-                                key={`${question.id}-preview-${optionIndex}`}
-                                className={cn(
-                                  "grid grid-cols-[24px_minmax(0,1fr)] items-center gap-3 rounded-[12px] border px-3 py-2",
-                                  optionIndex === (question.correctOption ?? 0)
-                                    ? "border-[#9cd9c0] bg-[#eefaf4]"
-                                    : "border-[#d7e3f5] bg-white",
-                                )}
-                              >
+                            {(question.options ?? []).map(
+                              (option, optionIndex) => (
                                 <div
+                                  key={`${question.id}-preview-${optionIndex}`}
                                   className={cn(
-                                    "flex h-6 w-6 items-center justify-center rounded-full border",
-                                    optionIndex === (question.correctOption ?? 0)
-                                      ? "border-[#0b5cab] bg-[#e8f1ff]"
-                                      : "border-[#cbd9ee] bg-white",
+                                    "grid grid-cols-[24px_minmax(0,1fr)] items-center gap-3 rounded-[12px] border px-3 py-2",
+                                    optionIndex ===
+                                      (question.correctOption ?? 0)
+                                      ? "border-[#9cd9c0] bg-[#eefaf4]"
+                                      : "border-[#d7e3f5] bg-white",
                                   )}
                                 >
-                                  <span
+                                  <div
                                     className={cn(
-                                      "h-2.5 w-2.5 rounded-full",
-                                      optionIndex === (question.correctOption ?? 0)
-                                        ? "bg-[#0b5cab]"
-                                        : "bg-transparent",
+                                      "flex h-6 w-6 items-center justify-center rounded-full border",
+                                      optionIndex ===
+                                        (question.correctOption ?? 0)
+                                        ? "border-[#0b5cab] bg-[#e8f1ff]"
+                                        : "border-[#cbd9ee] bg-white",
                                     )}
+                                  >
+                                    <span
+                                      className={cn(
+                                        "h-2.5 w-2.5 rounded-full",
+                                        optionIndex ===
+                                          (question.correctOption ?? 0)
+                                          ? "bg-[#0b5cab]"
+                                          : "bg-transparent",
+                                      )}
+                                    />
+                                  </div>
+                                  <MathPreviewText
+                                    content={option}
+                                    contentSource="backend"
+                                    className="text-[14px] leading-relaxed text-slate-700"
                                   />
                                 </div>
-                                <MathPreviewText
-                                  content={option}
-                                  contentSource="backend"
-                                  className="text-[14px] leading-relaxed text-slate-700"
-                                />
-                              </div>
-                            ))}
+                              ),
+                            )}
                           </div>
                         ) : (
                           <div className="rounded-[14px] border border-[#a8ddd0] bg-[#d8f2ea] px-4 py-3 text-[14px] text-[#167e61]">
@@ -1471,6 +1856,7 @@ function SharedLibraryPanel({
                 setPreviewExamId(null);
                 setEditingExamQuestionId(null);
                 setEditingExam(null);
+                setSelectedQuestionIds([]);
               }}
               className="rounded-[12px] border-[#d7e3f5] bg-white px-5 hover:bg-slate-50"
             >
@@ -1479,10 +1865,15 @@ function SharedLibraryPanel({
             <Button
               type="button"
               onClick={appendSelectedExam}
-              disabled={!editingExam?.questions.length}
+              disabled={
+                !editingExam?.questions.length ||
+                selectedQuestionIds.length === 0
+              }
               className="rounded-[12px] bg-[#0b5cab] px-5 hover:bg-[#0a4f96]"
             >
-              Шалгалтын асуултууд руу нэмэх
+              {selectedQuestionIds.length > 0
+                ? `${selectedQuestionIds.length} асуулт нэмэх`
+                : "Шалгалтын асуултууд руу нэмэх"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1559,87 +1950,36 @@ function PreviewQuestionCard({
           "scale-[1.015] -rotate-1 border-sky-300 bg-sky-50/60 shadow-[0_24px_50px_-20px_rgba(14,116,144,0.35)] opacity-70",
         isDragTarget
           ? "border-[#0f74e7] ring-2 ring-[#0f74e7]/20 shadow-[0_0_0_1px_rgba(15,116,231,0.08)]"
-          : "border-[#e3e9f4] shadow-[0_8px_20px_rgba(15,23,42,0.04)] hover:-translate-y-0.5 hover:border-[#b8ccef] hover:bg-[#fbfdff] hover:shadow-[0_10px_22px_rgba(148,163,184,0.14)]",
+          : "border-[#D5D7DB] shadow-[0_8px_20px_rgba(15,23,42,0.04)] hover:-translate-y-0.5 hover:border-[#b8ccef] hover:bg-[#fbfdff] hover:shadow-[0_10px_22px_rgba(148,163,184,0.14)]",
       )}
       onDragEnter={onDragTargetEnter}
       onDragOver={onDragTargetOver}
       onDrop={onDropOnTarget}
     >
-      <div className="flex items-start gap-3">
-        <div className="flex w-8 shrink-0 flex-col items-center gap-2">
-          <button
-            type="button"
-            draggable
-            onDragStart={onDragHandleStart}
-            onDragEnd={onDragHandleEnd}
-            className={cn(
-              "cursor-grab rounded-md p-1 transition-all active:cursor-grabbing",
-              isDragging
-                ? "bg-sky-100 text-sky-700 shadow-sm"
-                : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
-            )}
-            aria-label="Асуултын байрлал өөрчлөх"
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-          <span
-            className={cn(
-              "inline-flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-semibold text-white transition-all",
-              isDragging
-                ? "bg-sky-600 shadow-[0_10px_20px_-12px_rgba(2,132,199,0.8)]"
-                : "bg-[#0f74e7]",
-            )}
-          >
-            {question.index}
-          </span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 text-[14px] font-semibold text-slate-900">
+      <div className="min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 text-[14px] font-semibold text-slate-900">
+            <div className="inline-flex flex-wrap items-baseline gap-x-1">
+              <span>{`Асуулт ${question.index} - `}</span>
               <MathPreviewText
                 content={question.question}
                 contentSource="preview"
-                className="text-[14px] leading-relaxed text-slate-900"
+                className="inline text-[14px] leading-relaxed text-slate-900"
               />
             </div>
-            <div className="flex items-start gap-3">
-              <div
-                className={cn(
-                  "flex items-center gap-1 transition-opacity group-hover:opacity-100 md:opacity-0",
-                  isDragging && "opacity-40",
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={onMoveUp}
-                  disabled={!canMoveUp}
-                  className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-400"
-                  aria-label="Дээш зөөх"
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onMoveDown}
-                  disabled={!canMoveDown}
-                  className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-400"
-                  aria-label="Доош зөөх"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                  aria-label="Устгах"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
           </div>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+            aria-label="Устгах"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mt-3">
           {isWrittenQuestion ? (
-            <div className="mt-3 space-y-3">
+            <div className="space-y-3">
               {(question.answers[0] ?? "").trim() ? (
                 <div className="rounded-[14px] border border-[#a8ddd0] bg-[#d8f2ea] px-4 py-3 text-[14px] text-[#167e61]">
                   <p className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-[#167e61]/80">
@@ -1653,51 +1993,43 @@ function PreviewQuestionCard({
                 </div>
               ) : null}
               {question.explanation?.trim() ? (
-                <div className="rounded-[14px] bg-[#f5f8fc] px-4 py-3 text-[14px] text-slate-700">
-                  <div className="mb-1 flex items-center justify-between gap-3">
-                    <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-                      Бодолт / Тайлбар
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setIsExplanationExpanded((current) => !current)
-                      }
-                      className="inline-flex cursor-pointer items-center gap-1 text-[12px] font-semibold text-slate-500 transition hover:text-slate-700"
-                    >
+                <div className="rounded-[14px] border border-[#a8ddd0] bg-[#e7faf2] px-4 py-3 text-[14px] text-[#167e61]">
+                  <div className="flex items-start gap-2">
+                    <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-[#167e61]/80">
+                        Бодолт / Тайлбар
+                      </p>
                       {isExplanationExpanded ? (
-                        <>
-                          <ChevronUp className="h-3.5 w-3.5" />
-                          Хураах
-                        </>
+                        <MathPreviewText
+                          content={question.explanation}
+                          contentSource="preview"
+                          className="text-[14px] leading-relaxed"
+                        />
                       ) : (
-                        <>
-                          <ChevronDown className="h-3.5 w-3.5" />
-                          Дэлгэх
-                        </>
+                        <button
+                          type="button"
+                          onClick={() => setIsExplanationExpanded(true)}
+                          className="cursor-pointer text-left text-[13px] leading-relaxed text-[#167e61] hover:opacity-80"
+                        >
+                          {question.explanation}
+                        </button>
                       )}
-                    </button>
+                    </div>
                   </div>
-                  {isExplanationExpanded ? (
-                    <MathPreviewText
-                      content={question.explanation}
-                      contentSource="preview"
-                      className="text-[14px] leading-relaxed"
-                    />
-                  ) : null}
                 </div>
               ) : null}
             </div>
           ) : (
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2">
               {question.answers.map((answer, index) => (
                 <div
                   key={`${answer}-${index}`}
                   className={cn(
                     "rounded-[14px] px-4 py-3 text-[14px] text-slate-700",
                     index === question.correct
-                      ? "border border-[#a8ddd0] bg-[#d8f2ea] text-[#167e61]"
-                      : "bg-[#eef2f6]",
+                      ? "border border-[#a8ddd0] bg-[#d8f2ea] text-[#15803D]"
+                      : "bg-[#F1F4FA]",
                   )}
                 >
                   <div className="flex items-start gap-1.5">
@@ -1712,20 +2044,20 @@ function PreviewQuestionCard({
               ))}
             </div>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Badge
-              className={cn(
-                "inline-flex items-center gap-1.5",
-                sourceBadge.className,
-              )}
-            >
-              <sourceBadge.icon className="h-3.5 w-3.5" />
-              {sourceBadge.label}
-            </Badge>
-            <Badge className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-              {question.points} оноо
-            </Badge>
-          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Badge
+            className={cn(
+              "inline-flex items-center gap-1.5",
+              sourceBadge.className,
+            )}
+          >
+            <sourceBadge.icon className="h-3.5 w-3.5" />
+            {sourceBadge.label}
+          </Badge>
+          <Badge className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+            {question.points} оноо
+          </Badge>
         </div>
       </div>
     </div>
@@ -1866,16 +2198,13 @@ export function MaterialBuilderWorkspaceSection({
   }
 
   return (
-    <section className="mt-5 rounded-[22px] border border-[#dbe4f3] bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.05)] sm:p-6">
+    <section className="mt-5 rounded-[22px] border border-[#D5D7DB] bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.05)] sm:p-6">
       <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-        <div className="rounded-[20px] border border-[#e6edf7] bg-[#fbfcfe] p-4 sm:p-5">
-          <div className="mb-4 border-b border-[#e6edf7] pb-4">
+        <div className="rounded-[20px] bg-[#F4F7FA] p-4 sm:p-5">
+          <div className="mb-4 pb-4">
             <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">
               Асуулт нэмэх
             </h2>
-            <p className="mt-1 text-[14px] text-slate-500">
-              Олон аргыг хамтад нь ашиглаж болно
-            </p>
           </div>
 
           <WorkspaceTabs
@@ -1912,19 +2241,16 @@ export function MaterialBuilderWorkspaceSection({
 
         <div
           className={cn(
-            "rounded-[20px] border border-[#e6edf7] bg-[#fcfdff] p-4 sm:p-5",
+            "rounded-[20px] bg-[#F4F7FA] p-4 sm:p-5",
             previewQuestions.length > 5 &&
               "flex max-h-[calc(100vh-10rem)] flex-col",
           )}
         >
-          <div className="mb-4 flex items-start justify-between gap-4 border-b border-[#e6edf7] pb-4">
+          <div className="mb-4 flex items-start justify-between gap-4 pb-4">
             <div>
               <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">
                 Шалгалтын асуултууд
               </h2>
-              <p className="mt-1 text-[14px] text-slate-500">
-                Дарааллыг өөрчлөх эсвэл устгах боломжтой
-              </p>
             </div>
             <div className="flex items-center gap-2">
               <div className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-[14px] font-semibold text-blue-700">

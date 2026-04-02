@@ -11,6 +11,23 @@ import { publishExamSaved } from "../../../lib/ably";
 
 type Args = { input: SaveNewMathExamInput };
 
+function getErrorMessage(error: unknown): string {
+	if (error instanceof GraphQLError) {
+		return error.message;
+	}
+	if (error instanceof Error) {
+		const cause = "cause" in error ? (error as Error & { cause?: unknown }).cause : undefined;
+		if (cause instanceof Error && cause.message) {
+			return `${error.message} | cause: ${cause.message}`;
+		}
+		if (typeof cause === "string" && cause) {
+			return `${error.message} | cause: ${cause}`;
+		}
+		return error.message;
+	}
+	return String(error);
+}
+
 function dbSessionMetaFields(sm: SaveNewMathExamInput["sessionMeta"]) {
 	if (!sm) {
 		return {
@@ -77,6 +94,22 @@ export async function performSaveNewMathExam(
 		throw new GraphQLError(
 			"D1 DB холбогдоогүй байна (локалд .dev.vars + wrangler, production-д binding шалгана уу)",
 		);
+	}
+
+	if (!input.title?.trim()) {
+		throw new GraphQLError("Шалгалтын нэр шаардлагатай.");
+	}
+
+	if (!Array.isArray(input.questions) || input.questions.length === 0) {
+		throw new GraphQLError("Хадгалах асуулт байхгүй байна.");
+	}
+
+	if (
+		!Number.isFinite(input.mcqCount) ||
+		!Number.isFinite(input.mathCount) ||
+		!Number.isFinite(input.totalPoints)
+	) {
+		throw new GraphQLError("Шалгалтын тоон мэдээлэл буруу байна.");
 	}
 
 		const now = new Date().toISOString();
@@ -205,8 +238,14 @@ export async function performSaveNewMathExam(
 			};
 		});
 
-		if (rows.length) {
-			await ctx.db.insert(newExamQuestions).values(rows);
+		for (const row of rows) {
+			try {
+				await ctx.db.insert(newExamQuestions).values(row);
+			} catch (error) {
+				throw new GraphQLError(
+					`Асуулт хадгалах үед алдаа гарлаа (${row.id}): ${getErrorMessage(error)}`,
+				);
+			}
 		}
 
 		const result = {
@@ -228,6 +267,13 @@ export async function performSaveNewMathExam(
 export const saveNewMathExamMutation = {
 	saveNewMathExam: async (_: unknown, args: Args, ctx: GraphQLContext) => {
 		const { input } = args;
-		return performSaveNewMathExam(input, ctx);
+		try {
+			return await performSaveNewMathExam(input, ctx);
+		} catch (error) {
+			if (error instanceof GraphQLError) {
+				throw error;
+			}
+			throw new GraphQLError(`saveNewMathExam алдаа: ${getErrorMessage(error)}`);
+		}
 	},
 };

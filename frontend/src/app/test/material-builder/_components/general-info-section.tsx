@@ -42,7 +42,7 @@ export function GeneralInfoSection({
   return (
     <section className="rounded-[18px] border border-[#e3e9f4] bg-white px-5 py-5 shadow-[0_8px_18px_rgba(15,23,42,0.04)] sm:px-6">
       <div className="mb-5 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
+        <div className="flex items-center gap-2 text-[16px] font-semibold text-slate-900">
           <span className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full border border-[#b9d7ff] bg-[#eef6ff] text-[#3b82f6]">
             <Info className="h-3 w-3" />
           </span>
@@ -172,29 +172,18 @@ export function GeneralInfoSection({
           >
             Үргэлжлэх минут
           </Label>
-          <Select
+          <Input
+            id="duration-left"
+            type="number"
+            min="1"
+            step="1"
             value={values.durationMinutes}
-            onValueChange={(value) =>
-              onChange({ ...values, durationMinutes: value })
+            onChange={(event) =>
+              onChange({ ...values, durationMinutes: event.target.value })
             }
-          >
-            <SelectTrigger
-              id="duration-left"
-              className={`${fieldClassName} cursor-pointer`}
-            >
-              <SelectValue placeholder="Хугацаа сонгох" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10 мин</SelectItem>
-              <SelectItem value="20">20 мин</SelectItem>
-              <SelectItem value="30">30 мин</SelectItem>
-              <SelectItem value="40">40 мин</SelectItem>
-              <SelectItem value="60">60 мин</SelectItem>
-              <SelectItem value="80">80 мин</SelectItem>
-              <SelectItem value="90">90 мин</SelectItem>
-              <SelectItem value="100">100 мин</SelectItem>
-            </SelectContent>
-          </Select>
+            placeholder="Хугацаа оруулах"
+            className={fieldClassName}
+          />
         </div>
       </div>
     </section>
