@@ -65,7 +65,13 @@ import {
   ListNewMathExamsDocument,
   RegenerateQuestionAnswerDocument,
 } from "@/gql/create-exam-documents";
-import { Difficulty, QuestionFormat } from "@/gql/graphql";
+import {
+  Difficulty,
+  QuestionFormat,
+  type GenerateQuestionAnswerInput,
+  type GenerateQuestionAnswerResult,
+} from "@/gql/graphql";
+import { requestExtractedExam } from "@/lib/math-exam-api";
 import { cn } from "@/lib/utils";
 import {
   fetchR2TextbookCandidates,
@@ -122,6 +128,9 @@ const mathAssistFieldClassName =
 const answerMathAssistFieldClassName = `${mathAssistFieldClassName} h-11! min-h-11! bg-white!`;
 const mathAssistFieldContentClassName =
   "pl-3 font-sans text-[14px] leading-[1.6] font-normal tracking-normal text-slate-800 [&_.katex]:text-inherit";
+const DOCX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const acceptedImportFormats = ".pdf,.doc,.docx,.txt,.md,.xls,.xlsx";
 
 function normalizeGeneratedExplanationText(value: string) {
   return normalizeBackendMathText(value)
@@ -197,6 +206,103 @@ function resolvePreviewQuestionSourceType(
   }
 
   return "shared-library";
+}
+
+type ImportedDocument = {
+  fileName: string;
+  questions: PreviewQuestion[];
+  selectedIds: string[];
+};
+
+function summarizeImportFileNames(files: File[]) {
+  if (files.length === 0) {
+    return "attachment";
+  }
+
+  if (files.length === 1) {
+    return files[0]?.name ?? "attachment";
+  }
+
+  return `${files[0]?.name ?? "attachment"} +${files.length - 1} файл`;
+}
+
+function shouldUseFastImport(files: File[]) {
+  return files.every((file) => {
+    const fileName = file.name.toLowerCase();
+
+    return (
+      file.type === DOCX_MIME_TYPE ||
+      file.type.startsWith("text/") ||
+      /\.(docx|txt|md|markdown|csv|json)$/i.test(fileName)
+    );
+  });
+}
+
+function sanitizeImportedText(value?: string | null) {
+  return String(value ?? "")
+    .replace(/^q\s*\d+\s*[\.:]?\s*/i, "")
+    .replace(/^question\s*\d+\s*[\.:]?\s*/i, "")
+    .replace(/\\times/g, "×")
+    .replace(/\\div/g, "÷")
+    .replace(/\\cdot/g, "·")
+    .replace(/\\\/:?\s*/g, "/")
+    .replace(/\\+/g, "")
+    .replace(/\bdiv\b/gi, "÷")
+    .replace(/\$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function buildImportedQuestions(
+  exam: Awaited<ReturnType<typeof requestExtractedExam>>,
+  sourceName: string,
+): PreviewQuestion[] {
+  const rawQuestions = Array.isArray(exam.questions) ? exam.questions : [];
+
+  return rawQuestions.reduce<PreviewQuestion[]>((result, question, index) => {
+    const prompt = sanitizeImportedText(question.prompt);
+
+    if (!prompt.trim()) {
+      return result;
+    }
+
+    const options = (question.options ?? [])
+      .map((option) => sanitizeImportedText(option))
+      .filter(Boolean)
+      .slice(0, 6);
+    const writtenAnswer =
+      sanitizeImportedText(question.answerLatex) ||
+      sanitizeImportedText(question.responseGuide) ||
+      "";
+    const baseOptions =
+      options.length > 0 ? options : writtenAnswer ? [writtenAnswer] : [];
+    const normalizedOptions =
+      baseOptions.length >= 4
+        ? baseOptions
+        : [...baseOptions, ...Array(4 - baseOptions.length).fill("")];
+
+    const correct =
+      typeof question.correctOption === "number" &&
+      question.correctOption >= 0 &&
+      question.correctOption < normalizedOptions.length
+        ? question.correctOption
+        : 0;
+
+    result.push({
+      id: `import-${Date.now()}-${index + 1}`,
+      index: index + 1,
+      question: prompt,
+      answers: normalizedOptions,
+      correct,
+      explanation: sanitizeImportedText(question.responseGuide) || undefined,
+      points: question.points ?? 1,
+      questionType: "single-choice",
+      source: sourceName,
+      sourceType: "import",
+    });
+
+    return result;
+  }, []);
 }
 
 type QueuedTextbookImport = {
@@ -539,10 +645,91 @@ function WorkspaceTabs({
   );
 }
 
-function FilePanel() {
+function FilePanel({
+  importError,
+  importedDocument,
+  isExtracting,
+  isAutoFilling,
+  uploadProgress,
+  autoFillDone,
+  autoFillTotal,
+  onAddAll,
+  onAddSelected,
+  onAddAnswer,
+  onClear,
+  onRemoveAnswer,
+  onSelectFiles,
+  onSetCorrectAnswer,
+  onToggleQuestion,
+  onUpdateQuestion,
+}: {
+  importError: string | null;
+  importedDocument: ImportedDocument | null;
+  isExtracting: boolean;
+  isAutoFilling: boolean;
+  uploadProgress: number | null;
+  autoFillDone: number;
+  autoFillTotal: number;
+  onAddAll: () => void;
+  onAddSelected: () => void;
+  onAddAnswer: (questionId: string) => void;
+  onClear: () => void;
+  onRemoveAnswer: (questionId: string, answerIndex: number) => void;
+  onSelectFiles: (files: File[]) => Promise<void> | void;
+  onSetCorrectAnswer: (questionId: string, answerIndex: number) => void;
+  onToggleQuestion: (id: string, checked: boolean) => void;
+  onUpdateQuestion: (
+    questionId: string,
+    updater: (question: PreviewQuestion) => PreviewQuestion,
+  ) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const questionCount = importedDocument?.questions.length ?? 0;
+  const selectedCount = importedDocument?.selectedIds.length ?? 0;
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    void onSelectFiles(Array.from(event.target.files ?? []));
+    event.target.value = "";
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDragging(false);
+    void onSelectFiles(Array.from(event.dataTransfer.files ?? []));
+  }
+
   return (
-    <div className="min-w-0 overflow-x-hidden">
-      <div className="relative rounded-[20px] border border-dashed border-[#cfd8e3] bg-transparent px-5 py-7 text-center">
+    <div className="min-w-0 space-y-4 overflow-x-hidden">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={acceptedImportFormats}
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => fileInputRef.current?.click()}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
+        className={cn(
+          "relative rounded-[20px] border border-dashed border-[#cfd8e3] bg-transparent px-5 py-7 text-center transition",
+          isDragging && "border-[#0b5cab] bg-[#f1f6ff]",
+        )}
+      >
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#eef2f7] text-slate-600">
           <Upload className="h-4 w-4" />
         </div>
@@ -554,9 +741,10 @@ function FilePanel() {
         </p>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
+          onClick={() => fileInputRef.current?.click()}
           className="flex min-w-0 h-[42px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] px-2 text-[12px] font-medium leading-none text-slate-700 transition hover:bg-[#eef3f9] sm:text-[13px]"
         >
           <FileText className="h-4 w-4 text-rose-500" />
@@ -564,12 +752,270 @@ function FilePanel() {
         </button>
         <button
           type="button"
+          onClick={() => fileInputRef.current?.click()}
           className="flex min-w-0 h-[42px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[14px] border border-[#d9e3f0] bg-[#f4f7fb] px-2 text-[12px] font-medium leading-none text-slate-700 transition hover:bg-[#eef3f9] sm:text-[13px]"
         >
           <FileText className="h-4 w-4 text-blue-500" />
           DOC/DOCX
         </button>
       </div>
+
+      {isExtracting ? (
+        <div className="flex items-center gap-2 rounded-[14px] border border-[#dbe4f3] bg-[#f4f7fb] px-4 py-3 text-[13px] font-medium text-slate-600">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Файл уншиж байна...
+        </div>
+      ) : null}
+      {isAutoFilling ? (
+        <div className="flex items-center gap-2 rounded-[14px] border border-[#dbe4f3] bg-[#f4f7fb] px-4 py-3 text-[13px] font-medium text-slate-600">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Хариулт бэлтгэж байна...
+          {autoFillTotal > 0 ? ` ${autoFillDone}/${autoFillTotal}` : ""}
+        </div>
+      ) : null}
+
+      {importError ? (
+        <div className="rounded-[14px] border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-700">
+          {importError}
+        </div>
+      ) : null}
+
+      {importedDocument ? (
+        <div className="space-y-3">
+          {isAutoFilling ? null : (
+          <div className="rounded-[16px] border border-[#d0d7e2] bg-[#edf0f4] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-semibold text-slate-900">
+                  {importedDocument.fileName}
+                </p>
+                <p className="text-[13px] text-slate-500">
+                  {questionCount} асуулт олдлоо · {selectedCount} сонгогдсон
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmClearOpen(true)}
+                className="rounded-[10px] border-[#c7d0dd] bg-white text-slate-600 hover:bg-[#e9eef5]"
+              >
+                Цуцлах
+              </Button>
+            </div>
+          </div>
+          )}
+
+          {isAutoFilling ? null : (
+            <div className="max-h-[42vh] space-y-3 overflow-y-auto pr-1">
+              {importedDocument.questions.map((question, index) => {
+                const checked = importedDocument.selectedIds.includes(question.id);
+
+                return (
+                  <div
+                    key={question.id}
+                  className="rounded-[18px] border border-[#dbe4f3] bg-[#fbfdff] px-4 py-3 shadow-[0_6px_16px_rgba(15,23,42,0.03)]"
+                >
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      checked={checked}
+                        onCheckedChange={(next) =>
+                          onToggleQuestion(question.id, next === true)
+                        }
+                        className="mt-1"
+                      />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start gap-2">
+                              <span className="mt-2 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.08)]">
+                                Асуулт {index + 1}.
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <MathAssistField
+                                  value={question.question}
+                                  multiline
+                                  disableRichPreview
+                                  onChange={(value) =>
+                                    onUpdateQuestion(question.id, (current) => ({
+                                      ...current,
+                                      question: value,
+                                    }))
+                                  }
+                                  placeholder="Асуултын текст"
+                                  className={mathAssistFieldClassName}
+                                  contentClassName={mathAssistFieldContentClassName}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          {/* Removed duplicate badge on the right */}
+                        </div>
+
+                        {question.questionType === "written" ? (
+                          <div className="rounded-[14px] border border-[#e3e9f4] bg-[#f6f9fe] px-3 py-2">
+                            <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                              Хариултын чиглэл
+                            </p>
+                            <MathAssistField
+                              value={question.answers[0] ?? ""}
+                              multiline
+                              disableRichPreview
+                              onChange={(value) =>
+                                onUpdateQuestion(question.id, (current) => ({
+                                  ...current,
+                                  answers: [value],
+                                }))
+                              }
+                              placeholder="Хариултын тайлбар"
+                              className={mathAssistFieldClassName}
+                              contentClassName={mathAssistFieldContentClassName}
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[12px] font-semibold text-slate-700">
+                              Хариултууд
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => onAddAnswer(question.id)}
+                              className="text-[12px] font-semibold text-[#0b5cab] hover:underline"
+                            >
+                              + Хариулт нэмэх
+                            </button>
+                          </div>
+                            {question.answers.map((answer, answerIndex) => {
+                              const isCorrect = answerIndex === question.correct;
+
+                              return (
+                                <div
+                                  key={`${question.id}-${answerIndex}`}
+                                className={cn(
+                                  "flex items-center gap-2 rounded-[14px] border px-3 py-2",
+                                  isCorrect
+                                    ? "border-[#b6d4f5] bg-[#e8f2fd]"
+                                    : "border-[#e3e9f4] bg-[#f6f9fe]",
+                                )}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onSetCorrectAnswer(question.id, answerIndex)
+                                  }
+                                  className={cn(
+                                    "flex h-4.5 w-4.5 items-center justify-center rounded-full border text-[9px] font-semibold",
+                                    isCorrect
+                                      ? "border-[#0b5cab] bg-[#0b5cab] text-white"
+                                      : "border-slate-300 bg-white text-slate-400",
+                                  )}
+                                  aria-label="Зөв хариулт"
+                                >
+                                  {isCorrect ? "✓" : ""}
+                                </button>
+                                <span className="text-[11px] text-slate-500">
+                                  {String.fromCharCode(65 + answerIndex)}.
+                                </span>
+                                <div className="flex-1">
+                                  <MathAssistField
+                                    value={answer}
+                                    disableRichPreview
+                                    onChange={(value) =>
+                                      onUpdateQuestion(question.id, (current) => ({
+                                        ...current,
+                                        answers: current.answers.map((item, idx) =>
+                                          idx === answerIndex ? value : item,
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="Хариулт"
+                                    className={mathAssistFieldClassName}
+                                    contentClassName={mathAssistFieldContentClassName}
+                                  />
+                                </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onRemoveAnswer(question.id, answerIndex)
+                                    }
+                                    className="text-slate-400 hover:text-slate-600"
+                                    aria-label="Хариулт устгах"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {isAutoFilling ? null : (
+            <div className="flex items-center gap-3 rounded-[14px] border border-[#dbe4f3] bg-[#f8fbff] p-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 rounded-[12px] border-[#dbe4f3] bg-white"
+                onClick={onAddSelected}
+                disabled={selectedCount === 0}
+              >
+                Сонгосныг нэмэх
+              </Button>
+              <Button
+                type="button"
+                className="flex-1 rounded-[12px] bg-[#0b5cab] text-white hover:bg-[#0a4f96]"
+                onClick={onAddAll}
+                disabled={questionCount === 0}
+              >
+                Бүгдийг нэмэх
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-[16px] border border-[#e5edf7] bg-[#fbfdff] px-4 py-4 text-[13px] text-slate-500">
+          Файл импорт хийсний дараа танигдсан асуултууд энд жагсаалт болж гарна.
+        </div>
+      )}
+
+      <Dialog open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
+        <DialogContent className="w-[min(100vw-1.5rem,28rem)]! max-w-none! gap-0 overflow-hidden rounded-[20px] border border-[#dfe7f3] bg-white p-0 shadow-[0_24px_64px_-28px_rgba(15,23,42,0.26)]">
+          <DialogHeader className="border-b border-[#e6edf7] px-5 py-4">
+            <DialogTitle className="text-[18px] font-semibold text-slate-900">
+              Импортыг цуцлах уу?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-5 py-4 text-[14px] text-slate-600">
+            Таны татсан файл устах болно. Та итгэлтэй байна уу?
+          </div>
+          <div className="flex items-center justify-end gap-2 border-t border-[#e6edf7] px-5 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmClearOpen(false)}
+              className="rounded-[10px] border-[#dbe4f3] bg-white text-slate-600 hover:bg-[#f1f5f9]"
+            >
+              Үгүй
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setConfirmClearOpen(false);
+                onClear();
+              }}
+              className="rounded-[10px] bg-[#0b5cab] text-white hover:bg-[#0a4f96]"
+            >
+              Тийм, цуцлах
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2300,6 +2746,14 @@ export function MaterialBuilderWorkspaceSection({
     null,
   );
   const [fileDialogOpen, setFileDialogOpen] = useState(false);
+  const [importedDocument, setImportedDocument] =
+    useState<ImportedDocument | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isExtractingImport, setIsExtractingImport] = useState(false);
+  const [isAutoFillingImport, setIsAutoFillingImport] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [autoFillTotal, setAutoFillTotal] = useState(0);
+  const [autoFillDone, setAutoFillDone] = useState(0);
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [sharedLibraryDialogOpen, setSharedLibraryDialogOpen] = useState(false);
   const [textbookDialogOpen, setTextbookDialogOpen] = useState(false);
@@ -2329,6 +2783,10 @@ export function MaterialBuilderWorkspaceSection({
   const [dragTargetQuestionId, setDragTargetQuestionId] = useState<
     string | null
   >(null);
+  const [generateImportedAnswers] = useMutation<
+    { generateQuestionAnswer: GenerateQuestionAnswerResult },
+    { input: GenerateQuestionAnswerInput }
+  >(GenerateQuestionAnswerDocument);
   const textbookSubject = useMemo(
     () => normalizeTextbookSubject(generalInfo.subject),
     [generalInfo.subject],
@@ -2502,6 +2960,18 @@ export function MaterialBuilderWorkspaceSection({
     textbookPreviewQuestions.length,
   ]);
 
+  useEffect(() => {
+    if (!isExtractingImport) {
+      return;
+    }
+
+    setUploadProgress(0);
+
+    return () => {
+      setUploadProgress(null);
+    };
+  }, [isExtractingImport]);
+
   function handleSourceSelect(nextSource: MaterialSourceId) {
     onSourceChange(nextSource);
 
@@ -2523,6 +2993,354 @@ export function MaterialBuilderWorkspaceSection({
     if (nextSource === "shared-library") {
       setSharedLibraryDialogOpen(true);
     }
+  }
+
+  async function handleSelectImportFiles(files: File[]) {
+    if (files.length === 0) {
+      return;
+    }
+
+    setImportError(null);
+    setIsExtractingImport(true);
+
+    try {
+      const useFastImport = shouldUseFastImport(files);
+      const fileLabel = summarizeImportFileNames(files);
+      const exam = await requestExtractedExam(files, {
+        mode: useFastImport ? "fast" : "enhance",
+        onProgress: ({ loaded, total }) => {
+          if (!total || total <= 0) {
+            return;
+          }
+          const percent = Math.min(
+            100,
+            Math.round((loaded / total) * 100),
+          );
+          setUploadProgress(percent);
+        },
+      });
+      const questions = buildImportedQuestions(exam, fileLabel);
+
+      if (questions.length === 0) {
+        throw new Error("Файлаас танигдсан асуулт олдсонгүй.");
+      }
+
+      const nextDocument: ImportedDocument = {
+        fileName: fileLabel,
+        questions,
+        selectedIds: questions.map((question) => question.id),
+      };
+      setImportedDocument(nextDocument);
+      setUploadProgress(100);
+      setAutoFillTotal(nextDocument.questions.length);
+      setAutoFillDone(0);
+      toast.success(`${fileLabel}-с ${questions.length} асуулт уншлаа.`);
+      void autoFillImportedAnswers(nextDocument);
+    } catch (error: unknown) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message: string }).message)
+          : "Файлаас асуулт уншихад алдаа гарлаа.";
+
+      setImportedDocument(null);
+      setImportError(message);
+      toast.error(message);
+    } finally {
+      setIsExtractingImport(false);
+    }
+  }
+
+  async function autoFillImportedAnswers(document: ImportedDocument) {
+    setIsAutoFillingImport(true);
+    setAutoFillTotal(document.questions.length);
+    setAutoFillDone(0);
+
+    try {
+      const nextQuestions = [...document.questions];
+
+      const sleep = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
+      const getRetryDelayMs = (attempt: number, message: string) => {
+        const match = message.match(/(\d+)\s*секунд/i);
+        if (match) {
+          return Number(match[1]) * 1000;
+        }
+        const base = 800 * Math.pow(2, attempt);
+        return Math.min(10000, base);
+      };
+      const shouldRetry = (message: string) =>
+        /лимит|limit|rate|429|too many|сүлжээний алдаа|network/i.test(message);
+
+      for (let i = 0; i < nextQuestions.length; i += 1) {
+        const question = nextQuestions[i];
+        const hasEmptyAnswer = question.answers.some((answer) => !answer.trim());
+
+        if (!hasEmptyAnswer && question.answers.length >= 4) {
+          continue;
+        }
+
+        const prompt = `${question.question}\n\n4 сонголттой, зөвхөн тэмдэглэгээ ашиглаж (англи үггүй), нэг зөв хариулттай байдлаар хариул.`.trim();
+
+        let payloadOptions: string[] = [];
+        let payloadCorrectAnswer = "";
+
+        const callGroqFallback = async () => {
+          const response = await fetch("/api/groq-answer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt }),
+          });
+          if (!response.ok) {
+            return null;
+          }
+          const payload = (await response.json()) as {
+            options?: string[];
+            correctAnswer?: string;
+          };
+          return payload;
+        };
+
+        try {
+          let attempt = 0;
+          let lastErrorMessage = "";
+
+          while (attempt < 3) {
+            try {
+              const { data } = await generateImportedAnswers({
+                variables: {
+                  input: {
+                    prompt,
+                    format: QuestionFormat.SingleChoice,
+                    points: question.points ?? 1,
+                  },
+                },
+              });
+
+              const payload = data?.generateQuestionAnswer;
+              if (!payload) {
+                return;
+              }
+
+              payloadOptions = payload.options ?? [];
+              payloadCorrectAnswer = payload.correctAnswer ?? "";
+              break;
+            } catch (error) {
+              lastErrorMessage =
+                error instanceof Error ? error.message : String(error);
+              if (!shouldRetry(lastErrorMessage)) {
+                throw error;
+              }
+              const delay = getRetryDelayMs(attempt, lastErrorMessage);
+              await sleep(delay);
+              attempt += 1;
+            }
+          }
+
+          if (payloadOptions.length === 0 && payloadCorrectAnswer === "") {
+            const groqPayload = await callGroqFallback();
+            if (!groqPayload) {
+              throw new Error(lastErrorMessage || "AI хүсэлт амжилтгүй боллоо.");
+            }
+            payloadOptions = groqPayload.options ?? [];
+            payloadCorrectAnswer = groqPayload.correctAnswer ?? "";
+          }
+        } catch (error) {
+          const groqPayload = await callGroqFallback();
+          if (!groqPayload) {
+            // AI fallback: keep existing answers if generation fails
+            continue;
+          }
+          payloadOptions = groqPayload.options ?? [];
+          payloadCorrectAnswer = groqPayload.correctAnswer ?? "";
+        }
+
+        const options = payloadOptions
+          .map((option) => sanitizeImportedText(option))
+          .filter(Boolean)
+          .slice(0, 6);
+        const fallbackOptions = question.answers.map((answer) =>
+          sanitizeImportedText(answer),
+        );
+        const baseOptions =
+          options.length > 0 ? options : fallbackOptions.filter(Boolean);
+        const normalizedOptions =
+          baseOptions.length >= 4
+            ? baseOptions.slice(0, 4)
+            : [...baseOptions, ...Array(4 - baseOptions.length).fill("")];
+        const correctAnswer = sanitizeImportedText(payloadCorrectAnswer);
+        const correctIndex = normalizedOptions.findIndex(
+          (option) => option.trim() === correctAnswer.trim(),
+        );
+
+        const updatedQuestion = {
+          ...question,
+          answers: normalizedOptions,
+          correct: correctIndex >= 0 ? correctIndex : 0,
+        };
+        nextQuestions[i] = updatedQuestion;
+        setAutoFillDone((current) => current + 1);
+
+        setImportedDocument((current) =>
+          current
+            ? {
+                ...current,
+                questions: current.questions.map((item) =>
+                  item.id === question.id ? updatedQuestion : item,
+                ),
+              }
+            : current,
+        );
+      }
+    } finally {
+      setIsAutoFillingImport(false);
+    }
+  }
+
+  function handleToggleImportedQuestion(id: string, checked: boolean) {
+    setImportedDocument((current) =>
+      current
+        ? {
+            ...current,
+            selectedIds: checked
+              ? current.selectedIds.includes(id)
+                ? current.selectedIds
+                : [...current.selectedIds, id]
+              : current.selectedIds.filter((existing) => existing !== id),
+          }
+        : current,
+    );
+  }
+
+  function handleUpdateImportedQuestion(
+    questionId: string,
+    updater: (question: PreviewQuestion) => PreviewQuestion,
+  ) {
+    setImportedDocument((current) =>
+      current
+        ? {
+            ...current,
+            questions: current.questions.map((question) =>
+              question.id === questionId ? updater(question) : question,
+            ),
+          }
+        : current,
+    );
+  }
+
+  function handleAddImportedAnswer(questionId: string) {
+    handleUpdateImportedQuestion(questionId, (question) => ({
+      ...question,
+      answers: [...question.answers, ""],
+    }));
+  }
+
+  function handleRemoveImportedAnswer(questionId: string, answerIndex: number) {
+    handleUpdateImportedQuestion(questionId, (question) => {
+      if (question.questionType === "written") {
+        return question;
+      }
+
+      if (question.answers.length <= 4) {
+        return question;
+      }
+
+      const nextAnswers = question.answers.filter(
+        (_, index) => index !== answerIndex,
+      );
+      const nextCorrect =
+        question.correct === answerIndex
+          ? 0
+          : question.correct > answerIndex
+            ? question.correct - 1
+            : question.correct;
+
+      return {
+        ...question,
+        answers: nextAnswers,
+        correct: Math.max(0, Math.min(nextCorrect, nextAnswers.length - 1)),
+      };
+    });
+  }
+
+  function handleSetImportedCorrectAnswer(
+    questionId: string,
+    answerIndex: number,
+  ) {
+    handleUpdateImportedQuestion(questionId, (question) => ({
+      ...question,
+      correct: answerIndex,
+    }));
+  }
+
+  function handleAddAllImportedQuestions() {
+    if (!importedDocument || importedDocument.questions.length === 0) {
+      return;
+    }
+
+    onPreviewQuestionsChange(
+      reindexQuestions([
+        ...importedDocument.questions.map((question, index) => ({
+          ...question,
+          id: `import-${Date.now()}-${index + 1}`,
+          sourceType: "import" as const,
+        })),
+        ...previewQuestions,
+      ]),
+    );
+    toast.success(`${importedDocument.questions.length} асуулт нэмэгдлээ.`);
+    setImportedDocument(null);
+    setImportError(null);
+    setFileDialogOpen(false);
+  }
+
+  function handleAddSelectedImportedQuestions() {
+    if (!importedDocument) {
+      return;
+    }
+
+    const selectedQuestions = importedDocument.questions.filter((question) =>
+      importedDocument.selectedIds.includes(question.id),
+    );
+
+    if (selectedQuestions.length === 0) {
+      toast.error("Нэмэх асуултаа сонгоно уу.");
+      return;
+    }
+
+    onPreviewQuestionsChange(
+      reindexQuestions([
+        ...selectedQuestions.map((question, index) => ({
+          ...question,
+          id: `import-${Date.now()}-${index + 1}`,
+          sourceType: "import" as const,
+        })),
+        ...previewQuestions,
+      ]),
+    );
+    toast.success(`${selectedQuestions.length} асуулт нэмэгдлээ.`);
+
+    const remainingQuestions = importedDocument.questions.filter(
+      (question) => !importedDocument.selectedIds.includes(question.id),
+    );
+
+    setImportedDocument(
+      remainingQuestions.length > 0
+        ? {
+            ...importedDocument,
+            questions: remainingQuestions,
+            selectedIds: [],
+          }
+        : null,
+    );
+    setImportError(null);
+    if (remainingQuestions.length === 0) {
+      setFileDialogOpen(false);
+    }
+  }
+
+  function handleClearImportedQuestions() {
+    setImportedDocument(null);
+    setImportError(null);
   }
 
   function handleAddTextbook() {
@@ -2974,14 +3792,31 @@ export function MaterialBuilderWorkspaceSection({
       </Dialog>
 
       <Dialog open={fileDialogOpen} onOpenChange={setFileDialogOpen}>
-        <DialogContent className="w-[min(100vw-1.5rem,38rem)]! max-w-none! gap-0 overflow-hidden rounded-[24px] border border-[#dfe7f3] bg-white p-0 shadow-[0_26px_72px_-30px_rgba(15,23,42,0.26)]">
-          <DialogHeader className="border-b border-[#e6edf7] px-5 py-4">
+        <DialogContent className="flex h-[min(92vh,54rem)] w-[min(100vw-1.5rem,64rem)]! max-w-none! flex-col gap-0 overflow-hidden rounded-[28px] border border-[#dfe7f3] bg-white p-0 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.28)]">
+          <DialogHeader className="border-b border-[#e6edf7] px-6 py-5">
             <DialogTitle className="text-[20px] font-semibold text-slate-900">
               Файлаас асуулт оруулах
             </DialogTitle>
           </DialogHeader>
-          <div className="bg-white px-5 py-5">
-            <FilePanel />
+          <div className="min-h-0 flex-1 overflow-y-auto bg-white px-6 py-6">
+            <FilePanel
+              importError={importError}
+              importedDocument={importedDocument}
+              isExtracting={isExtractingImport}
+              isAutoFilling={isAutoFillingImport}
+              uploadProgress={uploadProgress}
+              autoFillDone={autoFillDone}
+              autoFillTotal={autoFillTotal}
+              onAddAll={handleAddAllImportedQuestions}
+              onAddSelected={handleAddSelectedImportedQuestions}
+              onAddAnswer={handleAddImportedAnswer}
+              onClear={handleClearImportedQuestions}
+              onRemoveAnswer={handleRemoveImportedAnswer}
+              onSelectFiles={handleSelectImportFiles}
+              onSetCorrectAnswer={handleSetImportedCorrectAnswer}
+              onToggleQuestion={handleToggleImportedQuestion}
+              onUpdateQuestion={handleUpdateImportedQuestion}
+            />
           </div>
         </DialogContent>
       </Dialog>
