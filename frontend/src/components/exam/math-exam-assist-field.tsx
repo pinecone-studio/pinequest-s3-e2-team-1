@@ -56,6 +56,7 @@ type MathAssistFieldProps = {
   placeholder?: string;
   previewDisplayMode?: boolean;
   previewForceMath?: boolean;
+  disableRichPreview?: boolean;
   secondaryAction?: {
     active?: boolean;
     icon: ReactNode;
@@ -73,6 +74,7 @@ export function MathAssistField({
   placeholder,
   previewDisplayMode = false,
   previewForceMath = false,
+  disableRichPreview = false,
   secondaryAction,
   value,
 }: MathAssistFieldProps) {
@@ -116,7 +118,8 @@ export function MathAssistField({
       }),
     [normalizedValue, previewDisplayMode, previewForceMath],
   );
-  const usesRenderedMathEditor = previewForceMath || mathSegments.length > 0;
+  const usesRenderedMathEditor =
+    !disableRichPreview && (previewForceMath || mathSegments.length > 0);
   const supportsWholeRichTextEditor = multiline && !usesRenderedMathEditor;
   const supportsActiveTextFormatting =
     supportsWholeRichTextEditor || activeTextIndex !== null;
@@ -693,11 +696,12 @@ export function MathAssistField({
     activeMathIndex !== null ||
     activeTextIndex !== null;
   const shouldShowRenderedPreview =
-    hasActiveRenderedEditor ||
-    (!isEditing &&
-      !isKeyboardOpen &&
-      activeMathIndex === null &&
-      Boolean(editableValue.trim()));
+    !disableRichPreview &&
+    (hasActiveRenderedEditor ||
+      (!isEditing &&
+        !isKeyboardOpen &&
+        activeMathIndex === null &&
+        Boolean(editableValue.trim())));
   const shouldShowLivePreview =
     !usesRenderedMathEditor &&
     (isEditing ||

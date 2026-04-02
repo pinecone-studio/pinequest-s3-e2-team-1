@@ -128,6 +128,9 @@ const questionMathAssistFieldClassName = `${mathAssistFieldClassName} bg-white!`
 const answerMathAssistFieldClassName = `${mathAssistFieldClassName} h-11! min-h-11! bg-white!`;
 const mathAssistFieldContentClassName =
   "pl-3 font-sans text-[14px] leading-[1.6] font-normal tracking-normal text-slate-800 [&_.katex]:text-inherit";
+const DOCX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const acceptedImportFormats = ".pdf,.doc,.docx,.txt,.md,.xls,.xlsx";
 
 function normalizeGeneratedExplanationText(value: string) {
   return normalizeBackendMathText(value)
@@ -205,6 +208,103 @@ function resolvePreviewQuestionSourceType(
   }
 
   return "shared-library";
+}
+
+type ImportedDocument = {
+  fileName: string;
+  questions: PreviewQuestion[];
+  selectedIds: string[];
+};
+
+function summarizeImportFileNames(files: File[]) {
+  if (files.length === 0) {
+    return "attachment";
+  }
+
+  if (files.length === 1) {
+    return files[0]?.name ?? "attachment";
+  }
+
+  return `${files[0]?.name ?? "attachment"} +${files.length - 1} файл`;
+}
+
+function shouldUseFastImport(files: File[]) {
+  return files.every((file) => {
+    const fileName = file.name.toLowerCase();
+
+    return (
+      file.type === DOCX_MIME_TYPE ||
+      file.type.startsWith("text/") ||
+      /\.(docx|txt|md|markdown|csv|json)$/i.test(fileName)
+    );
+  });
+}
+
+function sanitizeImportedText(value?: string | null) {
+  return String(value ?? "")
+    .replace(/^q\s*\d+\s*[\.:]?\s*/i, "")
+    .replace(/^question\s*\d+\s*[\.:]?\s*/i, "")
+    .replace(/\\times/g, "×")
+    .replace(/\\div/g, "÷")
+    .replace(/\\cdot/g, "·")
+    .replace(/\\\/:?\s*/g, "/")
+    .replace(/\\+/g, "")
+    .replace(/\bdiv\b/gi, "÷")
+    .replace(/\$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function buildImportedQuestions(
+  exam: Awaited<ReturnType<typeof requestExtractedExam>>,
+  sourceName: string,
+): PreviewQuestion[] {
+  const rawQuestions = Array.isArray(exam.questions) ? exam.questions : [];
+
+  return rawQuestions.reduce<PreviewQuestion[]>((result, question, index) => {
+    const prompt = sanitizeImportedText(question.prompt);
+
+    if (!prompt.trim()) {
+      return result;
+    }
+
+    const options = (question.options ?? [])
+      .map((option) => sanitizeImportedText(option))
+      .filter(Boolean)
+      .slice(0, 6);
+    const writtenAnswer =
+      sanitizeImportedText(question.answerLatex) ||
+      sanitizeImportedText(question.responseGuide) ||
+      "";
+    const baseOptions =
+      options.length > 0 ? options : writtenAnswer ? [writtenAnswer] : [];
+    const normalizedOptions =
+      baseOptions.length >= 4
+        ? baseOptions
+        : [...baseOptions, ...Array(4 - baseOptions.length).fill("")];
+
+    const correct =
+      typeof question.correctOption === "number" &&
+      question.correctOption >= 0 &&
+      question.correctOption < normalizedOptions.length
+        ? question.correctOption
+        : 0;
+
+    result.push({
+      id: `import-${Date.now()}-${index + 1}`,
+      index: index + 1,
+      question: prompt,
+      answers: normalizedOptions,
+      correct,
+      explanation: sanitizeImportedText(question.responseGuide) || undefined,
+      points: question.points ?? 1,
+      questionType: "single-choice",
+      source: sourceName,
+      sourceType: "import",
+    });
+
+    return result;
+  }, []);
 }
 
 type QueuedTextbookImport = {
@@ -2662,6 +2762,10 @@ export function MaterialBuilderWorkspaceSection({
   const [dragTargetQuestionId, setDragTargetQuestionId] = useState<
     string | null
   >(null);
+  const [generateImportedAnswers] = useMutation<
+    { generateQuestionAnswer: GenerateQuestionAnswerResult },
+    { input: GenerateQuestionAnswerInput }
+  >(GenerateQuestionAnswerDocument);
   const textbookSubject = useMemo(
     () => normalizeTextbookSubject(generalInfo.subject),
     [generalInfo.subject],
@@ -3051,6 +3155,18 @@ export function MaterialBuilderWorkspaceSection({
     textbookPreviewQuestions.length,
   ]);
 
+  useEffect(() => {
+    if (!isExtractingImport) {
+      return;
+    }
+
+    setUploadProgress(0);
+
+    return () => {
+      setUploadProgress(null);
+    };
+  }, [isExtractingImport]);
+
   function handleSourceSelect(nextSource: MaterialSourceId) {
     onSourceChange(nextSource);
 
@@ -3072,6 +3188,354 @@ export function MaterialBuilderWorkspaceSection({
     if (nextSource === "shared-library") {
       setSharedLibraryDialogOpen(true);
     }
+  }
+
+  async function handleSelectImportFiles(files: File[]) {
+    if (files.length === 0) {
+      return;
+    }
+
+    setImportError(null);
+    setIsExtractingImport(true);
+
+    try {
+      const useFastImport = shouldUseFastImport(files);
+      const fileLabel = summarizeImportFileNames(files);
+      const exam = await requestExtractedExam(files, {
+        mode: useFastImport ? "fast" : "enhance",
+        onProgress: ({ loaded, total }) => {
+          if (!total || total <= 0) {
+            return;
+          }
+          const percent = Math.min(
+            100,
+            Math.round((loaded / total) * 100),
+          );
+          setUploadProgress(percent);
+        },
+      });
+      const questions = buildImportedQuestions(exam, fileLabel);
+
+      if (questions.length === 0) {
+        throw new Error("Файлаас танигдсан асуулт олдсонгүй.");
+      }
+
+      const nextDocument: ImportedDocument = {
+        fileName: fileLabel,
+        questions,
+        selectedIds: questions.map((question) => question.id),
+      };
+      setImportedDocument(nextDocument);
+      setUploadProgress(100);
+      setAutoFillTotal(nextDocument.questions.length);
+      setAutoFillDone(0);
+      toast.success(`${fileLabel}-с ${questions.length} асуулт уншлаа.`);
+      void autoFillImportedAnswers(nextDocument);
+    } catch (error: unknown) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message: string }).message)
+          : "Файлаас асуулт уншихад алдаа гарлаа.";
+
+      setImportedDocument(null);
+      setImportError(message);
+      toast.error(message);
+    } finally {
+      setIsExtractingImport(false);
+    }
+  }
+
+  async function autoFillImportedAnswers(document: ImportedDocument) {
+    setIsAutoFillingImport(true);
+    setAutoFillTotal(document.questions.length);
+    setAutoFillDone(0);
+
+    try {
+      const nextQuestions = [...document.questions];
+
+      const sleep = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
+      const getRetryDelayMs = (attempt: number, message: string) => {
+        const match = message.match(/(\d+)\s*секунд/i);
+        if (match) {
+          return Number(match[1]) * 1000;
+        }
+        const base = 800 * Math.pow(2, attempt);
+        return Math.min(10000, base);
+      };
+      const shouldRetry = (message: string) =>
+        /лимит|limit|rate|429|too many|сүлжээний алдаа|network/i.test(message);
+
+      for (let i = 0; i < nextQuestions.length; i += 1) {
+        const question = nextQuestions[i];
+        const hasEmptyAnswer = question.answers.some((answer) => !answer.trim());
+
+        if (!hasEmptyAnswer && question.answers.length >= 4) {
+          continue;
+        }
+
+        const prompt = `${question.question}\n\n4 сонголттой, зөвхөн тэмдэглэгээ ашиглаж (англи үггүй), нэг зөв хариулттай байдлаар хариул.`.trim();
+
+        let payloadOptions: string[] = [];
+        let payloadCorrectAnswer = "";
+
+        const callGroqFallback = async () => {
+          const response = await fetch("/api/groq-answer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt }),
+          });
+          if (!response.ok) {
+            return null;
+          }
+          const payload = (await response.json()) as {
+            options?: string[];
+            correctAnswer?: string;
+          };
+          return payload;
+        };
+
+        try {
+          let attempt = 0;
+          let lastErrorMessage = "";
+
+          while (attempt < 3) {
+            try {
+              const { data } = await generateImportedAnswers({
+                variables: {
+                  input: {
+                    prompt,
+                    format: QuestionFormat.SingleChoice,
+                    points: question.points ?? 1,
+                  },
+                },
+              });
+
+              const payload = data?.generateQuestionAnswer;
+              if (!payload) {
+                return;
+              }
+
+              payloadOptions = payload.options ?? [];
+              payloadCorrectAnswer = payload.correctAnswer ?? "";
+              break;
+            } catch (error) {
+              lastErrorMessage =
+                error instanceof Error ? error.message : String(error);
+              if (!shouldRetry(lastErrorMessage)) {
+                throw error;
+              }
+              const delay = getRetryDelayMs(attempt, lastErrorMessage);
+              await sleep(delay);
+              attempt += 1;
+            }
+          }
+
+          if (payloadOptions.length === 0 && payloadCorrectAnswer === "") {
+            const groqPayload = await callGroqFallback();
+            if (!groqPayload) {
+              throw new Error(lastErrorMessage || "AI хүсэлт амжилтгүй боллоо.");
+            }
+            payloadOptions = groqPayload.options ?? [];
+            payloadCorrectAnswer = groqPayload.correctAnswer ?? "";
+          }
+        } catch (error) {
+          const groqPayload = await callGroqFallback();
+          if (!groqPayload) {
+            // AI fallback: keep existing answers if generation fails
+            continue;
+          }
+          payloadOptions = groqPayload.options ?? [];
+          payloadCorrectAnswer = groqPayload.correctAnswer ?? "";
+        }
+
+        const options = payloadOptions
+          .map((option) => sanitizeImportedText(option))
+          .filter(Boolean)
+          .slice(0, 6);
+        const fallbackOptions = question.answers.map((answer) =>
+          sanitizeImportedText(answer),
+        );
+        const baseOptions =
+          options.length > 0 ? options : fallbackOptions.filter(Boolean);
+        const normalizedOptions =
+          baseOptions.length >= 4
+            ? baseOptions.slice(0, 4)
+            : [...baseOptions, ...Array(4 - baseOptions.length).fill("")];
+        const correctAnswer = sanitizeImportedText(payloadCorrectAnswer);
+        const correctIndex = normalizedOptions.findIndex(
+          (option) => option.trim() === correctAnswer.trim(),
+        );
+
+        const updatedQuestion = {
+          ...question,
+          answers: normalizedOptions,
+          correct: correctIndex >= 0 ? correctIndex : 0,
+        };
+        nextQuestions[i] = updatedQuestion;
+        setAutoFillDone((current) => current + 1);
+
+        setImportedDocument((current) =>
+          current
+            ? {
+                ...current,
+                questions: current.questions.map((item) =>
+                  item.id === question.id ? updatedQuestion : item,
+                ),
+              }
+            : current,
+        );
+      }
+    } finally {
+      setIsAutoFillingImport(false);
+    }
+  }
+
+  function handleToggleImportedQuestion(id: string, checked: boolean) {
+    setImportedDocument((current) =>
+      current
+        ? {
+            ...current,
+            selectedIds: checked
+              ? current.selectedIds.includes(id)
+                ? current.selectedIds
+                : [...current.selectedIds, id]
+              : current.selectedIds.filter((existing) => existing !== id),
+          }
+        : current,
+    );
+  }
+
+  function handleUpdateImportedQuestion(
+    questionId: string,
+    updater: (question: PreviewQuestion) => PreviewQuestion,
+  ) {
+    setImportedDocument((current) =>
+      current
+        ? {
+            ...current,
+            questions: current.questions.map((question) =>
+              question.id === questionId ? updater(question) : question,
+            ),
+          }
+        : current,
+    );
+  }
+
+  function handleAddImportedAnswer(questionId: string) {
+    handleUpdateImportedQuestion(questionId, (question) => ({
+      ...question,
+      answers: [...question.answers, ""],
+    }));
+  }
+
+  function handleRemoveImportedAnswer(questionId: string, answerIndex: number) {
+    handleUpdateImportedQuestion(questionId, (question) => {
+      if (question.questionType === "written") {
+        return question;
+      }
+
+      if (question.answers.length <= 4) {
+        return question;
+      }
+
+      const nextAnswers = question.answers.filter(
+        (_, index) => index !== answerIndex,
+      );
+      const nextCorrect =
+        question.correct === answerIndex
+          ? 0
+          : question.correct > answerIndex
+            ? question.correct - 1
+            : question.correct;
+
+      return {
+        ...question,
+        answers: nextAnswers,
+        correct: Math.max(0, Math.min(nextCorrect, nextAnswers.length - 1)),
+      };
+    });
+  }
+
+  function handleSetImportedCorrectAnswer(
+    questionId: string,
+    answerIndex: number,
+  ) {
+    handleUpdateImportedQuestion(questionId, (question) => ({
+      ...question,
+      correct: answerIndex,
+    }));
+  }
+
+  function handleAddAllImportedQuestions() {
+    if (!importedDocument || importedDocument.questions.length === 0) {
+      return;
+    }
+
+    onPreviewQuestionsChange(
+      reindexQuestions([
+        ...importedDocument.questions.map((question, index) => ({
+          ...question,
+          id: `import-${Date.now()}-${index + 1}`,
+          sourceType: "import" as const,
+        })),
+        ...previewQuestions,
+      ]),
+    );
+    toast.success(`${importedDocument.questions.length} асуулт нэмэгдлээ.`);
+    setImportedDocument(null);
+    setImportError(null);
+    setFileDialogOpen(false);
+  }
+
+  function handleAddSelectedImportedQuestions() {
+    if (!importedDocument) {
+      return;
+    }
+
+    const selectedQuestions = importedDocument.questions.filter((question) =>
+      importedDocument.selectedIds.includes(question.id),
+    );
+
+    if (selectedQuestions.length === 0) {
+      toast.error("Нэмэх асуултаа сонгоно уу.");
+      return;
+    }
+
+    onPreviewQuestionsChange(
+      reindexQuestions([
+        ...selectedQuestions.map((question, index) => ({
+          ...question,
+          id: `import-${Date.now()}-${index + 1}`,
+          sourceType: "import" as const,
+        })),
+        ...previewQuestions,
+      ]),
+    );
+    toast.success(`${selectedQuestions.length} асуулт нэмэгдлээ.`);
+
+    const remainingQuestions = importedDocument.questions.filter(
+      (question) => !importedDocument.selectedIds.includes(question.id),
+    );
+
+    setImportedDocument(
+      remainingQuestions.length > 0
+        ? {
+            ...importedDocument,
+            questions: remainingQuestions,
+            selectedIds: [],
+          }
+        : null,
+    );
+    setImportError(null);
+    if (remainingQuestions.length === 0) {
+      setFileDialogOpen(false);
+    }
+  }
+
+  function handleClearImportedQuestions() {
+    setImportedDocument(null);
+    setImportError(null);
   }
 
   function handleAddTextbook() {
