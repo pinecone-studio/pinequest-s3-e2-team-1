@@ -11,6 +11,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,12 +31,14 @@ import { normalizeBackendMathText } from "@/lib/normalize-math-text";
 import {
   ConfirmExamVariantsDocument,
   GetExamVariantJobDocument,
+  GetNewMathExamDocument,
   SaveNewMathExamDocument,
   SaveExamVariantsDocument,
   RequestExamVariantsDocument,
 } from "@/gql/create-exam-documents";
 import { MathExamQuestionType } from "@/gql/graphql";
 import { TestShell } from "../../_components/test-shell";
+import type { BreadcrumbItem } from "../../_components/test-header-bar";
 import {
   GeneralInfoSection,
   type GeneralInfoValues,
@@ -66,6 +69,32 @@ type GeneratedVariant = {
     correctAnswer?: string | null;
     explanation?: string | null;
   }>;
+};
+
+type ExistingExamQuestion = {
+  answerLatex?: string | null;
+  correctOption?: number | null;
+  id: string;
+  options?: string[] | null;
+  points?: number | null;
+  prompt: string;
+  responseGuide?: string | null;
+  type: string;
+};
+
+type ExistingExam = {
+  examId: string;
+  questions: ExistingExamQuestion[];
+  sessionMeta?: {
+    durationMinutes?: number | null;
+    examType?: string | null;
+    grade?: number | null;
+    groupClass?: string | null;
+    subject?: string | null;
+    variantCount?: number | null;
+    withVariants?: boolean | null;
+  } | null;
+  title: string;
 };
 
 const defaultGeneralInfo: GeneralInfoValues = {
@@ -106,31 +135,80 @@ function normalizeVariantQuestions(
   }));
 }
 
-function mapVariantToPreviewQuestions(
-  variant: GeneratedVariant,
-): PreviewQuestion[] {
-  return normalizeVariantQuestions(variant.questions).map((question, index) => {
-    const options = question.options ?? [];
-    const matchedCorrectIndex = options.findIndex(
-      (option) => option.trim() === (question.correctAnswer ?? "").trim(),
-    );
-
-    return {
-      id: `variant-${variant.id}-${question.id}-${index + 1}`,
-      index: index + 1,
-      question: question.prompt,
-      questionType: question.type === "written" ? "written" : "single-choice",
-      answers: options,
-      correct: matchedCorrectIndex >= 0 ? matchedCorrectIndex : 0,
-      points: 1,
-      source: `AI хувилбар ${variant.variantNumber}`,
-      explanation: question.explanation ?? undefined,
-    };
-  });
-}
-
 function getDisplayVariantTitle(variant: GeneratedVariant) {
   return `Хувилбар ${variant.variantNumber}`;
+}
+
+function normalizeBuilderSubject(value?: string | null) {
+  const normalized = value?.trim().toLowerCase() ?? "";
+
+  if (!normalized) return "";
+  if (normalized === "math" || normalized.includes("мат")) return "math";
+  if (normalized === "physics" || normalized.includes("физ")) return "physics";
+  if (normalized === "chemistry" || normalized.includes("хим"))
+    return "chemistry";
+
+  return "";
+}
+
+function normalizeBuilderExamType(value?: string | null) {
+  const normalized = value?.trim().toLowerCase() ?? "";
+
+  if (!normalized) return "";
+  if (normalized === "progress" || normalized.includes("явц"))
+    return "progress";
+  if (normalized === "quarter" || normalized.includes("улир")) return "quarter";
+  if (normalized === "state" || normalized.includes("улс")) return "state";
+  if (normalized === "benchmark" || normalized.includes("жишиг"))
+    return "benchmark";
+  if (normalized === "unit" || normalized.includes("бүлэг")) return "unit";
+
+  return "";
+}
+
+function mapExistingExamToGeneralInfo(exam: ExistingExam): GeneralInfoValues {
+  return {
+    subject: normalizeBuilderSubject(exam.sessionMeta?.subject),
+    grade:
+      typeof exam.sessionMeta?.grade === "number"
+        ? String(exam.sessionMeta.grade)
+        : "",
+    examType: normalizeBuilderExamType(exam.sessionMeta?.examType),
+    examName: exam.title,
+    durationMinutes:
+      typeof exam.sessionMeta?.durationMinutes === "number"
+        ? String(exam.sessionMeta.durationMinutes)
+        : "",
+  };
+}
+
+function mapExistingExamToPreviewQuestions(
+  exam: ExistingExam,
+): PreviewQuestion[] {
+  return exam.questions.map((question, index) => {
+    const normalizedType = question.type.trim().toLowerCase();
+    const isWritten = normalizedType === "math" || normalizedType === "written";
+    const answers = isWritten
+      ? [question.answerLatex?.trim() || ""]
+      : (question.options ?? []).map((option) => String(option));
+
+    return {
+      id: `existing-${exam.examId}-${question.id}-${index + 1}`,
+      index: index + 1,
+      question: question.prompt,
+      questionType: isWritten ? "written" : "single-choice",
+      answers,
+      correct:
+        !isWritten &&
+        typeof question.correctOption === "number" &&
+        question.correctOption >= 0
+          ? question.correctOption
+          : 0,
+      points: question.points ?? 1,
+      source: exam.title,
+      explanation: question.responseGuide ?? undefined,
+    };
+  });
 }
 
 function buildBaseExamInput(args: {
@@ -218,6 +296,22 @@ function buildVariantMutationInput(
 }
 
 export default function MaterialBuilderPageContent() {
+  const searchParams = useSearchParams();
+  const editingExamId = searchParams.get("examId")?.trim() ?? "";
+  const isEditingExistingExam = editingExamId.length > 0;
+  const builderTitle = isEditingExistingExam
+    ? "Шалгалт үүсгэх"
+    : "Шалгалтын материал үүсгэх";
+  const breadcrumbItems: BreadcrumbItem[] = isEditingExistingExam
+    ? [
+        { href: "/test/live-dashboard", label: "Нүүр" },
+        { href: "/test/live-dashboard", label: "Миний шалгалтууд" },
+        { active: true, label: builderTitle },
+      ]
+    : [
+        { href: "/test/live-dashboard", label: "Нүүр" },
+        { active: true, label: builderTitle },
+      ];
   const [source, setSource] = useState<MaterialSourceId>("question-bank");
   const [selectedSharedMaterialId, setSelectedSharedMaterialId] =
     useState<string>(sharedLibraryMaterials[0]?.id ?? "");
@@ -253,6 +347,11 @@ export default function MaterialBuilderPageContent() {
   const [savingExam, setSavingExam] = useState(false);
   const [savingVariantAsExam, setSavingVariantAsExam] = useState(false);
   const [savedExamId, setSavedExamId] = useState<string | null>(null);
+  const [persistedVariantCount, setPersistedVariantCount] = useState(0);
+  const [isHydratingExistingExam, setIsHydratingExistingExam] = useState(
+    isEditingExistingExam,
+  );
+  const hydratedExamIdRef = useRef<string | null>(null);
   const variantToastIdRef = useRef<string | number | null>(null);
 
   const [requestExamVariants, { loading: requestingVariants }] = useMutation(
@@ -263,6 +362,9 @@ export default function MaterialBuilderPageContent() {
   );
   const [saveExamVariants] = useMutation(SaveExamVariantsDocument);
   const [saveNewMathExam] = useMutation(SaveNewMathExamDocument);
+  const [fetchExistingExam] = useLazyQuery(GetNewMathExamDocument, {
+    fetchPolicy: "no-cache",
+  });
   const [fetchVariantJob] = useLazyQuery(GetExamVariantJobDocument, {
     fetchPolicy: "no-cache",
   });
@@ -298,6 +400,99 @@ export default function MaterialBuilderPageContent() {
       ),
     [checkedVariantIds, generatedVariants],
   );
+  const resolvedVariantCount =
+    confirmedVariants.length > 0
+      ? confirmedVariants.length
+      : persistedVariantCount;
+
+  useEffect(() => {
+    if (!isEditingExistingExam) {
+      hydratedExamIdRef.current = null;
+      setGeneralInfo(defaultGeneralInfo);
+      setSource("question-bank");
+      setSelectedSharedMaterialId(sharedLibraryMaterials[0]?.id ?? "");
+      setVariantDialogOpen(false);
+      setVariantViewerOpen(false);
+      setVariantCount("2");
+      setPreviewQuestions([]);
+      setVariantJobId(null);
+      setGeneratedVariants([]);
+      setSelectedVariantId(null);
+      setCheckedVariantIds([]);
+      setConfirmedVariantIds([]);
+      setEditingQuestionId(null);
+      setSavingExam(false);
+      setSavingVariantAsExam(false);
+      setSavedExamId(null);
+      setPersistedVariantCount(0);
+      setIsHydratingExistingExam(false);
+      return;
+    }
+
+    if (hydratedExamIdRef.current === editingExamId) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsHydratingExistingExam(true);
+
+    void fetchExistingExam({
+      variables: { examId: editingExamId },
+    })
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        const exam = (
+          result.data as { getNewMathExam?: ExistingExam | null } | undefined
+        )?.getNewMathExam;
+
+        if (!exam) {
+          throw new Error("Сонгосон шалгалтын мэдээлэл олдсонгүй.");
+        }
+
+        setGeneralInfo(mapExistingExamToGeneralInfo(exam));
+        setSource("question-bank");
+        setSelectedSharedMaterialId(sharedLibraryMaterials[0]?.id ?? "");
+        setVariantDialogOpen(false);
+        setVariantViewerOpen(false);
+        setPreviewQuestions(mapExistingExamToPreviewQuestions(exam));
+        setVariantJobId(null);
+        setGeneratedVariants([]);
+        setSelectedVariantId(null);
+        setCheckedVariantIds([]);
+        setConfirmedVariantIds([]);
+        setEditingQuestionId(null);
+        setSavedExamId(exam.examId);
+        setPersistedVariantCount(
+          exam.sessionMeta?.withVariants
+            ? Math.max(exam.sessionMeta?.variantCount ?? 0, 0)
+            : 0,
+        );
+        hydratedExamIdRef.current = editingExamId;
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Сонгосон шалгалтыг нээж чадсангүй.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsHydratingExistingExam(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editingExamId, fetchExistingExam, isEditingExistingExam]);
 
   useEffect(() => {
     if (!variantJobId) return;
@@ -384,8 +579,8 @@ export default function MaterialBuilderPageContent() {
               examId: undefined,
               generalInfo,
               previewQuestions,
-              hasGeneratedVariants: false,
-              generatedVariantsCount: 0,
+              hasGeneratedVariants: resolvedVariantCount > 0,
+              generatedVariantsCount: resolvedVariantCount,
             }),
           },
         });
@@ -826,8 +1021,8 @@ export default function MaterialBuilderPageContent() {
           examId: savedExamId ?? undefined,
           generalInfo,
           previewQuestions,
-          hasGeneratedVariants: confirmedVariants.length > 0,
-          generatedVariantsCount: confirmedVariants.length,
+          hasGeneratedVariants: resolvedVariantCount > 0,
+          generatedVariantsCount: resolvedVariantCount,
         }),
       };
 
@@ -847,6 +1042,7 @@ export default function MaterialBuilderPageContent() {
       }
 
       setSavedExamId(examId);
+      setPersistedVariantCount(resolvedVariantCount);
       toast.success("Шалгалт өгөгдлийн санд амжилттай хадгалагдлаа.");
     } catch (error) {
       toast.error(
@@ -859,326 +1055,359 @@ export default function MaterialBuilderPageContent() {
     }
   }
 
+  const pageHeading = generalInfo.examName.trim();
+
   return (
     <TestShell
-      title="Шалгалтын материал үүсгэх"
-      description="Шалгалтын ерөнхий мэдээлэл, материалын эх сурвалж, хугацааг эндээс тохируулна."
-      contentClassName="bg-[#eef3ff] px-6 py-0 sm:px-8 lg:px-10"
-      sidebarCollapsible
+      breadcrumbItems={breadcrumbItems}
+      title={builderTitle}
+      contentClassName="px-6 py-0 sm:px-8 lg:px-10"
+      hideSidebar={isEditingExistingExam}
+      sidebarCollapsible={!isEditingExistingExam}
+      teacherVariant={isEditingExistingExam ? "none" : undefined}
     >
       <div className="min-h-[calc(100vh-3rem)] w-full pb-10 pt-1">
-        <GeneralInfoSection
-          values={generalInfo}
-          onChange={setGeneralInfo}
-          onApplyDemo={handleGeneralInfoDemo}
-          onReset={handleGeneralInfoReset}
-        />
-        <MaterialBuilderWorkspaceSection
-          generalInfo={generalInfo}
-          source={source}
-          onSourceChange={setSource}
-          selectedSharedMaterialId={selectedSharedMaterialId}
-          onSelectMaterialId={setSelectedSharedMaterialId}
-          previewQuestions={previewQuestions}
-          onPreviewQuestionsChange={setPreviewQuestions}
-          appendedContent={
-            confirmedVariants.length > 0 ? (
-              <section>
-                <div className="mb-4 flex items-center gap-2 text-[15px] font-semibold text-slate-900">
-                  <Check className="h-4 w-4 text-[#167e61]" />
-                  Баталсан AI хувилбарууд
-                </div>
-                <div className="space-y-3">
-                  {confirmedVariants.map((variant) => (
-                    <div key={variant.id} className="space-y-3">
-                      <div className="rounded-[14px] border border-[#e6edf7] bg-[#f8fbff] px-4 py-3">
-                        <div>
-                          <p className="text-[15px] font-semibold text-slate-900">
-                            {getDisplayVariantTitle(variant)}
-                          </p>
-                          <p className="mt-1 text-[12px] text-slate-500">
-                            {variant.questions.length} асуулт
-                          </p>
-                        </div>
-                      </div>
-                      {variant.questions.map((question) => (
-                        <div
-                          key={question.id}
-                          className={`group rounded-[20px] border bg-white p-5 transition-all duration-200 ${
-                            draggedConfirmedQuestion?.questionId === question.id
-                              ? "scale-[1.015] -rotate-1 border-sky-300 bg-sky-50/60 shadow-[0_24px_50px_-20px_rgba(14,116,144,0.35)] opacity-70"
-                              : dragTargetConfirmedQuestion?.questionId ===
-                                    question.id &&
-                                  dragTargetConfirmedQuestion.variantId ===
-                                    variant.id
-                                ? "border-[#0f74e7] ring-2 ring-[#0f74e7]/20 shadow-[0_0_0_1px_rgba(15,116,231,0.08)]"
-                                : "border-[#e3e9f4] shadow-[0_8px_20px_rgba(15,23,42,0.04)] hover:-translate-y-0.5 hover:border-[#b8ccef] hover:bg-[#fbfdff] hover:shadow-[0_10px_22px_rgba(148,163,184,0.14)]"
-                          }`}
-                          onDragEnter={() => {
-                            if (!draggedConfirmedQuestion) return;
-                            if (
-                              draggedConfirmedQuestion.variantId !== variant.id
-                            )
-                              return;
-                            setDragTargetConfirmedQuestion({
-                              variantId: variant.id,
-                              questionId: question.id,
-                            });
-                          }}
-                          onDragOver={(event) => {
-                            event.preventDefault();
-                            if (!draggedConfirmedQuestion) return;
-                            if (
-                              draggedConfirmedQuestion.variantId !== variant.id
-                            )
-                              return;
-                            event.dataTransfer.dropEffect = "move";
-                            setDragTargetConfirmedQuestion({
-                              variantId: variant.id,
-                              questionId: question.id,
-                            });
-                          }}
-                          onDrop={() =>
-                            dropConfirmedVariantQuestion(
-                              variant.id,
-                              question.id,
-                            )
-                          }
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="flex w-8 shrink-0 flex-col items-center gap-2">
-                              <button
-                                type="button"
-                                draggable
-                                onDragStart={(event) => {
-                                  event.dataTransfer.effectAllowed = "move";
-                                  setDraggedConfirmedQuestion({
-                                    variantId: variant.id,
-                                    questionId: question.id,
-                                  });
-                                  setDragTargetConfirmedQuestion({
-                                    variantId: variant.id,
-                                    questionId: question.id,
-                                  });
-                                }}
-                                onDragEnd={() => {
-                                  setDraggedConfirmedQuestion(null);
-                                  setDragTargetConfirmedQuestion(null);
-                                }}
-                                className="cursor-grab rounded-md p-1 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing"
-                                aria-label="Асуултын байрлал өөрчлөх"
-                              >
-                                <GripVertical className="h-4 w-4" />
-                              </button>
-                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#0f74e7] text-[12px] font-semibold text-white">
-                                {question.position}
-                              </span>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1 text-[14px] font-semibold text-slate-900">
-                                  <MathPreviewText
-                                    content={question.prompt}
-                                    contentSource="backend"
-                                    className="text-[14px] leading-relaxed text-slate-900"
-                                  />
-                                </div>
-                                <div className="flex items-start gap-1 transition-opacity group-hover:opacity-100 md:opacity-0">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      moveConfirmedVariantQuestion(
-                                        variant.id,
-                                        question.id,
-                                        "up",
-                                      )
-                                    }
-                                    disabled={question.position === 1}
-                                    className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
-                                    aria-label="Дээш зөөх"
-                                  >
-                                    <ChevronUp className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      moveConfirmedVariantQuestion(
-                                        variant.id,
-                                        question.id,
-                                        "down",
-                                      )
-                                    }
-                                    disabled={
-                                      question.position ===
-                                      variant.questions.length
-                                    }
-                                    className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
-                                    aria-label="Доош зөөх"
-                                  >
-                                    <ChevronDown className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      deleteConfirmedVariantQuestion(
-                                        variant.id,
-                                        question.id,
-                                      )
-                                    }
-                                    className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                    aria-label="Устгах"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              </div>
-                              {(question.options ?? []).length > 0 ? (
-                                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                                  {(question.options ?? []).map(
-                                    (option, index) => {
-                                      const isCorrect =
-                                        option.trim() ===
-                                        (question.correctAnswer ?? "").trim();
-
-                                      return (
-                                        <div
-                                          key={`${question.id}-${index}`}
-                                          className={`rounded-[14px] px-4 py-3 text-[14px] ${
-                                            isCorrect
-                                              ? "border border-[#a8ddd0] bg-[#d8f2ea] text-[#167e61]"
-                                              : "bg-[#eef2f6] text-slate-700"
-                                          }`}
-                                        >
-                                          <div className="flex items-start gap-1.5">
-                                            <span className="shrink-0">
-                                              {String.fromCharCode(65 + index)}.
-                                            </span>
-                                            <MathPreviewText
-                                              content={option}
-                                              contentSource="backend"
-                                              className="min-w-0 flex-1 text-[14px] leading-relaxed"
-                                            />
-                                          </div>
-                                        </div>
-                                      );
-                                    },
-                                  )}
-                                </div>
-                              ) : null}
-                              <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <Badge className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-100">
-                                  AI
-                                </Badge>
-                                <Badge className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                                  1 оноо
-                                </Badge>
-                              </div>
+        {isEditingExistingExam && pageHeading ? (
+          <div className="px-1 pb-6 pt-4">
+            <h1 className="text-[32px] font-bold tracking-[-0.02em] text-slate-900">
+              {pageHeading}
+            </h1>
+          </div>
+        ) : null}
+        {isEditingExistingExam && isHydratingExistingExam ? (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="flex min-h-[32vh] w-full items-center justify-center rounded-[22px] border border-dashed border-slate-300 bg-white px-6 text-sm text-slate-500">
+              Сонгосон шалгалтын мэдээллийг ачаалж байна...
+            </div>
+          </div>
+        ) : (
+          <>
+            <GeneralInfoSection
+              values={generalInfo}
+              onChange={setGeneralInfo}
+              onApplyDemo={handleGeneralInfoDemo}
+              onReset={handleGeneralInfoReset}
+              showUtilityActions={!isEditingExistingExam}
+            />
+            <MaterialBuilderWorkspaceSection
+              generalInfo={generalInfo}
+              source={source}
+              onSourceChange={setSource}
+              selectedSharedMaterialId={selectedSharedMaterialId}
+              onSelectMaterialId={setSelectedSharedMaterialId}
+              previewQuestions={previewQuestions}
+              onPreviewQuestionsChange={setPreviewQuestions}
+              appendedContent={
+                confirmedVariants.length > 0 ? (
+                  <section>
+                    <div className="mb-4 flex items-center gap-2 text-[15px] font-semibold text-slate-900">
+                      <Check className="h-4 w-4 text-[#167e61]" />
+                      Баталсан AI хувилбарууд
+                    </div>
+                    <div className="space-y-3">
+                      {confirmedVariants.map((variant) => (
+                        <div key={variant.id} className="space-y-3">
+                          <div className="rounded-[14px] border border-[#e6edf7] bg-[#f8fbff] px-4 py-3">
+                            <div>
+                              <p className="text-[15px] font-semibold text-slate-900">
+                                {getDisplayVariantTitle(variant)}
+                              </p>
+                              <p className="mt-1 text-[12px] text-slate-500">
+                                {variant.questions.length} асуулт
+                              </p>
                             </div>
                           </div>
+                          {variant.questions.map((question) => (
+                            <div
+                              key={question.id}
+                              className={`group rounded-[20px] border bg-white p-5 transition-all duration-200 ${
+                                draggedConfirmedQuestion?.questionId ===
+                                question.id
+                                  ? "scale-[1.015] -rotate-1 border-sky-300 bg-sky-50/60 shadow-[0_24px_50px_-20px_rgba(14,116,144,0.35)] opacity-70"
+                                  : dragTargetConfirmedQuestion?.questionId ===
+                                        question.id &&
+                                      dragTargetConfirmedQuestion.variantId ===
+                                        variant.id
+                                    ? "border-[#0f74e7] ring-2 ring-[#0f74e7]/20 shadow-[0_0_0_1px_rgba(15,116,231,0.08)]"
+                                    : "border-[#e3e9f4] shadow-[0_8px_20px_rgba(15,23,42,0.04)] hover:-translate-y-0.5 hover:border-[#b8ccef] hover:bg-[#fbfdff] hover:shadow-[0_10px_22px_rgba(148,163,184,0.14)]"
+                              }`}
+                              onDragEnter={() => {
+                                if (!draggedConfirmedQuestion) return;
+                                if (
+                                  draggedConfirmedQuestion.variantId !==
+                                  variant.id
+                                )
+                                  return;
+                                setDragTargetConfirmedQuestion({
+                                  variantId: variant.id,
+                                  questionId: question.id,
+                                });
+                              }}
+                              onDragOver={(event) => {
+                                event.preventDefault();
+                                if (!draggedConfirmedQuestion) return;
+                                if (
+                                  draggedConfirmedQuestion.variantId !==
+                                  variant.id
+                                )
+                                  return;
+                                event.dataTransfer.dropEffect = "move";
+                                setDragTargetConfirmedQuestion({
+                                  variantId: variant.id,
+                                  questionId: question.id,
+                                });
+                              }}
+                              onDrop={() =>
+                                dropConfirmedVariantQuestion(
+                                  variant.id,
+                                  question.id,
+                                )
+                              }
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="flex w-8 shrink-0 flex-col items-center gap-2">
+                                  <button
+                                    type="button"
+                                    draggable
+                                    onDragStart={(event) => {
+                                      event.dataTransfer.effectAllowed = "move";
+                                      setDraggedConfirmedQuestion({
+                                        variantId: variant.id,
+                                        questionId: question.id,
+                                      });
+                                      setDragTargetConfirmedQuestion({
+                                        variantId: variant.id,
+                                        questionId: question.id,
+                                      });
+                                    }}
+                                    onDragEnd={() => {
+                                      setDraggedConfirmedQuestion(null);
+                                      setDragTargetConfirmedQuestion(null);
+                                    }}
+                                    className="cursor-grab rounded-md p-1 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing"
+                                    aria-label="Асуултын байрлал өөрчлөх"
+                                  >
+                                    <GripVertical className="h-4 w-4" />
+                                  </button>
+                                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#0f74e7] text-[12px] font-semibold text-white">
+                                    {question.position}
+                                  </span>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1 text-[14px] font-semibold text-slate-900">
+                                      <MathPreviewText
+                                        content={question.prompt}
+                                        contentSource="backend"
+                                        className="text-[14px] leading-relaxed text-slate-900"
+                                      />
+                                    </div>
+                                    <div className="flex items-start gap-1 transition-opacity group-hover:opacity-100 md:opacity-0">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          moveConfirmedVariantQuestion(
+                                            variant.id,
+                                            question.id,
+                                            "up",
+                                          )
+                                        }
+                                        disabled={question.position === 1}
+                                        className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
+                                        aria-label="Дээш зөөх"
+                                      >
+                                        <ChevronUp className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          moveConfirmedVariantQuestion(
+                                            variant.id,
+                                            question.id,
+                                            "down",
+                                          )
+                                        }
+                                        disabled={
+                                          question.position ===
+                                          variant.questions.length
+                                        }
+                                        className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
+                                        aria-label="Доош зөөх"
+                                      >
+                                        <ChevronDown className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          deleteConfirmedVariantQuestion(
+                                            variant.id,
+                                            question.id,
+                                          )
+                                        }
+                                        className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                        aria-label="Устгах"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {(question.options ?? []).length > 0 ? (
+                                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                      {(question.options ?? []).map(
+                                        (option, index) => {
+                                          const isCorrect =
+                                            option.trim() ===
+                                            (
+                                              question.correctAnswer ?? ""
+                                            ).trim();
+
+                                          return (
+                                            <div
+                                              key={`${question.id}-${index}`}
+                                              className={`rounded-[14px] px-4 py-3 text-[14px] ${
+                                                isCorrect
+                                                  ? "border border-[#a8ddd0] bg-[#d8f2ea] text-[#167e61]"
+                                                  : "bg-[#eef2f6] text-slate-700"
+                                              }`}
+                                            >
+                                              <div className="flex items-start gap-1.5">
+                                                <span className="shrink-0">
+                                                  {String.fromCharCode(
+                                                    65 + index,
+                                                  )}
+                                                  .
+                                                </span>
+                                                <MathPreviewText
+                                                  content={option}
+                                                  contentSource="backend"
+                                                  className="min-w-0 flex-1 text-[14px] leading-relaxed"
+                                                />
+                                              </div>
+                                            </div>
+                                          );
+                                        },
+                                      )}
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <Badge className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-100">
+                                      AI
+                                    </Badge>
+                                    <Badge className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                      1 оноо
+                                    </Badge>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
-                  ))}
-                </div>
-              </section>
-            ) : null
-          }
-        />
+                  </section>
+                ) : null
+              }
+            />
 
-        <div className="flex items-center justify-end gap-3 pt-10">
-          <Button
-            variant="outline"
-            onClick={() =>
-              shouldShowVariantViewerButton
-                ? setVariantViewerOpen(true)
-                : setVariantDialogOpen(true)
-            }
-            disabled={previewQuestions.length === 0 || isGeneratingVariants}
-            className="h-[42px] min-w-[148px] cursor-pointer rounded-[10px] border-[#cfe0fb] bg-white px-6 text-[15px] font-semibold text-[#0b5cab] shadow-[0_6px_14px_rgba(148,163,184,0.12)] hover:border-[#b7cff8] hover:bg-[#f7faff] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-[#cfe0fb] disabled:hover:bg-white"
-          >
-            {isGeneratingVariants ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Хувилбар боловсруулж байна...
-              </>
-            ) : shouldShowVariantViewerButton ? (
-              <>
-                <Eye className="h-4 w-4" />
-                AI хувилбар харах
-              </>
-            ) : (
-              "Хувилбар үүсгэх"
-            )}
-          </Button>
-          <Button
-            onClick={() => void handleSaveExam()}
-            disabled={savingExam}
-            className="h-[42px] min-w-[128px] cursor-pointer rounded-[10px] bg-[#0b5cab] px-7 text-[15px] font-semibold shadow-[0_8px_18px_rgba(11,92,171,0.25)] hover:bg-[#0a4f96] disabled:cursor-not-allowed"
-          >
-            {savingExam ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Хадгалж байна...
-              </>
-            ) : source === "shared-library" ? (
-              "Сонгосон материалыг ашиглах"
-            ) : (
-              "Хадгалах"
-            )}
-          </Button>
-        </div>
-
-        <Dialog open={variantDialogOpen} onOpenChange={setVariantDialogOpen}>
-          <DialogContent className="max-w-[min(100vw-2rem,28rem)] gap-0 overflow-hidden rounded-[24px] border border-[#dfe7f3] bg-white p-0 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.28)]">
-            <DialogHeader className="px-5 py-4">
-              <DialogTitle className="text-[18px] font-semibold text-slate-900">
-                Хувилбарын тоо оруулах
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="px-5 py-6">
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={variantCount}
-                onChange={(event) => setVariantCount(event.target.value)}
-                placeholder="Жишээ нь: 2"
-                className="h-[48px] w-full rounded-[14px] border border-[#d7e3f5] bg-white px-4 text-[15px] shadow-none outline-none"
-              />
-            </div>
-
-            <DialogFooter className="mx-0 mb-0 rounded-b-[24px] border-t-0 bg-white px-5 py-4 sm:flex-row sm:justify-end">
+            <div className="flex items-center justify-end gap-3 pt-10">
               <Button
-                type="button"
                 variant="outline"
-                onClick={() => setVariantDialogOpen(false)}
-                className="cursor-pointer rounded-[12px] border-[#d7e3f5] bg-white px-5 hover:bg-slate-50"
-              >
-                Хаах
-              </Button>
-              <Button
-                type="button"
-                onClick={() => void handleRequestVariants()}
-                disabled={
-                  !canGenerateVariants ||
-                  requestingVariants ||
-                  Boolean(variantJobId)
+                onClick={() =>
+                  shouldShowVariantViewerButton
+                    ? setVariantViewerOpen(true)
+                    : setVariantDialogOpen(true)
                 }
-                className="cursor-pointer rounded-[12px] bg-[#0b5cab] px-5 hover:bg-[#0a4f96] disabled:cursor-not-allowed"
+                disabled={previewQuestions.length === 0 || isGeneratingVariants}
+                className="h-[42px] min-w-[148px] cursor-pointer rounded-[10px] border-[#cfe0fb] bg-white px-6 text-[15px] font-semibold text-[#0b5cab] shadow-[0_6px_14px_rgba(148,163,184,0.12)] hover:border-[#b7cff8] hover:bg-[#f7faff] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-[#cfe0fb] disabled:hover:bg-white"
               >
-                {requestingVariants || variantJobId ? (
+                {isGeneratingVariants ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    AI ажиллаж байна...
+                    Хувилбар боловсруулж байна...
+                  </>
+                ) : shouldShowVariantViewerButton ? (
+                  <>
+                    <Eye className="h-4 w-4" />
+                    AI хувилбар харах
                   </>
                 ) : (
-                  "AI хувилбар үүсгэх"
+                  "Хувилбар үүсгэх"
                 )}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <Button
+                onClick={() => void handleSaveExam()}
+                disabled={savingExam}
+                className="h-[42px] min-w-[128px] cursor-pointer rounded-[10px] bg-[#0b5cab] px-7 text-[15px] font-semibold shadow-[0_8px_18px_rgba(11,92,171,0.25)] hover:bg-[#0a4f96] disabled:cursor-not-allowed"
+              >
+                {savingExam ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Хадгалж байна...
+                  </>
+                ) : source === "shared-library" ? (
+                  "Сонгосон материалыг ашиглах"
+                ) : (
+                  "Хадгалах"
+                )}
+              </Button>
+            </div>
+
+            <Dialog
+              open={variantDialogOpen}
+              onOpenChange={setVariantDialogOpen}
+            >
+              <DialogContent className="max-w-[min(100vw-2rem,28rem)] gap-0 overflow-hidden rounded-[24px] border border-[#dfe7f3] bg-white p-0 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.28)]">
+                <DialogHeader className="px-5 py-4">
+                  <DialogTitle className="text-[18px] font-semibold text-slate-900">
+                    Хувилбарын тоо оруулах
+                  </DialogTitle>
+                </DialogHeader>
+
+                <div className="px-5 py-6">
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={variantCount}
+                    onChange={(event) => setVariantCount(event.target.value)}
+                    placeholder="Жишээ нь: 2"
+                    className="h-[48px] w-full rounded-[14px] border border-[#d7e3f5] bg-white px-4 text-[15px] shadow-none outline-none"
+                  />
+                </div>
+
+                <DialogFooter className="mx-0 mb-0 rounded-b-[24px] border-t-0 bg-white px-5 py-4 sm:flex-row sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setVariantDialogOpen(false)}
+                    className="cursor-pointer rounded-[12px] border-[#d7e3f5] bg-white px-5 hover:bg-slate-50"
+                  >
+                    Хаах
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void handleRequestVariants()}
+                    disabled={
+                      !canGenerateVariants ||
+                      requestingVariants ||
+                      Boolean(variantJobId)
+                    }
+                    className="cursor-pointer rounded-[12px] bg-[#0b5cab] px-5 hover:bg-[#0a4f96] disabled:cursor-not-allowed"
+                  >
+                    {requestingVariants || variantJobId ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        AI ажиллаж байна...
+                      </>
+                    ) : (
+                      "AI хувилбар үүсгэх"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
 
         <Dialog open={variantViewerOpen} onOpenChange={setVariantViewerOpen}>
           <DialogContent className="flex h-[min(92vh,52rem)] w-[min(100vw-1.5rem,56rem)]! max-w-none! flex-col gap-0 overflow-hidden rounded-[24px] border border-[#dfe7f3] bg-white p-0 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.28)]">

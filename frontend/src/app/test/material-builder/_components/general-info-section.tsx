@@ -31,6 +31,7 @@ type Props = {
   values: GeneralInfoValues;
   onChange: (next: GeneralInfoValues) => void;
   onReset: () => void;
+  showUtilityActions?: boolean;
 };
 
 export function GeneralInfoSection({
@@ -38,6 +39,7 @@ export function GeneralInfoSection({
   values,
   onChange,
   onReset,
+  showUtilityActions = true,
 }: Props) {
   return (
     <section className="rounded-[18px] border border-[#e3e9f4] bg-white px-5 py-5 shadow-[0_8px_18px_rgba(15,23,42,0.04)] sm:px-6">
@@ -48,24 +50,26 @@ export function GeneralInfoSection({
           </span>
           Ерөнхий мэдээлэл
         </div>
-        <div className="flex items-center gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onApplyDemo}
-            className="h-7 cursor-pointer rounded-[8px] border-slate-100 bg-transparent px-2 text-[11px] font-normal text-slate-400 opacity-55 shadow-none hover:border-slate-200 hover:bg-slate-50 hover:text-slate-500 hover:opacity-100"
-          >
-            Demo
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onReset}
-            className="h-7 cursor-pointer rounded-[8px] border-slate-100 bg-transparent px-2 text-[11px] font-normal text-slate-400 opacity-55 shadow-none hover:border-slate-200 hover:bg-slate-50 hover:text-slate-500 hover:opacity-100"
-          >
-            Reset
-          </Button>
-        </div>
+        {showUtilityActions ? (
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onApplyDemo}
+              className="h-7 cursor-pointer rounded-[8px] border-slate-100 bg-transparent px-2 text-[11px] font-normal text-slate-400 opacity-55 shadow-none hover:border-slate-200 hover:bg-slate-50 hover:text-slate-500 hover:opacity-100"
+            >
+              Demo
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onReset}
+              className="h-7 cursor-pointer rounded-[8px] border-slate-100 bg-transparent px-2 text-[11px] font-normal text-slate-400 opacity-55 shadow-none hover:border-slate-200 hover:bg-slate-50 hover:text-slate-500 hover:opacity-100"
+            >
+              Reset
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-x-4 gap-y-4 md:grid-cols-2">
