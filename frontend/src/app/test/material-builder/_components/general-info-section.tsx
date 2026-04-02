@@ -1,8 +1,5 @@
 "use client";
 
-"use client";
-
-import { Button } from "@/components/ui/button";
 import { Info } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,12 +15,19 @@ import {
   fieldWrapperClassName,
 } from "./material-builder-config";
 
-export type GeneralInfoValues = {
-  subject: string;
-  grade: string;
-  examType: string;
+export type MaterialBuilderSubject = "math" | "physics" | "chemistry";
+export type MaterialBuilderExamType =
+  | "progress"
+  | "midterm"
+  | "final"
+  | "practice";
+
+export type MaterialBuilderGeneralInfo = {
+  durationMinutes: number;
   examName: string;
-  durationMinutes: string;
+  examType: MaterialBuilderExamType;
+  grade: number;
+  subject: MaterialBuilderSubject;
 };
 
 type Props = {
@@ -35,8 +39,6 @@ type Props = {
 };
 
 export function GeneralInfoSection({
-  onApplyDemo,
-  values,
   onChange,
   onReset,
   showUtilityActions = true,
@@ -74,20 +76,16 @@ export function GeneralInfoSection({
 
       <div className="grid gap-x-4 gap-y-4 md:grid-cols-2">
         <div className={fieldWrapperClassName}>
-          <Label
-            htmlFor="subject"
-            className="text-[14px] font-medium text-slate-800"
-          >
+          <Label htmlFor="subject" className="text-[14px] font-medium text-slate-800">
             Хичээл
           </Label>
           <Select
-            value={values.subject}
-            onValueChange={(value) => onChange({ ...values, subject: value })}
+            value={value.subject}
+            onValueChange={(nextValue: MaterialBuilderSubject) =>
+              patch({ subject: nextValue })
+            }
           >
-            <SelectTrigger
-              id="subject"
-              className={`${fieldClassName} cursor-pointer`}
-            >
+            <SelectTrigger id="subject" className={`${fieldClassName} cursor-pointer`}>
               <SelectValue placeholder="Хичээл сонгох" />
             </SelectTrigger>
             <SelectContent>
@@ -99,20 +97,14 @@ export function GeneralInfoSection({
         </div>
 
         <div className={fieldWrapperClassName}>
-          <Label
-            htmlFor="classroom"
-            className="text-[14px] font-medium text-slate-800"
-          >
+          <Label htmlFor="classroom" className="text-[14px] font-medium text-slate-800">
             Анги
           </Label>
           <Select
-            value={values.grade}
-            onValueChange={(value) => onChange({ ...values, grade: value })}
+            value={String(value.grade)}
+            onValueChange={(nextValue) => patch({ grade: Number(nextValue) || 10 })}
           >
-            <SelectTrigger
-              id="classroom"
-              className={`${fieldClassName} cursor-pointer`}
-            >
+            <SelectTrigger id="classroom" className={`${fieldClassName} cursor-pointer`}>
               <SelectValue placeholder="Анги сонгох" />
             </SelectTrigger>
             <SelectContent>
@@ -125,70 +117,64 @@ export function GeneralInfoSection({
         </div>
 
         <div className={fieldWrapperClassName}>
-          <Label
-            htmlFor="exam-type"
-            className="text-[14px] font-medium text-slate-800"
-          >
+          <Label htmlFor="exam-type" className="text-[14px] font-medium text-slate-800">
             Төрөл
           </Label>
           <Select
-            value={values.examType}
-            onValueChange={(value) => onChange({ ...values, examType: value })}
+            value={value.examType}
+            onValueChange={(nextValue: MaterialBuilderExamType) =>
+              patch({ examType: nextValue })
+            }
           >
-            <SelectTrigger
-              id="exam-type"
-              className={`${fieldClassName} cursor-pointer`}
-            >
+            <SelectTrigger id="exam-type" className={`${fieldClassName} cursor-pointer`}>
               <SelectValue placeholder="Төрөл сонгох" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="progress">Явцын</SelectItem>
-              <SelectItem value="quarter">Улирлын</SelectItem>
-              <SelectItem value="state">Улсын шалгалт</SelectItem>
-              <SelectItem value="benchmark">Жишиг шалгалт</SelectItem>
-              <SelectItem value="unit">Бүлэг сэдвийн шалгалт</SelectItem>
+              <SelectItem value="midterm">Дунд шалгалт</SelectItem>
+              <SelectItem value="final">Эцсийн шалгалт</SelectItem>
+              <SelectItem value="practice">Дадлага</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className={fieldWrapperClassName}>
-          <Label
-            htmlFor="exam-name"
-            className="text-[14px] font-medium text-slate-800"
-          >
+          <Label htmlFor="exam-name" className="text-[14px] font-medium text-slate-800">
             Шалгалтын нэр
           </Label>
           <Input
             id="exam-name"
-            value={values.examName}
-            onChange={(event) =>
-              onChange({ ...values, examName: event.target.value })
-            }
-            placeholder="Шалгалтын нэр оруулах"
+            value={value.examName}
+            onChange={(event) => patch({ examName: event.target.value })}
             className={fieldClassName}
           />
         </div>
 
         <div className={fieldWrapperClassName}>
-          <Label
-            htmlFor="duration-left"
-            className="text-[14px] font-medium text-slate-800"
-          >
+          <Label htmlFor="duration-left" className="text-[14px] font-medium text-slate-800">
             Үргэлжлэх минут
           </Label>
-          <Input
-            id="duration-left"
-            type="number"
-            min="1"
-            step="1"
-            value={values.durationMinutes}
-            onChange={(event) =>
-              onChange({ ...values, durationMinutes: event.target.value })
+          <Select
+            value={String(value.durationMinutes)}
+            onValueChange={(nextValue) =>
+              patch({ durationMinutes: Number(nextValue) || 30 })
             }
-            placeholder="Хугацаа оруулах"
-            className={fieldClassName}
-          />
+          >
+            <SelectTrigger
+              id="duration-left"
+              className={`${fieldClassName} cursor-pointer`}
+            >
+              <SelectValue placeholder="Хугацаа сонгох" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20">20 мин</SelectItem>
+              <SelectItem value="30">30 мин</SelectItem>
+              <SelectItem value="40">40 мин</SelectItem>
+              <SelectItem value="60">60 мин</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+
       </div>
     </section>
   );
