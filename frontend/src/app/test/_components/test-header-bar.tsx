@@ -124,7 +124,9 @@ export function TestHeaderBar({
             {actions}
           </div>
         ) : null}
-        {teacherVariant === "none" ? null : (
+        {rightSlot ? (
+          rightSlot
+        ) : teacherVariant === "none" ? null : (
           <TeacherControl
             isRefreshing={isTeacherRefreshing}
             onRefresh={onTeacherRefresh}
@@ -294,7 +296,9 @@ function TeacherControl({
           className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 disabled:cursor-default disabled:opacity-80"
           aria-label="Шинэчлэх"
         >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+          />
         </button>
         <div>
           <p className="text-[15px] font-semibold leading-none text-slate-900">
