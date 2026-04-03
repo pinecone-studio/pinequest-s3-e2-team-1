@@ -531,6 +531,9 @@ type GraphqlEnvelope<TData> = {
   errors?: Array<{ message?: string }>;
 };
 
+type DashboardAttempt = DashboardApiPayload["attempts"][number];
+type DashboardAvailableTest = DashboardApiPayload["availableTests"][number];
+
 const hasMissingFieldError = (
   payload: { errors?: Array<{ message?: string }> },
   fieldName: string,
@@ -567,7 +570,7 @@ const buildProgress = (attempt: Record<string, any>, questionCount: number) => {
     (attempt.result?.unansweredCount ?? 0);
   const answeredQuestionsFromReview =
     attempt.answerReview?.filter(
-      (item: Record<string, any>) =>
+      (item) =>
         item.selectedOptionId || item.selectedAnswerText,
     ).length ?? 0;
   const answeredQuestions = Math.max(
@@ -639,7 +642,9 @@ export const fetchTakeExamDashboard = async (
     forceRefresh?: boolean;
   } = {},
 ): Promise<DashboardApiPayload> => {
-  let { payload, response } = await fetchGraphqlPayload<any>(
+  type DashboardWithMaterial = DashboardApiPayload & { testMaterial?: unknown | null };
+
+  let { payload, response } = await fetchGraphqlPayload<DashboardWithMaterial>(
     testId ? DASHBOARD_WITH_MATERIAL_QUERY : DASHBOARD_QUERY,
     testId ? { forceRefresh, limit, testId } : { forceRefresh, limit },
     graphqlUrl,
@@ -698,13 +703,13 @@ export const fetchTakeExamDashboard = async (
   }
 
   const data = payload.data;
-  const testsById = new Map<string, Record<string, any>>(
-    data.availableTests.map((test: Record<string, any>) => [test.id, test]),
+  const testsById = new Map<string, DashboardAvailableTest>(
+    data.availableTests.map((test) => [test.id, test]),
   );
 
   return {
     ...data,
-    attempts: data.attempts.map((attempt: Record<string, any>) => {
+    attempts: data.attempts.map((attempt) => {
       const test = testsById.get(attempt.testId);
       const totalQuestions = test?.criteria.questionCount ?? 0;
 
@@ -724,7 +729,7 @@ export const fetchTakeExamDashboard = async (
           ? {
               ...attempt.result,
               questionResults: attempt.result.questionResults.map(
-                (result: Record<string, any>) => ({
+                (result) => ({
                   ...result,
                   answerChangeCount: result.answerChangeCount ?? null,
                   competency: result.competency,
@@ -738,17 +743,10 @@ export const fetchTakeExamDashboard = async (
         teacherSync: null,
       };
     }),
-    availableTests: data.availableTests.map((test: Record<string, any>) => ({
-      ...test,
-    })),
-    liveMonitoringFeed: data.liveMonitoringFeed.map((item: Record<string, any>) => ({
+    availableTests: data.availableTests.map((test) => ({ ...test })),
+    liveMonitoringFeed: data.liveMonitoringFeed.map((item) => ({
       ...item,
-      monitoring: item.monitoring
-        ? {
-            ...item.monitoring,
-            infoCount: 0,
-          }
-        : null,
+      monitoring: item.monitoring ? { ...item.monitoring, infoCount: 0 } : null,
     })),
   } satisfies DashboardApiPayload;
 };

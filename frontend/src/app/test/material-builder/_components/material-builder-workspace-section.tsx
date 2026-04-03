@@ -1991,12 +1991,12 @@ function SharedLibraryPanel({
                   </PopoverTrigger>
                   <PopoverContent
                     align="end"
-                    className="w-[min(92vw,24rem)] rounded-[18px] border border-[#dbe4f3] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.12)]"
+                    className="w-[min(92vw,28rem)] rounded-[18px] border border-[#dbe4f3] p-4 shadow-[0_18px_45px_rgba(15,23,42,0.12)]"
                   >
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
                         <p className="text-[14px] font-semibold text-slate-900">
-                          Нэмэлт filter
+                          Нэмэлт шүүлт
                         </p>
                         <p className="text-[12px] text-slate-500">
                           Жагсаалтыг нарийвчлан шүүнэ
