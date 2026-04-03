@@ -42,7 +42,6 @@ type TestHeaderBarProps = {
   rightSlot?: ReactNode;
   meta?: ReactNode;
   onTeacherRefresh?: (() => void) | null;
-  rightSlot?: ReactNode;
   teacherVariant?: TeacherVariant;
   title: string;
 };
